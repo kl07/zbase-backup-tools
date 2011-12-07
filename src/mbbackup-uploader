@@ -1,0 +1,215 @@
+#!/usr/bin/python 
+#Description: Backup s3 uploader Daemon
+
+import fnmatch
+import sys
+import os
+import re
+import consts
+from config import Config
+from logger import Logger 
+import time
+import signal
+import commands
+from threading import Lock
+
+PID_FILE = '/var/run/s3backup_uploader.pid'
+
+class BackupUploader:
+    """
+    Upload incremental backups to S3
+    """
+    def __init__(self):
+        status = self.init_mb_object()
+        if status:
+           self.logger.log("=== Starting Membase Backup Uploader Daemon ===")
+        else:
+            sys.exit(1)
+        self.exit = False
+        self.file_upload_lock = Lock()
+        signal.signal(signal.SIGINT, self.graceful_exit)
+        signal.signal(signal.SIGQUIT, self.graceful_exit)
+
+    def alert_nagios(self):
+        pass
+
+    def init_mb_object(self):
+        status = True
+        try:
+            self.config = Config(consts.configfile) 
+            self.config.read()
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+        except Exception, e:
+            self.config.syslog_tag = consts.SYSLOG_TAG 
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+            self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
+            status = False
+        return status 
+
+    def find_backups(self):
+        files = []
+        for root,dirname,filenames in os.walk(self.config.db_backup_root):
+            for filename in fnmatch.filter(filenames, '*.mbb'):
+                files.append(os.path.join(root, filename))
+        return sorted(files)
+
+    def _upload_file(self, filepath): 
+        root_path = self.config.db_backup_root
+        if root_path[-1] == '/':
+            root_path = root_path[:-1]
+
+        regex = re.compile('^%s(/.*)' %root_path)
+        s3suffix_path = regex.findall(filepath)[0]
+        s3path = "s3://%s%s" %(self.config.s3bucket, s3suffix_path)
+
+        self.logger.log("ATTEMPT: Uploading %s to %s" %(filepath, s3path))
+        upload_cmd = "%s sync %s %s -v" %(consts.PATH_S3CMD_EXEC, 
+                filepath,
+                s3path)
+        self.logger.log("Executing command, %s" %upload_cmd)
+        status, output = commands.getstatusoutput(upload_cmd)
+        if status > 0:
+            self.logger.log("FAILED: Upload to S3 failed for backup file %s (%s)" %(filepath, output))
+            return False
+        else:
+            self.logger.log(output)
+            self.logger.log("SUCCESS: Uploading %s to %s" %(filepath, s3path))
+        return True 
+
+    def _remove_file(self, filepath):
+        self.logger.log("Removing backup file, %s" %filepath)
+        try:
+            os.unlink(filepath)
+            return True
+        except:
+            return False
+        
+    def upload_files(self, files):
+        total_files_count = len(files)
+        i = 0
+        for f in files:
+            if self.exit == True:
+                self.logger.log("Successfully terminated uploader daemon")
+                os.unlink(PID_FILE)
+                sys.exit(0)
+            i+=1
+            self.file_upload_lock.acquire()
+            status = self._upload_file(f)
+            if status == True:
+                self._remove_file(f)
+            else:
+                self.logger.log("Skipping upload for remaining %d backup files" %(total_files_count - i)) 
+                self.file_upload_lock.release()
+                return False
+            self.file_upload_lock.release()
+        return True
+
+    def _islocked(self, filepath):
+        if os.path.exists(filepath+'.lock'):
+            return True
+        else:
+            return False
+
+    def _filter_ready_files(self, files):
+        lock_status = {}
+        for filename in files:
+            if self._islocked(filename):
+                lock_status[filename] = True
+            else:
+                lock_status[filename] = False
+
+        ready_files = []
+        for i in range(len(files)):
+            f = files[i]
+            if i == 0 and f == lock_status[f] == True:
+                break
+            elif lock_status[files[i-1]] == False and lock_status[f] == True:
+                break
+            elif lock_status[f] == False:
+                ready_files.append(f)
+
+        return ready_files
+    
+    def graceful_exit(self, signum, frame):
+        self.exit = True
+        if self.file_upload_lock.locked():
+            self.logger.log("Waiting for file upload to complete")
+        else:
+            self.file_upload_lock.acquire()
+            self.logger.log("Successfully terminated uploader daemon")
+            os.unlink(PID_FILE)
+            sys.exit(0)
+
+    def mainloop(self):
+        while True:
+            self.logger.log("Searching for Backups")
+            backup_files = self.find_backups()
+            uploadable_backups = self._filter_ready_files(backup_files)
+            count = len(uploadable_backups)
+            if count > 0:
+                self.logger.log("Found backup files :")
+                for bf in backup_files:
+                    self.logger.log("\t- %s" %bf)
+                self.logger.log("Uploading Backup files to S3")
+                uploads_status = self.upload_files(uploadable_backups)
+                if not uploads_status:
+                    #TODO: Alert
+                    pass
+            else:
+                self.logger.log("No backups found")
+
+            self.logger.log("Waiting for %d mins" %int(self.config.upload_check_interval_mins))
+            time.sleep(int(self.config.upload_check_interval_mins)*60)
+
+
+if __name__ == '__main__':
+    
+    if os.getuid() != 0:
+        print "Please run as root"
+        sys.exit(1)
+    try:
+        command = sys.argv[1]
+    except:
+        command = None
+
+    if command == 'start':
+
+        if os.path.exists(PID_FILE): 
+            pid = int(open(PID_FILE).read())
+            try:
+                os.kill(pid, 0)
+                print "Uploader Daemon with PID:%d is already running" %pid
+                os._exit(1)
+            except:
+                pass
+        try:
+            pid = os.fork()
+            if pid == 0:
+                f = open(PID_FILE,'w')
+                f.write(str(os.getpid()))
+                f.close()
+ 	    else:
+                os._exit(0)
+        except:
+            os._exit(2)
+
+        uploader_instance = BackupUploader()
+        uploader_instance.mainloop()
+
+    elif command == "stop":
+        if os.path.exists(PID_FILE): 
+            print "Issuing stop command for Uploader Daemon"
+            pid = int(open(PID_FILE).read())
+            try:
+                os.kill(pid, 0)
+            except:
+                print "Uploader is not already running"
+                sys.exit(0)
+
+            os.kill(pid, 2)
+        else:
+            print "Uploader Daemon is not running"
+
+    else:
+        print "Usage: %s command\ncommand = start or stop\n" %sys.argv[0]
+        
