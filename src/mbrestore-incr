@@ -1,0 +1,232 @@
+#!/usr/bin/env python26
+#Description: Incremental restore script
+
+import time
+import consts
+import commands
+from logger import Logger
+from config import Config
+import Queue
+from threading import Thread
+import sys
+
+DAY_EPOCH = 60*60*24
+
+def epoch2date(epoch):
+    lt = time.localtime(epoch)
+    return time.strftime('%Y-%m-%d',lt)
+
+class Restore:
+
+    def __init__(self):
+        try:
+            self.config = Config(consts.configfile) 
+            self.config.read()
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+        except Exception, e:
+            self.config.syslog_tag = consts.SYSLOG_TAG 
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+            self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
+
+        self.cloud = self.config.cloud 
+        self.game_id = self.config.game_id
+        self.hostname = self.config.hostname
+        buffer_list = self.config.buffer_list.split(',')
+        self.thread_count = len(buffer_list)
+
+        self.free_buffer_list = Queue.Queue() 
+        self.download_queue = Queue.Queue()
+        self.file_count = 0
+ 
+        for b in buffer_list:
+            self.free_buffer_list.put(b) 
+        self.restore_queue = Queue.Queue()
+
+    def _list_s3_files(self, s3path):
+        ls_cmd = "%s ls %s" %(consts.PATH_S3CMD_EXEC, s3path)
+        self.logger.log("Executing command %s" %ls_cmd)
+        status, output = commands.getstatusoutput(ls_cmd)
+	if status !=0:
+            self.logger.log("FAILED: %s" %output)
+            return False
+	else:
+            lines = output.split('\n')
+            files = map(lambda x: 's3://'+x.split('s3://')[-1], lines)
+            complete = False
+            for f in files:
+                if f.endswith('.done'):
+                    complete = True
+            mbb_files = filter(lambda x: x.endswith('.mbb'), files)
+            if complete == False:
+                return []
+            return mbb_files 
+
+    def _download_file(self, s3path, filepath):
+        get_cmd = "%s sync %s %s" %(consts.PATH_S3CMD_EXEC, s3path, filepath)
+        self.logger.log("Executing command %s" %get_cmd)
+	status, output = commands.getstatusoutput(get_cmd)
+        self.logger.log("Downloading file %s to %s" %(s3path, filepath))
+    	if status !=0:
+            self.logger.log("FAILED: %s" %output)
+            return False
+        else:
+            self.logger.log("Completed downloading file %s" %s3path)
+            return True
+
+    def exit(self, status):
+        self.logger.log("Error occured")
+        sys.exit(status)
+
+    def fetch_backuplist(self):
+        """
+        Get the list of backup files which are to be downloaded
+        """
+
+        self.logger.log("Fetching Backup list from S3")
+        epoch = time.time()
+        incremental_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/' %(self.config.s3bucket, self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME))
+        self.logger.log("Fetching list of incremental backups")
+        if not incremental_backup_list:
+            self.logger.log("Could not find any incremental backups")
+            return False 
+        '''
+        master_backup_epoch = epoch 
+        self.logger.log("Searching for master backup")
+        for attempt in xrange(consts.MAX_BACKUP_SEARCH_TRIES):
+            date = epoch2date(master_backup_epoch)
+            master_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/%s/' %(self.config.s3bucket, self.cloud, self.game_id, self.hostname, consts.MASTER_DIRNAME, date))
+            if not master_backup_list:
+                continue
+            if len(master_backup_list):
+                self.logger.log("Found master backup for date, %s" %epoch2date(master_backup_epoch))
+                break
+            else:
+                master_backup_epoch -= DAY_EPOCH
+                if attempt == consts.MAX_BACKUP_SEARCH_TRIES - 1:
+                    self.logger.log("Could not find master backup. Maximum tries exceeded")
+                    return False
+
+        self.logger.log("Fetching list of periodic backups")
+        periodic_backup_list = []
+        for date_epoch in xrange(master_backup_epoch, epoch + DAY_EPOCH, DAY_EPOCH):
+            date = epoch2date(date_epoch)
+            periodic_file_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/%s/' %(self.conf.s3bucket, self.cloud, self.game_id, self.hostname, consts.PERIODIC_DIRNAME, date))
+            if not periodic_file_list:
+                return False
+            periodic_backup_list.extend(periodic_file_list)
+        
+     
+        incremental_backup_list.sort()
+        incremental_backup_list.reverse()
+        master_backup_list.sort()
+        master_backup_list.reverse()
+        periodic_backup_list.sort()
+        periodic_backup_list.reverse()
+
+        return incremental_backup_list + periodic_backup_list + master_backup_list 
+        '''
+
+        def numeric_revsort(items):
+
+            def f(x):
+                x = x[::-1]
+                b,a = x.split('-',1)
+                a = a[::-1]
+                b = b[::-1]
+                b = int(b.strip('.mbb'))
+                return a,b,'.mbb'
+
+            new_items = map(f, items)
+            new_items.sort()
+            new_items.reverse()
+            return map(lambda x: x[0]+'-'+str(x[1])+x[2], new_items)
+
+        return numeric_revsort(incremental_backup_list)
+
+    def populate_queue(self):
+        backup_files = self.fetch_backuplist()
+        for f in backup_files:
+            self.logger.log("Found file %s" %f)
+        if not backup_files:
+            self.exit(1)
+        for i,f in enumerate(backup_files):
+            self.download_queue.put((i, f, 'backup-%05d.mbb' %i))
+        self.file_count = len(self.download_queue.queue)
+
+    def _do_online_restore(self, backup_file, complete=False):
+        self.logger.log("Performing restore from %s" %backup_file)
+        if complete:
+            restore_cmd = "%s -h 127.0.0.1:11211 -c %s" %(consts.PATH_MBRESTORE_EXEC, backup_file)
+        else:
+            restore_cmd = "%s -h 127.0.0.1:11211 %s" %(consts.PATH_MBRESTORE_EXEC, backup_file)
+
+        self.logger.log("Executing command %s" %restore_cmd)
+        status, output = commands.getstatusoutput(restore_cmd)
+        if status == 0:
+            return True
+        else:
+            self.logger.log("FAILED: Executing command %s (%s)"  %(restore_cmd, output))
+            return False
+
+    def perform_restore(self):
+        shard = 0
+        while shard < self.file_count:
+            self.logger.log("Checking for restore file")
+            restore_list = list(self.restore_queue.queue)
+            restore_list.sort()
+            print restore_list
+            if len(restore_list) > 0 and shard == restore_list[0][0]:
+                backup = restore_list[0]
+                self.restore_queue.queue.remove(backup)
+                backup_file = backup[1]
+                buffer_path = backup[2]
+                if shard == self.file_count - 1:
+                    complete = True
+                else:
+                    complete = False
+                status = self._do_online_restore(backup_file, complete)
+                if status:
+                    self.free_buffer_list.put(buffer_path)
+                    shard +=1
+                else:
+                    self.exit(1)
+            time.sleep(1)
+                
+
+    def download_files(self):
+        while True:
+            self.logger.log("Attempt to obtain a file for download")
+            backup = self.download_queue.get() 
+            self.logger.log("SUCCESS: Attempt to obtain a file for download %s" %str(backup))
+            buffer_path = self.free_buffer_list.get()
+            self.logger.log("Obtained buffer %s" %buffer_path)
+            status = self._download_file(backup[1], '%s/%s' %(buffer_path, backup[2]))
+            self.logger.log("Download complete")
+            if status:
+                self.restore_queue.put((backup[0], '%s/%s' %(buffer_path, backup[2]), buffer_path))
+            else:
+                self.exit(1)
+            self.download_queue.task_done()
+
+    def main(self):
+        self.populate_queue()
+        for i in range(self.thread_count):
+            t = Thread(target=self.download_files)
+            t.daemon = True
+            t.start()
+        t = Thread(target=self.perform_restore)
+        t.daemon = True
+        t.start()
+
+        self.download_queue.join()
+        t.join()
+        self.logger.log("Restore completed successfully")
+
+        
+if __name__ == '__main__':
+    restore = Restore()
+    restore.main()
+
+
+
+
