@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python26
 #Description: Constants definitions
 
 SYSLOG_TAG = 'MembaseBackup'
