@@ -20,6 +20,10 @@ class Config:
         upload_check_interval_mins = self.config.get('S3Upload', 'upload_check_interval_mins')
         log_level = self.config.get('Log', 'log_level')
         syslog_tag = self.config.get('Log', 'syslog_tag')
+        cloud = self.config.get('General', 'cloud')
+        game_id = self.config.get('General', 'game_id')
+        buffer_list = self.config.get('Restore', 'buffer_list')
+        hostname = self.config.get('Restore', 'hostname')
 
         self.db_backup_root = db_backup_root
         self.s3bucket = s3bucket
@@ -27,4 +31,8 @@ class Config:
         if log_level in ['INFO', 'DEBUG']:
             self.log_level = log_level
         self.syslog_tag = syslog_tag
+        self.cloud = cloud
+        self.game_id = game_id
+        self.hostname = hostname 
+        self.buffer_list = buffer_list 
         
