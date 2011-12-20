@@ -12,6 +12,7 @@ import time
 import signal
 import commands
 from threading import Lock
+from util import natural_sortkey
 
 PID_FILE = '/var/run/s3backup_uploader.pid'
 
@@ -47,11 +48,11 @@ class BackupUploader:
         return status 
 
     def find_backups(self):
-        files = []
+        files = set([])
         for root,dirname,filenames in os.walk(self.config.db_backup_root):
-            for filename in fnmatch.filter(filenames, '*.mbb'):
-                files.append(os.path.join(root, filename))
-        return sorted(files)
+            for filename in fnmatch.filter(filenames, '*.mbb') + fnmatch.filter(filenames, '*.mbb.lock'):
+                files.add(os.path.join(root, filename.replace('.lock', '')))
+        return sorted(files, key=natural_sortkey)
 
     def _upload_file(self, filepath): 
         root_path = self.config.db_backup_root
@@ -127,7 +128,6 @@ class BackupUploader:
                 break
             elif lock_status[f] == False:
                 ready_files.append(f)
-
         return ready_files
     
     def graceful_exit(self, signum, frame):
