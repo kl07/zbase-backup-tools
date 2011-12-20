@@ -1,16 +1,19 @@
-#!/usr/bin/env python26
+#!/usr/bin/python26 
 #Description: Incremental restore script
 
 import time
+import os
 import consts
 import commands
 from logger import Logger
 from config import Config
 import Queue
 from threading import Thread
+from util import natural_sortkey 
 import sys
 
 DAY_EPOCH = 60*60*24
+PID_FILE = '/var/run/mbrestore.pid'
 
 def epoch2date(epoch):
     lt = time.localtime(epoch)
@@ -63,9 +66,16 @@ class Restore:
 
     def _download_file(self, s3path, filepath):
         get_cmd = "%s sync %s %s" %(consts.PATH_S3CMD_EXEC, s3path, filepath)
+        retries = self.config.download_retries
         self.logger.log("Executing command %s" %get_cmd)
-	status, output = commands.getstatusoutput(get_cmd)
-        self.logger.log("Downloading file %s to %s" %(s3path, filepath))
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Retrying download for %s" %s3path)
+            status, output = commands.getstatusoutput(get_cmd)
+            self.logger.log("Downloading file %s to %s" %(s3path, filepath))
+            if status == 0:
+                break
+
     	if status !=0:
             self.logger.log("FAILED: %s" %output)
             return False
@@ -74,29 +84,28 @@ class Restore:
             return True
 
     def exit(self, status):
-        self.logger.log("Error occured")
-        sys.exit(status)
+        self.logger.log("Error occured. Exiting")
+        os._exit(status)
 
     def fetch_backuplist(self):
         """
         Get the list of backup files which are to be downloaded
         """
-
         self.logger.log("Fetching Backup list from S3")
         epoch = time.time()
         incremental_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/' %(self.config.s3bucket, self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME))
         self.logger.log("Fetching list of incremental backups")
         if not incremental_backup_list:
             self.logger.log("Could not find any incremental backups")
-            return False 
-        '''
+            incremental_backup_list = []
+
         master_backup_epoch = epoch 
         self.logger.log("Searching for master backup")
         for attempt in xrange(consts.MAX_BACKUP_SEARCH_TRIES):
             date = epoch2date(master_backup_epoch)
             master_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/%s/' %(self.config.s3bucket, self.cloud, self.game_id, self.hostname, consts.MASTER_DIRNAME, date))
-            if not master_backup_list:
-                continue
+            #if not master_backup_list:
+            #    continue
             if len(master_backup_list):
                 self.logger.log("Found master backup for date, %s" %epoch2date(master_backup_epoch))
                 break
@@ -104,47 +113,32 @@ class Restore:
                 master_backup_epoch -= DAY_EPOCH
                 if attempt == consts.MAX_BACKUP_SEARCH_TRIES - 1:
                     self.logger.log("Could not find master backup. Maximum tries exceeded")
-                    return False
+                    master_backup_list = []
 
         self.logger.log("Fetching list of periodic backups")
         periodic_backup_list = []
-        for date_epoch in xrange(master_backup_epoch, epoch + DAY_EPOCH, DAY_EPOCH):
+        for date_epoch in xrange(int(master_backup_epoch), int(epoch) + DAY_EPOCH, DAY_EPOCH):
             date = epoch2date(date_epoch)
-            periodic_file_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/%s/' %(self.conf.s3bucket, self.cloud, self.game_id, self.hostname, consts.PERIODIC_DIRNAME, date))
+            periodic_file_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/%s/' %(self.config.s3bucket, self.cloud, self.game_id, self.hostname, consts.PERIODIC_DIRNAME, date))
             if not periodic_file_list:
-                return False
+                self.logger.log("Could not find periodic backup for %s" %date)
             periodic_backup_list.extend(periodic_file_list)
-        
      
-        incremental_backup_list.sort()
+        incremental_backup_list.sort(key=natural_sortkey)
         incremental_backup_list.reverse()
-        master_backup_list.sort()
+        master_backup_list.sort(key=natural_sortkey)
         master_backup_list.reverse()
-        periodic_backup_list.sort()
+        periodic_backup_list.sort(key=natural_sortkey)
         periodic_backup_list.reverse()
 
         return incremental_backup_list + periodic_backup_list + master_backup_list 
-        '''
-
-        def numeric_revsort(items):
-
-            def f(x):
-                x = x[::-1]
-                b,a = x.split('-',1)
-                a = a[::-1]
-                b = b[::-1]
-                b = int(b.strip('.mbb'))
-                return a,b,'.mbb'
-
-            new_items = map(f, items)
-            new_items.sort()
-            new_items.reverse()
-            return map(lambda x: x[0]+'-'+str(x[1])+x[2], new_items)
-
-        return numeric_revsort(incremental_backup_list)
 
     def populate_queue(self):
         backup_files = self.fetch_backuplist()
+        if len(backup_files) == 0:
+            self.logger.log("No backup files found.")
+            self.exit(2)
+
         for f in backup_files:
             self.logger.log("Found file %s" %f)
         if not backup_files:
@@ -171,10 +165,9 @@ class Restore:
     def perform_restore(self):
         shard = 0
         while shard < self.file_count:
-            self.logger.log("Checking for restore file")
+            self.logger.log("Waiting for restore file with shard %d" %shard)
             restore_list = list(self.restore_queue.queue)
             restore_list.sort()
-            print restore_list
             if len(restore_list) > 0 and shard == restore_list[0][0]:
                 backup = restore_list[0]
                 self.restore_queue.queue.remove(backup)
@@ -186,6 +179,7 @@ class Restore:
                     complete = False
                 status = self._do_online_restore(backup_file, complete)
                 if status:
+                    os.unlink(backup_file)
                     self.free_buffer_list.put(buffer_path)
                     shard +=1
                 else:
@@ -195,7 +189,7 @@ class Restore:
 
     def download_files(self):
         while True:
-            self.logger.log("Attempt to obtain a file for download")
+            self.logger.log("Waiting for obtaining download buffer")
             backup = self.download_queue.get() 
             self.logger.log("SUCCESS: Attempt to obtain a file for download %s" %str(backup))
             buffer_path = self.free_buffer_list.get()
@@ -209,6 +203,25 @@ class Restore:
             self.download_queue.task_done()
 
     def main(self):
+
+        start_time = time.time()
+
+        if os.getuid() != 0:
+            print "Please run as root"
+            sys.exit(1)
+        
+        if os.path.exists(PID_FILE):
+            pid = int(open(PID_FILE, 'r').read())
+            try:
+                os.kill(pid, 0)
+                self.logger.log("Restore process is already running with PID %d" %pid)
+                sys.exit(1)
+            except:
+                pass
+        fd = open(PID_FILE,'w')
+        fd.write(str(os.getpid()))
+        fd.close()
+
         self.populate_queue()
         for i in range(self.thread_count):
             t = Thread(target=self.download_files)
@@ -220,13 +233,11 @@ class Restore:
 
         self.download_queue.join()
         t.join()
-        self.logger.log("Restore completed successfully")
+        end_time = time.time()
+        self.logger.log("Restore completed successfully in %d seconds" %end_time-start_time)
 
         
 if __name__ == '__main__':
     restore = Restore()
     restore.main()
-
-
-
 
