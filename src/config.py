@@ -24,6 +24,7 @@ class Config:
         game_id = self.config.get('General', 'game_id')
         buffer_list = self.config.get('Restore', 'buffer_list')
         hostname = self.config.get('Restore', 'hostname')
+        download_retries = self.config.get('Restore', 'download_retries')
 
         self.db_backup_root = db_backup_root
         self.s3bucket = s3bucket
@@ -35,4 +36,5 @@ class Config:
         self.game_id = game_id
         self.hostname = hostname 
         self.buffer_list = buffer_list 
+        self.download_retries = int(download_retries)
         
