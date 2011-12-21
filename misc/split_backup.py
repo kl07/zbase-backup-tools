@@ -1,77 +1,203 @@
-#!/usr/bin/python 
-#Description: Split the backup files into smaller chunks
+#!/usr/bin/env python
 
-import sqlite3
+import os
+import sys
+import glob
+import getopt
+import exceptions
+import string
+import traceback
+import backup_util
+import subprocess
+import util
+import time
 
-class Backup:
-    def __init__(self, src, dest_prefix, chunk_size):
-        self.dest_prefix = dest_prefix
-        self.chunk_size = chunk_size
-        connection = sqlite3.connect(src)
-        self.cursor = connection.cursor()
+try:
+    import sqlite3
+except:
+    sys.exit("ERROR: %s requires python version 2.6 or greater" %
+              (os.path.basename(sys.argv[0])))
 
-    def show(self):
-        rows = self.cursor.execute('select vbucket_id,cpoint_id,seq,op,key,flg,exp,cas,val,length(val) from cpoint_op')
-        for row in rows:
-            print row
+DEFAULT_OUTPUT_FILE = "./split-%.mbb"
+DEFAULT_MAX_DB_SIZE = 512 # Default max size 512MB of a merged database file
 
-    def _create_tables(self, cursor):
-        if cursor != None:
-            cursor.execute('create table if not exists cpoint_op(vbucket_id integer, cpoint_id integer, seq integer, op text, key varchar(250), flg integer, exp integer, cas integer, val blob);')
-            cursor.execute('create table if not exists cpoint_state(vbucket_id integer, cpoint_id integer, prev_cpoint_id integer, state varchar(1), source varchar(250), updated_at text);')
+def usage(err=0):
+    print >> sys.stderr, """
+Usage: %s [-o %s] [-m %s] [-v] source_backup.mbb
+""" % (os.path.basename(sys.argv[0]), DEFAULT_OUTPUT_FILE, DEFAULT_MAX_DB_SIZE)
+    sys.exit(err)
 
-    def create_splits(self):
-        shard = 0
-        create_new_sqlite = True
-        size = 0
-        output_cursor = connection = None
-        cpoint_ids = []
-        cstate = self.cursor.execute('select * from cpoint_state')
-        cstate = cstate.fetchall()
+def parse_args(args):
+    output_file = DEFAULT_OUTPUT_FILE
+    max_db_size = DEFAULT_MAX_DB_SIZE
+    verbosity = 0
 
-        rows = self.cursor.execute('select vbucket_id,cpoint_id,seq,op,key,flg,exp,cas,val,length(val) from cpoint_op')
-        for row in rows:
-            if row[1] not in cpoint_ids:
-                cpoint_ids.append(row[1])
+    try:
+        opts, args = getopt.getopt(args, 'o:m:v', ['help'])
+    except getopt.GetoptError, e:
+        usage(e.msg)
 
-            size += int(row[-1])
-            if size >= self.chunk_size and connection!=None:
-                for cstate_row in cstate:
-                    if cstate_row[1] in cpoint_ids:
-                        output_cursor.execute('insert into cpoint_state values(?,?,?,?,?,?)', (cstate_row[0],cstate_row[1],cstate_row[2],cstate_row[3],cstate_row[4],cstate_row[5]))
-                
-                connection.commit()
-                connection.close()
-                create_new_sqlite = True
-                size = int(row[-1])
-                shard +=1
-                
-            if create_new_sqlite:
-                print 'Creating file %s-%d.mbb' %(self.dest_prefix, shard)
-                connection = sqlite3.connect("%s-%d.mbb" %(self.dest_prefix, shard))
-                output_cursor = connection.cursor()
-                self._create_tables(output_cursor)
-                create_new_sqlite = False
-                cpoint_ids = []
-            output_cursor.execute('insert into cpoint_op(vbucket_id,cpoint_id,seq,op,key,flg,exp,cas,val) values(?,?,?,?,?,?,?,?,?)', (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8]))
+    for (o, a) in opts:
+        if o == '--help':
+            usage()
+        elif o == '-o':
+            output_file = a
+        elif o == '-m':
+            max_db_size = int(a)
+        elif o == '-v':
+            verbosity = verbosity + 1
+        else:
+            usage("unknown option - " + o)
 
-        for cstate_row in cstate:
-            if cstate_row[1] in cpoint_ids:
-                output_cursor.execute('insert into cpoint_state values(?,?,?,?,?,?)', (cstate_row[0],cstate_row[1],cstate_row[2],cstate_row[3],cstate_row[4],cstate_row[5]))
- 
-        connection.commit()
-        connection.close()
+    if not args:
+        usage("missing incremental source backup file for splitting")
 
+    return output_file, max_db_size, args, verbosity
+
+def findCmd(cmdName):
+    cmd_dir = os.path.dirname(sys.argv[0])
+    possible = []
+    for bin_dir in [cmd_dir, os.path.join(cmd_dir, "..", "..", "bin")]:
+        possible = possible + [os.path.join(bin_dir, p) for p in [cmdName, cmdName + '.exe']]
+    cmdbin = [p for p in possible if os.path.exists(p)][0]
+    return cmdbin
+
+def log(level, *args):
+    global verbosity
+    if level < verbosity:
+       s = ", ".join(list(args))
+       print string.rjust(s, (level * 2) + len(s))
+
+def merge_incremental_backup_files(backup_files, single_output_file):
+    sqlite = findCmd("sqlite3")
+    squasher_sql_file = findCmd("squasher.sql")
+    sql_stmt = open(squasher_sql_file, 'r').read()
+    sql_stmt = string.replace(sql_stmt, "__SQUASHED_DATABASE__", single_output_file)
+    for bfile in backup_files:
+        sql_cmd = string.replace(sql_stmt, "__INCREMENTAL_DATABASE__", bfile)
+        p = subprocess.Popen(sqlite,
+                             stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        (output, err) = p.communicate(sql_cmd)
+        if p.returncode != 0:
+            log(1, "Error in merging \"%s\"" % bfile)
+            sys.exit(err)
+        log(1, "Incremental backup file: \"%s\"" % bfile)
+
+def create_split_db(db_file_name, max_db_size):
+    db = None
+    max_db_size = max_db_size * 1024 * 1024 # Convert MB to bytes
+    try:
+        db = sqlite3.connect(db_file_name)
+        db.text_factory = str
+        db.executescript("""
+        BEGIN;
+        CREATE TABLE cpoint_op
+        (vbucket_id integer, cpoint_id integer, seq integer, op text,
+        key varchar(250), flg integer, exp integer, cas integer, val blob);
+        CREATE TABLE cpoint_state
+        (vbucket_id integer, cpoint_id integer, prev_cpoint_id integer, state varchar(1),
+        source varchar(250), updated_at text);
+        COMMIT;
+        """)
+        db_page_size = db.execute("pragma page_size").fetchone()[0]
+        db_max_page_count = max_db_size / db_page_size
+        db.execute("pragma max_page_count=%d" % (db_max_page_count))
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        exit("ERROR: " + str(e))
+    return db
+
+def copy_checkpoint_state_records(checkpoint_states, db):
+    c = db.cursor()
+    stmt = "INSERT into cpoint_state" \
+           "(vbucket_id, cpoint_id, prev_cpoint_id, state, source, updated_at)" \
+           " VALUES (?, ?, ?, ?, ?, ?)"
+    for cstate in checkpoint_states:
+        c.execute(stmt, (cstate[0], cstate[1], cstate[2], cstate[3], cstate[4], cstate[5]))
+    db.commit()
+    c.close()
+
+def copy_checkpoint_op_records(op_records, db):
+    result = True
+    c = db.cursor()
+    stmt = "INSERT into cpoint_op" \
+           "(vbucket_id, cpoint_id, seq, op, key, flg, exp, cas, val)" \
+           " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    try:
+        for oprecord in op_records:
+            c.execute(stmt, (oprecord[0], oprecord[1], oprecord[2], oprecord[3], oprecord[4],
+                             oprecord[5], oprecord[6], oprecord[7], sqlite3.Binary(oprecord[8])))
+    except sqlite3.Error, e: ## Can't find the better exeception code for database full error.
+        log(1, "The database size exceeds the max size allowed: " + e.args[0])
+        result = False
+    if result == True:
+        db.commit()
+    c.close()
+    return result
+
+def split_single_merged_db_file(single_output_file, split_output_file, max_db_size):
+    try:
+        ## Find the next split output file to start with
+        next_split_output_file = util.expand_file_pattern(split_output_file)
+        split_db = create_split_db(next_split_output_file, max_db_size)
+        log(1, "Creating split database file: \"%s\"" % next_split_output_file)
+        merged_db = sqlite3.connect(single_output_file)
+        merged_db.text_factory = str
+        md_cursor = merged_db.cursor()
+        md_cursor.arraysize = 5000
+
+        ## Copy checkpoint_state records into the first split db.
+        ## Note that the number of checkpoint_state records is usually small even in the merged db.
+        md_cursor.execute("select vbucket_id, cpoint_id, prev_cpoint_id, state, source, updated_at " \
+                          "from cpoint_state")
+        checkpoint_states = md_cursor.fetchall()
+        copy_checkpoint_state_records(checkpoint_states, split_db)
+
+        op_records = []
+        ## Copy checkpoint_operation records into the multiple split database files.
+        md_cursor.execute("select vbucket_id, cpoint_id, seq, op, key, flg, exp, cas, val " \
+                          "from cpoint_op")
+        while True:
+            op_records = md_cursor.fetchmany(md_cursor.arraysize)
+            if op_records == []:
+                break
+            if copy_checkpoint_op_records(op_records, split_db) != True:
+                ## The current split database size exceeds the max size allowed.
+                ## Create the next split database and continue to copy records.
+                try:
+                    split_db.rollback()
+                except sqlite3.Error, e: ## Can't find the better error code for rollback failure.
+                    log(1, "Insertion transaction was already rollbacked: " + e.args[0])
+                split_db.close()
+                next_split_output_file = util.expand_file_pattern(split_output_file)
+                split_db = create_split_db(next_split_output_file, max_db_size)
+                log(1, "Split database file: \"%s\"" % next_split_output_file)
+                copy_checkpoint_state_records(checkpoint_states, split_db)
+                copy_checkpoint_op_records(op_records, split_db)
+
+        merged_db.close()
+        split_db.close()
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        exit("ERROR: " + str(e))
+
+def main():
+    global verbosity
+
+    split_output_file, max_db_size, input_files, verbosity = parse_args(sys.argv[1:])
+    log(1, "incremental backup file = " + ' '.join(input_files))
+    log(1, "output backup file = %s" % split_output_file)
+    log(1, "max size of a single merged database = %d MB" % max_db_size)
+    log(1, "verbosity = " + str(verbosity) + "\n")
+
+    single_output_file = input_files[0]
+    ## Split the single merged database file into multiple database files,
+    ## so that each split file size does not exceed the max size provided.
+    split_single_merged_db_file(single_output_file, split_output_file, max_db_size)
+
+    log(1, "\n  Splitting of files completed.\n")
 
 if __name__ == '__main__':
-    import sys
-    if len(sys.argv) != 3:
-        print
-        print "Usage: %s input.mbb dest_path/file_prefix" %sys.argv[0]
-        print "Files of approx 512 MB chunks will be created as dest_path/file_prefix-%.mbb"
-        sys.exit(1)
-
-    b = Backup(sys.argv[1], sys.argv[2], 536870912)   
-    b.create_splits()
-    #b.show()
-
+    main()
