@@ -128,7 +128,7 @@ class MembaseBackup:
         if not self._lock_file(backup_filepath):
             return False
 
-        mbbackup_cmd = "%s -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
+        mbbackup_cmd = "python26 %s -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
         status, msg = commands.getstatusoutput(mbbackup_cmd)
         
         size = 0

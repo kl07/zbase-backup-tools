@@ -150,9 +150,9 @@ class Restore:
     def _do_online_restore(self, backup_file, complete=False):
         self.logger.log("Performing restore from %s" %backup_file)
         if complete:
-            restore_cmd = "%s -h 127.0.0.1:11211 -c %s" %(consts.PATH_MBRESTORE_EXEC, backup_file)
+            restore_cmd = "python26 %s -h 127.0.0.1:11211 -c %s" %(consts.PATH_MBRESTORE_EXEC, backup_file)
         else:
-            restore_cmd = "%s -h 127.0.0.1:11211 %s" %(consts.PATH_MBRESTORE_EXEC, backup_file)
+            restore_cmd = "python26 %s -h 127.0.0.1:11211 %s" %(consts.PATH_MBRESTORE_EXEC, backup_file)
 
         self.logger.log("Executing command %s" %restore_cmd)
         status, output = commands.getstatusoutput(restore_cmd)
