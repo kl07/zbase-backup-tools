@@ -1,4 +1,4 @@
-#!/usr/bin/python26 
+#!/usr/bin/python
 #Description: Incremental merge script
 
 import time
@@ -9,9 +9,9 @@ from logger import Logger
 from config import Config
 import Queue
 from threading import Thread
-from util import natural_sortkey
+from util import natural_sortkey, setup_sqlite_lib
 import sys
-import re
+setup_sqlite_lib()
 
 DAY_EPOCH = 60*60*24
 PID_FILE = '/var/run/mbmerge.pid'

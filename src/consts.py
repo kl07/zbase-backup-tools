@@ -4,6 +4,7 @@
 SYSLOG_TAG = 'MembaseBackup'
 MBRESTORE_PIDFILE = '/var/run/mbrestore.pid'
 configfile = '/etc/membase-backup/default.ini'
+LAST_CHECKPOINT_FILE = '/opt/membase/membase-backup/last_closed_checkpoint'
 BACKUP_TAPNAME = 'backup'
 REPLICATION_TAPNAME = 'replication'
 PATH_MBBACKUP_EXEC = '/opt/membase/lib/python/mbbackup-incremental'

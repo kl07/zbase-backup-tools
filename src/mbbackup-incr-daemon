@@ -12,14 +12,17 @@ import signal
 import commands
 from threading import Thread
 from mc_bin_client import MemcachedClient 
+from util import setup_sqlite_lib
 import Queue
+setup_sqlite_lib()
 import sqlite3
+
 
 PID_FILE = '/var/run/mbbackup-incr.pid'
 
 class BackupProcess:
     """
-    Upload incremental backups to S3
+    Create backups and upload incremental backups to S3
     """
     def __init__(self):
         self.exit_status = 0
@@ -176,25 +179,47 @@ class BackupProcess:
             return True
         return False
 
+    def is_closed_checkpoint_moved(self):
+        last_checkpoint = 0
+        if os.path.exists(consts.LAST_CHECKPOINT_FILE):
+            last_checkpoint = int(open(consts.LAST_CHECKPOINT_FILE).read())
+        stats = self.mb.stats('checkpoint')
+        current_checkpoint = int(stats['vb_0:last_closed_checkpoint_id'])
+        self.logger.log("Last closed checkpoint ID: %d, Current closed checkpoint ID: %d" %(last_checkpoint, current_checkpoint))
+	self.current_checkpoint = current_checkpoint
+        if last_checkpoint != current_checkpoint:
+            return True
+        else:
+            return False
+
+
     def backup_process_thread(self):
         interval = self.config.backup_interval_mins*60
         while True:
             start_time = time.time()
-            self.logger.log("Waiting for obtaining free ramfs buffer")
-            buffer_path = self.free_buffer_list.get()
-            self.logger.log("Obtained buffer %s" %buffer_path)
-            now = time.localtime(time.time())
-            datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
-            backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S.mbb',now) 
-            backup_root = buffer_path
-            backup_dir = os.path.join(backup_root, self.config.cloud, self.config.game_id,self.hostname, consts.INCR_DIRNAME)
-            backup_filepath = os.path.join(backup_dir, backup_filename)
-            status = self._take_backup(backup_filepath, datetimestamp)
-            if status:
-                self.backup_queue.put((backup_filepath, buffer_path))
-                self.logger.log("Added %s to upload queue" %backup_filepath)
+
+            if self.is_closed_checkpoint_moved():
+                self.logger.log("Waiting for obtaining free ramfs buffer")
+                buffer_path = self.free_buffer_list.get()
+                self.logger.log("Obtained buffer %s" %buffer_path)
+                now = time.localtime(time.time())
+                datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
+                backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S.mbb',now) 
+                backup_root = buffer_path
+                backup_dir = os.path.join(backup_root, self.config.cloud, self.config.game_id,self.hostname, consts.INCR_DIRNAME)
+                backup_filepath = os.path.join(backup_dir, backup_filename)
+                status = self._take_backup(backup_filepath, datetimestamp)
+                if status:
+                    self.backup_queue.put((backup_filepath, buffer_path))
+                    self.logger.log("Added %s to upload queue" %backup_filepath)
+                    f = open(consts.LAST_CHECKPOINT_FILE,'w')
+                    f.write(str(self.current_checkpoint))
+                    f.close()
+                else:
+                    self.exit(1)
             else:
-                self.exit(1)
+                self.logger.log("Closed checkpoint hasn't been moved. Skipping backup")
+
             end_time = time.time()
             total_time = int(end_time - start_time)
             sleep_time = interval - total_time

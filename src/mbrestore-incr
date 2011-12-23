@@ -9,11 +9,14 @@ from logger import Logger
 from config import Config
 import Queue
 from threading import Thread
-from util import natural_sortkey 
+from util import natural_sortkey, setup_sqlite_lib 
 import sys
 
 DAY_EPOCH = 60*60*24
 PID_FILE = '/var/run/mbrestore.pid'
+
+setup_sqlite_lib()
+
 
 def epoch2date(epoch):
     lt = time.localtime(epoch)
