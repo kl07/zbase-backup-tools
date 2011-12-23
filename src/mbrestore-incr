@@ -204,7 +204,7 @@ class Restore:
 
     def main(self):
 
-        start_time = time.time()
+        start_time = int(time.time())
 
         if os.getuid() != 0:
             print "Please run as root"
@@ -233,7 +233,7 @@ class Restore:
 
         self.download_queue.join()
         t.join()
-        end_time = time.time()
+        end_time = int(time.time())
         self.logger.log("Restore completed successfully in %d seconds" %end_time-start_time)
 
         

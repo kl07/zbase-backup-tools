@@ -1,0 +1,313 @@
+#!/usr/bin/python 
+#Description: Backup s3 uploader Daemon
+
+import sys
+import os
+import re
+import consts
+from config import Config
+from logger import Logger 
+import time
+import signal
+import commands
+from threading import Thread
+from mc_bin_client import MemcachedClient 
+import Queue
+
+PID_FILE = '/var/run/mbbackup-incr.pid'
+
+class BackupProcess:
+    """
+    Upload incremental backups to S3
+    """
+    def __init__(self):
+        self.exit_status = 0
+        status = self.init_mb_object()
+        if status:
+           self.logger.log("=== Starting Membase Backup Daemon ===")
+        else:
+            sys.exit(1)
+	signal.signal(signal.SIGINT, self.graceful_exit)
+	signal.signal(signal.SIGQUIT, self.graceful_exit)
+	signal.signal(signal.SIGTERM, self.graceful_exit)
+        
+    def init_mb_object(self):
+        status = True
+        try:
+            self.config = Config(consts.configfile) 
+            self.config.read()
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+            self.current_backup = None
+        except Exception, e:
+            self.config.syslog_tag = consts.SYSLOG_TAG 
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+            self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
+            status = False
+        try:
+            self.mb = MemcachedClient(host='127.0.0.1', port=11211)
+        except Exception:
+            self.logger.log("FAILED: Could not initialize membase server connection")
+            status = False
+            return status
+
+        try:
+            self.cloud = self.config.cloud 
+            self.game_id = self.config.game_id
+            self.hostname = self.config.hostname
+            buffer_list = self.config.buffer_list.split(',')
+            self.free_buffer_list = Queue.Queue() 
+            self.backup_queue = Queue.Queue()
+            for b in buffer_list:
+                self.free_buffer_list.put(b) 
+        except Exception, e:
+            self.logger.log("FAILED: %s" %str(e))
+            status = False
+        return status 
+
+    def resume_process(self):
+        self.logger.log("Looking for backup files to resume upload process")
+        now = time.localtime(time.time())
+        date = time.strftime('%Y-%m-%d', now)
+        dirpath_suffix = '%s/%s/%s/%s/%s' %(self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME, date) 
+        
+        for b in list(self.free_buffer_list.queue):
+            try:
+                flist = os.listdir(os.path.join(b, dirpath_suffix))
+            except:
+                return    
+            if len(flist) == 1:
+                self.logger.log("Found backup file %s. Pusing to uploader queue" %flist[0])
+                item = (os.path.join(b,flist[0]), b)
+                self.free_buffer_list.queue.remove(b)
+                self.backup_queue.put(item)
+
+    def _upload_file(self, filepath, buffer_path): 
+        retries = self.config.upload_retries
+        root_path = buffer_path
+        if root_path[-1] == '/':
+            root_path = root_path[:-1]
+        regex = re.compile('^%s(/.*)' %root_path)
+        s3suffix_path = regex.findall(filepath)[0]
+        s3path = "s3://%s%s" %(self.config.s3bucket, s3suffix_path)
+
+        self.logger.log("ATTEMPT: Uploading %s to %s" %(filepath, s3path))
+        upload_cmd = "%s sync %s %s -v" %(consts.PATH_S3CMD_EXEC, 
+                filepath,
+                s3path)
+        self.logger.log("Executing command, %s" %upload_cmd)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Retrying upload for %s" %filepath)
+            status, output = commands.getstatusoutput(upload_cmd)
+            self.logger.log("Uploading file %s to %s" %(filepath, s3path))
+        if status > 0:
+            self.logger.log("FAILED: Upload to S3 failed for backup file %s (%s)" %(filepath, output))
+            return False
+        else:
+            self.logger.log(output)
+            self.logger.log("SUCCESS: Uploading %s to %s" %(filepath, s3path))
+        return True 
+
+    def _remove_file(self, filepath):
+        self.logger.log("Removing backup file, %s" %filepath)
+        try:
+            os.unlink(filepath)
+            return True
+        except:
+            return False
+        
+    def upload_process_thread(self):
+        upload_interval = self.config.upload_interval_mins*60
+        while True:
+            start_time = time.time()
+            self.logger.log("Waiting for obtaining backup file")
+            backup_item = self.backup_queue.get()
+            (backup_filepath, buffer_path) = backup_item
+            status = self._upload_file(backup_filepath, buffer_path)
+            if status:
+                self.free_buffer_list.put(buffer_path)
+                self._remove_file(backup_filepath)
+            else:
+                self.exit(1)
+            end_time = time.time()
+            total_time = int(end_time-start_time)
+            sleep_time = upload_interval - total_time
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+    def graceful_exit(self, signum=None, frame=None):
+        self.logger.log("Backup process terminated")
+        if self.current_backup != None:
+            if os.path.exists(self.current_backup):
+                os.unlink(self.current_backup)
+        os.unlink(PID_FILE)
+        os._exit(self.exit_status)
+        
+
+    def exit(self, status):
+        self.exit = status
+        self.graceful_exit()
+
+    def is_tap_alive(self, tapname):
+        try:
+            tap_stats = self.mb.stats('tap')
+        except Exception:
+            self.logger.log("FAILED: Could not fetch tap stats from membase server")
+            self.exit(1)
+
+        if len(filter(lambda x: 'eq_tapq:%s:' %(tapname) in x, tap_stats)):
+            return True
+        return False
+
+    def backup_process_thread(self):
+        interval = self.config.backup_interval_mins*60
+        while True:
+            start_time = time.time()
+            self.logger.log("Waiting for obtaining free ramfs buffer")
+            buffer_path = self.free_buffer_list.get()
+            self.logger.log("Obtained buffer %s" %buffer_path)
+            now = time.localtime(time.time())
+            datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
+            date = time.strftime('%Y-%m-%d', now)
+            backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S.mbb',now) 
+            backup_root = buffer_path
+            backup_dir = os.path.join(backup_root, self.config.cloud, self.config.game_id,self.hostname, consts.INCR_DIRNAME, date)
+            backup_filepath = os.path.join(backup_dir, backup_filename)
+            status = self._take_backup(backup_filepath, datetimestamp)
+            if status:
+                self.backup_queue.put((backup_filepath, buffer_path))
+                self.logger.log("Added %s to upload queue" %backup_filepath)
+            else:
+                self.exit(1)
+            end_time = time.time()
+            total_time = int(end_time - start_time)
+            sleep_time = interval - total_time
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+    def _take_backup(self, backup_filepath, datetimestamp):
+        """
+        Create incremental backup
+        """
+        if self.is_tap_alive(consts.REPLICATION_TAPNAME):
+            self.logger.log("The host is a master. Exiting")
+            self.exit(1)
+
+        if os.path.exists(consts.MBRESTORE_PIDFILE):
+            pid = int(open(consts.MBRESTORE_PIDFILE).read())
+            try:
+                os.kill(pid, 0)
+                self.logger.log("Restore process is on progress. Exiting")
+                self.exit(1)
+            except:
+                pass
+
+        start_time = time.time()
+        self.logger.log("==== START BACKUP ====")
+        self.logger.log("Creating Backup for %s" %(datetimestamp))
+
+        if not self.is_tap_alive(consts.BACKUP_TAPNAME):
+            self.logger.log("No registered TAP for Backup found")
+            self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
+            return False
+
+        backup_dir = os.path.dirname(backup_filepath)
+        backup_filename = os.path.basename(backup_filepath)
+        if not os.path.exists(backup_dir):
+            try:
+                os.makedirs(backup_dir)
+            except Exception, e:
+                self.logger.log("FAILED: Creating Backup directory %s (%s)" %(backup_dir, e.strerror))
+                self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
+                return False
+
+        self.current_backup = backup_filepath
+        self.logger.log("Creating Backup file : %s" %(backup_filepath))
+        mbbackup_cmd = "/usr/bin/python26 %s -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
+        status, msg = commands.getstatusoutput(mbbackup_cmd)
+        
+        size = 0
+        if status > 0:
+            self.logger.log("FAILED: %s" %msg)
+            self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
+            if os.path.exists(backup_filepath):
+                os.unlink(backup_filepath)
+            return False
+        else:
+            self.current_backup = None
+            size = os.stat(backup_filepath).st_size
+            if size == 0:
+                self.logger.log("FAILED: Backup size is 0")
+                os.unlink(backup_filepath)
+                self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
+                return False
+
+        end_time = time.time()
+        time_taken = end_time - start_time
+        self.logger.log("Completed Backup for %s" %(datetimestamp))
+        self.logger.log("BACKUP SUMMARY: size: %d, time-taken: %d, backup-file: %s" %(size, int(time_taken), backup_filename))
+        self.logger.log("==== END BACKUP ====")
+        return True 
+
+    def mainloop(self):
+
+        self.resume_process()
+        backup_thread = Thread(target=self.backup_process_thread)
+        upload_thread = Thread(target=self.upload_process_thread)
+        backup_thread.setDaemon(True)
+        upload_thread.setDaemon(True)
+
+        backup_thread.start()
+        upload_thread.start()
+        while True:
+            time.sleep(100)
+
+if __name__ == '__main__':
+    if os.getuid() != 0:
+        print "Please run as root"
+        sys.exit(1)
+    try:
+        command = sys.argv[1]
+    except:
+        command = None
+
+    if command == 'start':
+
+        if os.path.exists(PID_FILE): 
+            pid = int(open(PID_FILE).read())
+            try:
+                os.kill(pid, 0)
+                print "Uploader Daemon with PID:%d is already running" %pid
+                os._exit(1)
+            except:
+                pass
+        try:
+            pid = os.fork()
+            if pid == 0:
+                f = open(PID_FILE,'w')
+                f.write(str(os.getpid()))
+                f.close()
+	    else:
+                os._exit(0)
+        except:
+            os._exit(2)
+        core = BackupProcess()
+        core.mainloop()
+
+    elif command == "stop":
+        if os.path.exists(PID_FILE): 
+            print "Issuing stop command for Backup Daemon"
+            pid = int(open(PID_FILE).read())
+            try:
+                os.kill(pid, 0)
+            except:
+                print "Uploader is not already running"
+                sys.exit(0)
+
+            os.kill(pid, signal.SIGTERM)
+        else:
+           print "Uploader Daemon is not running"
+
+    else:
+        print "Usage: %s command\ncommand = start or stop\n" %sys.argv[0]
+        

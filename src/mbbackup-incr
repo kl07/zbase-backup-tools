@@ -9,6 +9,7 @@ import time
 import socket 
 import consts 
 from logger import Logger
+# FIXME log message should have process id along with timestamp.
 from config import Config
 from mc_bin_client import MemcachedClient 
 
@@ -17,6 +18,7 @@ class MembaseBackup:
         self.hostname = socket.gethostname()
         self.hostprefix = '-'.join(self.hostname.split('-')[:-1])
         self.backup_file = ''
+        # FIXME SIGTERM handling
         signal.signal(signal.SIGINT, self._exit_cleanup)
         signal.signal(signal.SIGQUIT, self._exit_cleanup)
 
@@ -29,9 +31,10 @@ class MembaseBackup:
 
         try:
             self.logger.log("Cleaning up %s" %self.backup_file)
+# FIXME ensure backup_file string is not empty and file is present.
             os.unlink(self.backup_file)
             lock_file = self.backup_file + '.lock'
-            if os.path.exitsts(lock_file):
+            if os.path.exists(lock_file):
                 os.unlink(lock_file)
         except:
             pass
@@ -49,7 +52,7 @@ class MembaseBackup:
             self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
             status = False
         try:
-            self.mb = MemcachedClient()
+            self.mb = MemcachedClient() # FIXME pass the host:port explicitly here.
         except Exception:
             self.logger.log("FAILED: Could not initialize membase server connection")
             status = False
