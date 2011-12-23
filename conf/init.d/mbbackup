@@ -1,0 +1,19 @@
+#!/bin/bash 
+
+. /etc/init.d/functions
+
+
+command=$1
+
+if [ "$command" = "start" ];
+then
+    daemon "{ /opt/membase/membase-backup/mbbackup-incr-daemon start > /dev/null 2>&1 }"
+
+fi
+
+
+if [ "$command" = "stop" ];
+then
+   mbbackup-uploader start
+fi
+
