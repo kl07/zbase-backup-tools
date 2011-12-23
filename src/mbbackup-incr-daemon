@@ -69,6 +69,7 @@ class BackupProcess:
         now = time.localtime(time.time())
         date = time.strftime('%Y-%m-%d', now)
         dirpath_suffix = '%s/%s/%s/%s/%s' %(self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME, date) 
+       
         
         for b in list(self.free_buffer_list.queue):
             try:
@@ -77,7 +78,7 @@ class BackupProcess:
                 return    
             if len(flist) == 1:
                 self.logger.log("Found backup file %s. Pusing to uploader queue" %flist[0])
-                item = (os.path.join(b,flist[0]), b)
+                item = (os.path.join(b,dirpath_suffix,flist[0]), b)
                 self.free_buffer_list.queue.remove(b)
                 self.backup_queue.put(item)
 
