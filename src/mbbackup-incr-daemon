@@ -185,10 +185,9 @@ class BackupProcess:
             self.logger.log("Obtained buffer %s" %buffer_path)
             now = time.localtime(time.time())
             datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
-            date = time.strftime('%Y-%m-%d', now)
             backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S.mbb',now) 
             backup_root = buffer_path
-            backup_dir = os.path.join(backup_root, self.config.cloud, self.config.game_id,self.hostname, consts.INCR_DIRNAME, date)
+            backup_dir = os.path.join(backup_root, self.config.cloud, self.config.game_id,self.hostname, consts.INCR_DIRNAME)
             backup_filepath = os.path.join(backup_dir, backup_filename)
             status = self._take_backup(backup_filepath, datetimestamp)
             if status:
