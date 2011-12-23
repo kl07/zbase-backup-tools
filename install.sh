@@ -10,7 +10,7 @@ then
 fi
 
 echo Installing Incremental backup scripts
-mkdir -p /etc/membase-backup && cp $installer_path/conf/default.ini /etc/membase-backup  && cp -r $installer_path/src/ /opt/membase/membase-backup/ && cp $installer_path/conf/membase-backup-incr.cron /etc/cron.d/ 
+mkdir -p /etc/membase-backup && cp $installer_path/conf/default.ini /etc/membase-backup  && cp -r $installer_path/src/ /opt/membase/membase-backup/ && cp $installer_path/conf/init.d/mbbackup /etc/init.d/
 
 if [ $? -eq 0 ];
 then

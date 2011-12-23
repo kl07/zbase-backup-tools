@@ -2,8 +2,10 @@
 #Description: Constants definitions
 
 SYSLOG_TAG = 'MembaseBackup'
+MBRESTORE_PIDFILE = '/var/run/mbrestore.pid'
 configfile = '/etc/membase-backup/default.ini'
 BACKUP_TAPNAME = 'backup'
+REPLICATION_TAPNAME = 'replication'
 PATH_MBBACKUP_EXEC = '/opt/membase/lib/python/mbbackup-incremental'
 PATH_S3CMD_EXEC = '/usr/bin/s3cmd_zynga'
 INCR_DIRNAME = 'incremental'
