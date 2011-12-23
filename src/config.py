@@ -23,7 +23,7 @@ class Config:
         syslog_tag = self.config.get('Log', 'syslog_tag')
         cloud = self.config.get('General', 'cloud')
         game_id = self.config.get('General', 'game_id')
-        buffer_list = self.config.get('Restore', 'buffer_list')
+        buffer_list = self.config.get('General', 'buffer_list')
         hostname = self.config.get('Restore', 'hostname')
         download_retries = self.config.get('Restore', 'download_retries')
         upload_retries = self.config.get('S3Upload', 'upload_retries')
