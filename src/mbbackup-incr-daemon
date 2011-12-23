@@ -10,6 +10,7 @@ from logger import Logger
 import time
 import signal
 import commands
+import socket
 from threading import Thread
 from mc_bin_client import MemcachedClient 
 from util import setup_sqlite_lib
@@ -56,7 +57,7 @@ class BackupProcess:
         try:
             self.cloud = self.config.cloud 
             self.game_id = self.config.game_id
-            self.hostname = self.config.hostname
+            self.hostname = socket.gethostname()
             buffer_list = self.config.buffer_list.split(',')
             self.free_buffer_list = Queue.Queue() 
             self.backup_queue = Queue.Queue()
