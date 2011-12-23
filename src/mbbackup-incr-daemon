@@ -13,6 +13,7 @@ import commands
 from threading import Thread
 from mc_bin_client import MemcachedClient 
 import Queue
+import sqlite3
 
 PID_FILE = '/var/run/mbbackup-incr.pid'
 
@@ -37,7 +38,6 @@ class BackupProcess:
             self.config = Config(consts.configfile) 
             self.config.read()
             self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
-            self.current_backup = None
         except Exception, e:
             self.config.syslog_tag = consts.SYSLOG_TAG 
             self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
@@ -70,17 +70,20 @@ class BackupProcess:
         date = time.strftime('%Y-%m-%d', now)
         dirpath_suffix = '%s/%s/%s/%s/%s' %(self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME, date) 
        
-        
         for b in list(self.free_buffer_list.queue):
             try:
                 flist = os.listdir(os.path.join(b, dirpath_suffix))
             except:
                 return    
             if len(flist) == 1:
-                self.logger.log("Found backup file %s. Pusing to uploader queue" %flist[0])
-                item = (os.path.join(b,dirpath_suffix,flist[0]), b)
-                self.free_buffer_list.queue.remove(b)
-                self.backup_queue.put(item)
+                filepath = os.path.join(b,dirpath_suffix,flist[0])
+                if self._is_backup_valid(filepath):
+                    self.logger.log("Found backup file %s. Pusing to uploader queue" %flist[0])
+                    item = (filepath, b)
+                    self.free_buffer_list.queue.remove(b)
+                    self.backup_queue.put(item)
+                else:
+                    self._remove_file(filepath)
 
     def _upload_file(self, filepath, buffer_path): 
         retries = self.config.upload_retries
@@ -99,8 +102,10 @@ class BackupProcess:
         for i in range(retries):
             if i > 0:
                 self.logger.log("Retrying upload for %s" %filepath)
-            status, output = commands.getstatusoutput(upload_cmd)
             self.logger.log("Uploading file %s to %s" %(filepath, s3path))
+            status, output = commands.getstatusoutput(upload_cmd)
+            if status == 0:
+                break
         if status > 0:
             self.logger.log("FAILED: Upload to S3 failed for backup file %s (%s)" %(filepath, output))
             return False
@@ -109,12 +114,27 @@ class BackupProcess:
             self.logger.log("SUCCESS: Uploading %s to %s" %(filepath, s3path))
         return True 
 
+
+    def _is_backup_valid(self, filepath):
+        try:
+            db = sqlite3.connect(filepath)
+            cursor = db.execute("select count(*) from cpoint_op;")
+            mutation_count = cursor.fetchone()[0]
+            if mutation_count == 0:
+                return False
+            else:
+                return True
+        except Exception, e:
+            self.logger.log("FAILED: sqlite validation failed for %s (%s)" %(filepath, str(e)))
+            return False
+
     def _remove_file(self, filepath):
         self.logger.log("Removing backup file, %s" %filepath)
         try:
             os.unlink(filepath)
             return True
-        except:
+        except Exception, e:
+            self.logger.log("FAILED: Unable to remove file %s (%s)" %(filepath, str(e)))
             return False
         
     def upload_process_thread(self):
@@ -138,12 +158,8 @@ class BackupProcess:
 
     def graceful_exit(self, signum=None, frame=None):
         self.logger.log("Backup process terminated")
-        if self.current_backup != None:
-            if os.path.exists(self.current_backup):
-                os.unlink(self.current_backup)
         os.unlink(PID_FILE)
         os._exit(self.exit_status)
-        
 
     def exit(self, status):
         self.exit = status
@@ -208,7 +224,7 @@ class BackupProcess:
         self.logger.log("Creating Backup for %s" %(datetimestamp))
 
         if not self.is_tap_alive(consts.BACKUP_TAPNAME):
-            self.logger.log("No registered TAP for Backup found")
+            self.logger.log("FAILED: No registered TAP for Backup found")
             self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
             return False
 
@@ -222,7 +238,6 @@ class BackupProcess:
                 self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
                 return False
 
-        self.current_backup = backup_filepath
         self.logger.log("Creating Backup file : %s" %(backup_filepath))
         mbbackup_cmd = "/usr/bin/python26 %s -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
         status, msg = commands.getstatusoutput(mbbackup_cmd)
@@ -232,16 +247,16 @@ class BackupProcess:
             self.logger.log("FAILED: %s" %msg)
             self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
             if os.path.exists(backup_filepath):
-                os.unlink(backup_filepath)
+                self._remove_file(backup_filepath)
             return False
         else:
-            self.current_backup = None
             size = os.stat(backup_filepath).st_size
-            if size == 0:
-                self.logger.log("FAILED: Backup size is 0")
-                os.unlink(backup_filepath)
-                self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
-                return False
+            if size <= 3072:
+                if not self._is_backup_valid(backup_filepath):
+                    self.logger.log("FAILED: Backup size is %d" %size)
+                    self._remove_file(backup_filepath)
+                    self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
+                    return False
 
         end_time = time.time()
         time_taken = end_time - start_time
