@@ -2,6 +2,7 @@
 #Description: Configuration parser
 
 import ConfigParser
+import socket
 
 class Config:
     def __init__(self, conf_file = None):
@@ -21,7 +22,10 @@ class Config:
         cloud = self.config.get('General', 'cloud')
         game_id = self.config.get('General', 'game_id')
         buffer_list = self.config.get('General', 'buffer_list')
-        hostname = self.config.get('Restore', 'hostname')
+        try:
+            hostname = self.config.get('Restore', 'hostname')
+        except:
+            hostname = socket.gethostname()
         download_retries = self.config.get('Restore', 'download_retries')
         upload_retries = self.config.get('S3Upload', 'upload_retries')
 
