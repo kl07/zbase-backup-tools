@@ -127,7 +127,7 @@ class BackupProcess:
             return False
         else:
             self.logger.log(output)
-            self.logger.log("SUCCESS: Uploading %s to %s " %(filepath, s3path))
+            self.logger.log("SUCCESS: Uploading %s to %s (retries=%d)" %(filepath, s3path, i+1))
         return True 
 
 
