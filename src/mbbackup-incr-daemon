@@ -58,7 +58,15 @@ class BackupProcess:
             self.cloud = self.config.cloud 
             self.game_id = self.config.game_id
             self.hostname = socket.gethostname()
-            buffer_list = self.config.buffer_list.split(',')
+            buffer_list = set(self.config.buffer_list.split(','))
+            f = open('/etc/mtab')
+            lines = f.readlines()
+            tmpfs_locations = map(lambda y: y.split(' ')[1], filter(lambda x: ' tmpfs ' in x, lines))
+            for b in buffer_list:
+                if len(filter(lambda x: x in b, tmpfs_locations)) == 0:
+                    self.logger.log("FAILED: Buffer %s is not a tmpfs location" %b)
+                    self.exit(1)
+
             self.free_buffer_list = Queue.Queue() 
             self.backup_queue = Queue.Queue()
             for b in buffer_list:
@@ -169,9 +177,16 @@ class BackupProcess:
         self.exit = status
         self.graceful_exit()
 
+    def mbstats(self, item):
+        try:
+            return self.mb.stats(item)
+        except:
+            self.logger.log("FAILED: Unable to query stats from Membase:11211")
+            self.exit(1)
+
     def is_tap_alive(self, tapname):
         try:
-            tap_stats = self.mb.stats('tap')
+            tap_stats = self.mbstats('tap')
         except Exception:
             self.logger.log("FAILED: Could not fetch tap stats from membase server")
             self.exit(1)
@@ -184,7 +199,7 @@ class BackupProcess:
         last_checkpoint = 0
         if os.path.exists(consts.LAST_CHECKPOINT_FILE):
             last_checkpoint = int(open(consts.LAST_CHECKPOINT_FILE).read())
-        stats = self.mb.stats('checkpoint')
+        stats = self.mbstats('checkpoint')
         current_checkpoint = int(stats['vb_0:last_closed_checkpoint_id'])
         self.logger.log("Last closed checkpoint ID: %d, Current closed checkpoint ID: %d" %(last_checkpoint, current_checkpoint))
 	self.current_checkpoint = current_checkpoint
