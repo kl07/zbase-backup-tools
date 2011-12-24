@@ -84,8 +84,6 @@ class BackupProcess:
 
     def resume_process(self):
         self.logger.log("Looking for backup files to resume upload process")
-        now = time.localtime(time.time())
-        date = time.strftime('%Y-%m-%d', now)
         dirpath_suffix = '%s/%s/%s/%s/' %(self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME) 
        
         for b in list(self.free_buffer_list.queue):
@@ -213,10 +211,15 @@ class BackupProcess:
             last_checkpoint = int(open(consts.LAST_CHECKPOINT_FILE).read())
         stats = self.mbstats('checkpoint')
         current_checkpoint = int(stats['vb_0:last_closed_checkpoint_id'])
+        num_checkpoints = int(stats['vb_0:num_checkpoints'])
         self.logger.log("Last closed checkpoint ID: %d, Current closed checkpoint ID: %d" %(last_checkpoint, current_checkpoint))
 	self.current_checkpoint = current_checkpoint
         if last_checkpoint != current_checkpoint:
-            return True
+            if current_checkpoint == last_checkpoint + num_checkpoints:
+                return True
+            else:
+                self.logger.log("FAILED: Somebody has tapped backup data. Last backup tap cursor position mismatch")
+                self.exit(1)
         else:
             return False
 
@@ -237,13 +240,13 @@ class BackupProcess:
                 backup_dir = os.path.join(backup_root, self.config.cloud, self.config.game_id,self.hostname, consts.INCR_DIRNAME)
                 backup_filepath = os.path.join(backup_dir, backup_filename)
                 status = self._take_backup(backup_filepath, datetimestamp)
-                f = open(consts.LAST_CHECKPOINT_FILE,'w')
-                f.write(str(self.current_checkpoint))
-                f.close()
- 
+
                 if status:
                     self.backup_queue.put((backup_filepath, buffer_path))
                     self.logger.log("Added %s to upload queue" %backup_filepath)
+                    f = open(consts.LAST_CHECKPOINT_FILE,'w')
+                    f.write(str(self.current_checkpoint))
+                    f.close()
                 else:
                     self.exit(1)
             else:
