@@ -66,6 +66,9 @@ class BackupProcess:
                 if len(filter(lambda x: x in b, tmpfs_locations)) == 0:
                     self.logger.log("FAILED: Buffer %s is not a tmpfs location" %b)
                     self.exit(1)
+            if not os.path.exists('/root/.s3cfg'):
+                self.logger.log("FAILED: s3cmd_zynga configuration not found at /root/.s3cfg")
+                self.exit(1)
 
             self.free_buffer_list = Queue.Queue() 
             self.backup_queue = Queue.Queue()
@@ -107,7 +110,7 @@ class BackupProcess:
         s3path = "s3://%s%s" %(self.config.s3bucket, s3suffix_path)
 
         self.logger.log("ATTEMPT: Uploading %s to %s" %(filepath, s3path))
-        upload_cmd = "%s sync %s %s -v" %(consts.PATH_S3CMD_EXEC, 
+        upload_cmd = "%s -c /root/.s3cfg sync %s %s -v" %(consts.PATH_S3CMD_EXEC, 
                 filepath,
                 s3path)
         self.logger.log("Executing command, %s" %upload_cmd)
