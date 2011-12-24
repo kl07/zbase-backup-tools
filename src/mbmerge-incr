@@ -70,6 +70,7 @@ class Merge:
             self.hostname = hostname
 
         self.output_file = output_file
+        self.s3filelist = filelog
         buffer_list = self.config.buffer_list.split(',')
         self.thread_count = len(buffer_list)
 
