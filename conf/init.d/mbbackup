@@ -1,27 +1,62 @@
 #!/bin/bash 
 
 . /etc/init.d/functions
+PIDFILE=/var/run/mbbackup-incr.pid
 
 
 command=$1
 
-if [ "$command" = "start" ];
-then
-    /usr/bin/python26 /opt/membase/membase-backup/mbbackup-incr-daemon start
-    if [ $? -eq 0 ];
+start(){
+    if [ -e $PIDFILE ];
     then
-        echo Started backup daemon
-    else
-        echo Failed to start backup daemon
+        PID=$(cat $PIDFILE) 
+        kill -s 0 $PID && echo "Backup daemon is running with pid $PID" && exit 0
     fi
 
-fi
+    /usr/bin/python26 /opt/membase/membase-backup/mbbackup-incr-daemon start >/dev/null 2>&1 
+    if [ $? -eq 0 ];
+    then
+        echo Started backup daemon && exit 0
+    else
+        echo Failed to start backup daemon && exit 1
+    fi
+}
 
 
-if [ "$command" = "stop" ];
-then
-	/usr/bin/python26 /opt/membase/membase-backup/mbbackup-incr-daemon stop
-  
-fi
+status(){
+    if [ -e $PIDFILE ]; 
+    then
+        PID=$(cat $PIDFILE) 
+        kill -s 0 $PID && echo "Backup daemon is running with pid $PID" && exit 0
+    fi 
+}
+
+stop(){
+	/usr/bin/python26 /opt/membase/membase-backup/mbbackup-incr-daemon stop >/dev/null 2>&1
+    if [ $? -eq 0 ];
+    then
+        echo "Stopped backup daemon successfully"
+    else
+        echo "Failed to stop backup daemon"
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+    stop
+    ;;
+    status)
+    status memcached
+    ;;
+    restart)
+    restart
+    ;;
+    *)
+    echo $"Usage: $0 {start|stop|status|restart}"
+    exit 1
+esac
 
 
