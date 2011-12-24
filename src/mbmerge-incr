@@ -11,6 +11,7 @@ import Queue
 from threading import Thread
 from util import natural_sortkey, setup_sqlite_lib
 import sys
+import getopt
 setup_sqlite_lib()
 
 DAY_EPOCH = 60*60*24
@@ -20,9 +21,32 @@ def epoch2date(epoch):
     lt = time.localtime(epoch)
     return time.strftime('%Y-%m-%d',lt)
 
+def parse_args():
+    options = {}
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 'h:o:l:')
+    except getopt.GetoptError, err:
+        print str(err)
+        sys.exit(2)
+    for o,a in opts:
+        if o == '-h':
+            options['hostname'] = a
+        elif o == '-o':
+            options['output'] = a
+        elif o == '-l':
+            options['filelog'] = a
+        else:
+            assert False, "Unknown option"
+
+    if len(options) != 3:
+        print "Usage: %s -h hostname -l s3list.txt -o merged_file.mbb" %sys.argv[0]
+        print "More arguments required"
+        sys.exit(2)
+    return options
+
 class Merge:
 
-    def __init__(self, output_file, cloud=None, game_id=None, hostname=None):
+    def __init__(self, output_file, filelog, cloud=None, game_id=None, hostname=None):
         try:
             self.config = Config(consts.configfile) 
             self.config.read()
@@ -34,10 +58,16 @@ class Merge:
 
         if cloud == None:
             self.cloud = self.config.cloud 
+        else:
+            self.cloud = cloud
         if game_id == None:
             self.game_id = self.config.game_id
+	else:
+            self.game_id = game_id
         if hostname == None:
             self.hostname = self.config.hostname
+        else:
+            self.hostname = hostname
 
         self.output_file = output_file
         buffer_list = self.config.buffer_list.split(',')
@@ -101,6 +131,7 @@ class Merge:
         self.logger.log("Fetching Backup list from S3")
         epoch = time.time()
 	incremental_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/' %(self.config.s3bucket, self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME))
+        self.incremental_backup_list = incremental_backup_list
 
         self.logger.log("Fetching list of incremental backups")
         if not incremental_backup_list:
@@ -194,15 +225,14 @@ class Merge:
 
         self.download_queue.join()
         t.join()
+        f = open(self.s3filelist, 'w')
+        for i in self.incremental_backup_list:
+            f.write(i+'\n')
+        f.close()
         self.logger.log("Merge completed successfully. Merged file can be found at %s" %self.output_file)
-
         
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print 
-        print "Usage: %s merged_file.mbb" %sys.argv[0]
-        sys.exit(1)
-
-    merge = Merge(sys.argv[1])
+    args = parse_args()
+    merge = Merge(output_file=args['output'], filelog=args['filelog'], hostname=args['hostname'])
     merge.main()
 
