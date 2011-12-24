@@ -9,11 +9,10 @@ from config import Config
 from logger import Logger 
 import time
 import signal
-import commands
 import socket
 from threading import Thread
 from mc_bin_client import MemcachedClient 
-from util import setup_sqlite_lib
+from util import setup_sqlite_lib, getcommandoutput
 import Queue
 setup_sqlite_lib()
 import sqlite3
@@ -70,14 +69,18 @@ class BackupProcess:
                 self.logger.log("FAILED: s3cmd_zynga configuration not found at /root/.s3cfg")
                 self.exit(1)
 
+            self.processlist = Queue.Queue()
             self.free_buffer_list = Queue.Queue() 
             self.backup_queue = Queue.Queue()
             for b in buffer_list:
                 self.free_buffer_list.put(b) 
         except Exception, e:
-            self.logger.log("FAILED: %s" %str(e))
+            self.logger.log("FAILED: %s " %str(e))
             status = False
         return status 
+
+    def getstatusoutput(self, cmd):
+        return getcommandoutput(cmd, self.processlist)
 
     def resume_process(self):
         self.logger.log("Looking for backup files to resume upload process")
@@ -109,16 +112,16 @@ class BackupProcess:
         s3suffix_path = regex.findall(filepath)[0]
         s3path = "s3://%s%s" %(self.config.s3bucket, s3suffix_path)
 
-        self.logger.log("ATTEMPT: Uploading %s to %s" %(filepath, s3path))
+        self.logger.log("ATTEMPT: Uploading %s to %s " %(filepath, s3path))
         upload_cmd = "%s -c /root/.s3cfg sync %s %s -v" %(consts.PATH_S3CMD_EXEC, 
                 filepath,
                 s3path)
-        self.logger.log("Executing command, %s" %upload_cmd)
+        self.logger.log("Executing command, %s " %upload_cmd)
         for i in range(retries):
             if i > 0:
-                self.logger.log("Retrying upload for %s" %filepath)
-            self.logger.log("Uploading file %s to %s" %(filepath, s3path))
-            status, output = commands.getstatusoutput(upload_cmd)
+                self.logger.log("Retrying upload for %s " %filepath)
+            self.logger.log("Uploading file %s to %s " %(filepath, s3path))
+            status, output = self.getstatusoutput(upload_cmd)
             if status == 0:
                 break
         if status > 0:
@@ -126,7 +129,7 @@ class BackupProcess:
             return False
         else:
             self.logger.log(output)
-            self.logger.log("SUCCESS: Uploading %s to %s" %(filepath, s3path))
+            self.logger.log("SUCCESS: Uploading %s to %s " %(filepath, s3path))
         return True 
 
 
@@ -144,7 +147,7 @@ class BackupProcess:
             return False
 
     def _remove_file(self, filepath):
-        self.logger.log("Removing backup file, %s" %filepath)
+        self.logger.log("Removing backup file, %s " %filepath)
         try:
             os.unlink(filepath)
             return True
@@ -172,6 +175,12 @@ class BackupProcess:
                 time.sleep(sleep_time)
 
     def graceful_exit(self, signum=None, frame=None):
+        for process in self.processlist.queue:
+            try:
+                process.terminate()
+            except:
+                pass
+
         self.logger.log("Backup process terminated")
         os.unlink(PID_FILE)
         os._exit(self.exit_status)
@@ -220,7 +229,7 @@ class BackupProcess:
             if self.is_closed_checkpoint_moved():
                 self.logger.log("Waiting for obtaining free ramfs buffer")
                 buffer_path = self.free_buffer_list.get()
-                self.logger.log("Obtained buffer %s" %buffer_path)
+                self.logger.log("Obtained buffer %s " %buffer_path)
                 now = time.localtime(time.time())
                 datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
                 backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S.mbb',now) 
@@ -267,7 +276,7 @@ class BackupProcess:
 
         start_time = time.time()
         self.logger.log("==== START BACKUP ====")
-        self.logger.log("Creating Backup for %s" %(datetimestamp))
+        self.logger.log("Creating Backup for %s " %(datetimestamp))
 
         if not self.is_tap_alive(consts.BACKUP_TAPNAME):
             self.logger.log("FAILED: No registered TAP for Backup found")
@@ -286,7 +295,7 @@ class BackupProcess:
 
         self.logger.log("Creating Backup file : %s" %(backup_filepath))
         mbbackup_cmd = "/usr/bin/python26 %s -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
-        status, msg = commands.getstatusoutput(mbbackup_cmd)
+        status, msg = self.getstatusoutput(mbbackup_cmd)
         
         size = 0
         if status > 0:
@@ -346,6 +355,7 @@ if __name__ == '__main__':
         try:
             pid = os.fork()
             if pid == 0:
+                os.setsid()
                 f = open(PID_FILE,'w')
                 f.write(str(os.getpid()))
                 f.close()
@@ -363,7 +373,7 @@ if __name__ == '__main__':
             try:
                 os.kill(pid, 0)
             except:
-                print "Uploader is not already running"
+                print "Backup daemon is not already running"
                 sys.exit(0)
 
             os.kill(pid, signal.SIGTERM)
