@@ -80,7 +80,7 @@ class BackupProcess:
         self.logger.log("Looking for backup files to resume upload process")
         now = time.localtime(time.time())
         date = time.strftime('%Y-%m-%d', now)
-        dirpath_suffix = '%s/%s/%s/%s/%s' %(self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME, date) 
+        dirpath_suffix = '%s/%s/%s/%s/' %(self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME) 
        
         for b in list(self.free_buffer_list.queue):
             try:
@@ -225,12 +225,13 @@ class BackupProcess:
                 backup_dir = os.path.join(backup_root, self.config.cloud, self.config.game_id,self.hostname, consts.INCR_DIRNAME)
                 backup_filepath = os.path.join(backup_dir, backup_filename)
                 status = self._take_backup(backup_filepath, datetimestamp)
+                f = open(consts.LAST_CHECKPOINT_FILE,'w')
+                f.write(str(self.current_checkpoint))
+                f.close()
+ 
                 if status:
                     self.backup_queue.put((backup_filepath, buffer_path))
                     self.logger.log("Added %s to upload queue" %backup_filepath)
-                    f = open(consts.LAST_CHECKPOINT_FILE,'w')
-                    f.write(str(self.current_checkpoint))
-                    f.close()
                 else:
                     self.exit(1)
             else:
