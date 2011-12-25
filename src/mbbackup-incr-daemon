@@ -255,9 +255,11 @@ class BackupProcess:
         """
         Create incremental backup
         """
-        if self.is_tap_alive(consts.REPLICATION_TAPNAME):
-            self.logger.log("The host is a master. Exiting")
-            self.exit(1)
+
+        #TODO: Waiting for checkpoint stats to show cursor names
+        #if self.is_tap_alive(consts.REPLICATION_TAPNAME):
+        #    self.logger.log("The host is a master. Exiting")
+        #    self.exit(1)
 
         if os.path.exists(consts.MBRESTORE_PIDFILE):
             pid = int(open(consts.MBRESTORE_PIDFILE).read())
@@ -272,10 +274,11 @@ class BackupProcess:
         self.logger.log("==== START BACKUP ====")
         self.logger.log("Creating Backup for %s " %(datetimestamp))
 
-        if not self.is_tap_alive(consts.BACKUP_TAPNAME):
-            self.logger.log("FAILED: No registered TAP for Backup found")
-            self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
-            return False
+        #TODO: Waiting for checkpoint stats to show cursor names
+        #if not self.is_tap_alive(consts.BACKUP_TAPNAME):
+        #    self.logger.log("FAILED: No registered TAP for Backup found")
+        #    self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
+        #    return False
 
         backup_dir = os.path.dirname(backup_filepath)
         backup_filename = os.path.basename(backup_filepath)
