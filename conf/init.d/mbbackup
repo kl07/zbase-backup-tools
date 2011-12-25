@@ -27,8 +27,10 @@ status(){
     if [ -e $PIDFILE ]; 
     then
         PID=$(cat $PIDFILE) 
-        kill -s 0 $PID && echo "Backup daemon is running with pid $PID" && exit 0
-    fi 
+        kill -s 0 $PID && echo "Backup daemon is running with pid $PID"
+    else
+        echo "Backup daemon is not running" 
+    fi
 }
 
 stop(){
