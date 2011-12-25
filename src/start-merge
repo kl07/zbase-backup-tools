@@ -1,0 +1,218 @@
+#!/usr/bin/python26
+#Description: Wrapper script that downloads, merges and uploads
+
+import time
+import os
+import consts
+import commands
+from logger import Logger
+from config import Config
+import Queue
+from threading import Thread
+from util import natural_sortkey
+import sys
+import re
+import getopt
+import datetime
+import fnmatch
+
+DAY_EPOCH = 60*60*24
+PID_FILE = '/var/run/mbmerge.pid'
+
+def epoch2date(epoch):
+    lt = time.localtime(epoch)
+    return time.strftime('%Y-%m-%d',lt)
+
+class MergeWrapper:
+
+    def __init__(self, location=None):
+        try:
+            self.config = Config(consts.configfile)
+            self.config.read()
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+        except Exception, e:
+            self.config.syslog_tag = consts.SYSLOG_TAG
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+            self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
+
+        self.cloud = self.config.cloud
+        self.game_id = self.config.game_id
+        self.s3bucket = self.config.s3bucket
+        now=datetime.datetime.now()
+        self.timestamp = "%d:%d:%d" %(now.year,now.month,now.day)
+
+
+    def _download_file(self, s3path):
+        get_cmd = "%s get --force %s " %(consts.PATH_S3CMD_EXEC, s3path)
+        retries = self.config.download_retries
+        self.logger.log("Executing command %s" %get_cmd)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Retrying download for %s" %s3path)
+            status, output = commands.getstatusoutput(get_cmd)
+            self.logger.log("Downloading file %s " %(s3path))
+            if status == 0:
+                break
+
+        if status !=0:
+            self.logger.log("FAILED: %s" %output)
+            return False
+        else:
+            self.logger.log("Completed downloading file %s" %s3path)
+            return True
+
+    def _delete_file(self, s3path):
+        del_cmd = "%s %s %s " %(consts.PATH_S3CMD_EXEC, consts.DEL_COMMAND, s3path)
+        retries = self.config.download_retries
+        self.logger.log("Executing command %s" %del_cmd)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Retrying deletion for %s" %s3path)
+            status, output = commands.getstatusoutput(del_cmd)
+            self.logger.log("Deleting file %s " %(s3path))
+            if status == 0:
+                break
+
+        if status !=0:
+            self.logger.log("FAILED: %s" %output)
+            return False
+        else:
+            self.logger.log("Completed deleting file %s" %s3path)
+            return True
+
+
+    def _upload_file(self, file, s3path):
+        put_cmd = "%s sync %s/%s %s " %(consts.PATH_S3CMD_EXEC, consts.BACKUP_ROOT, file, s3path + file)
+        retries = self.config.download_retries
+        self.logger.log("Executing command %s" %put_cmd)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Retrying upload for %s" %file)
+            status, output = commands.getstatusoutput(put_cmd)
+            self.logger.log("Uploading  file %s " %(file))
+            if status == 0:
+                break
+
+        if status !=0:
+            self.logger.log("FAILED: %s" %output)
+            return False
+        else:
+            self.logger.log("Completed uploading file %s" %file)
+            return True
+
+    def _nuke_path(self, s3path):
+        #create an empty directory
+        empty_dir = "/tmp/nuke-%s" %self.timestamp
+        if not os.path.exists(empty_dir):
+            os.makedirs(empty_dir)
+        nuke_cmd = "%s sync --delete-removed %s %s " %(consts.PATH_S3CMD_EXEC, empty_dir, s3path)
+        retries = self.config.download_retries
+        self.logger.log("Executing command %s" %nuke_cmd)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Retrying nuking for %s" %s3path)
+            status, output = commands.getstatusoutput(nuke_cmd)
+            self.logger.log("Nuking file %s " %(s3path))
+            if status == 0:
+                break
+
+        if status !=0:
+            self.logger.log("FAILED: %s" %output)
+            return False
+        else:
+            self.logger.log("Completed nuking file %s" %s3path)
+            return True
+
+    def cleanup_files(self, output_file=None):
+        #parse the output and remove those files from the s3 bucket
+        fd = open(output_file)
+        line = fd.readline().strip()
+        while line:
+            status  = self._delete_file(line)
+            if status != True:
+                self.logger.log("Warning ! FAILED to delete file  %s" %line)
+            line = fd.readline().strip()
+
+        return True
+
+    def upload_split(self) :
+        #list all .mbb files in /dev/shm and upload them to daily backup location
+        upload_location = "s3://%s/%s/%s/%s/daily-%s/" %(self.s3bucket, self.cloud, self.game_id, self.location, self.timestamp)
+        print "upload location %s" %upload_location
+        for file in os.listdir(consts.BACKUP_ROOT):
+            if fnmatch.fnmatch(file, '*.mbb'):
+               status = self._upload_file(file, upload_location)
+               if status != True:
+                    #nuke the s3 location.
+                    self._nuke_path(upload_location)
+                    self.logger.log("FAILED to upload file %s for hostname %s" %(file, self.location))
+                    return False
+
+        return True
+
+
+    def merge_host(self, location=None):
+
+        now=datetime.datetime.now()
+        timestamp = "%d:%d:%d" %(now.year,now.month,now.day)
+        merge_backupfile = "%s/%s-daily-%s" %(consts.BACKUP_ROOT,location,timestamp)
+        output_file = "%s/%s-filelist-%s" %(consts.BACKUP_ROOT, location, timestamp)
+        merge_cmd = "%s -h %s -o %s -l %s" %(consts.MERGE_CMD,location,merge_backupfile, output_file)
+        print "executing command %s" %merge_cmd
+        status, output = commands.getstatusoutput(merge_cmd)
+        print "%s %s" %(output,status)
+        done = False
+        if status:
+            self.logger.log("Failed to merge backupfiles from location: %s" %location)
+            return False
+        else:
+            split_file_names =  merge_backupfile + '-%.mbb'
+            split_upload_cmd = "%s -o %s -m 512 %s" %(consts.SPLIT_UPLOAD_CMD, split_file_names, merge_backupfile)
+            print "Executing command %s" %split_upload_cmd
+            status2,output2 = commands.getstatusoutput(split_upload_cmd)
+            if status2:
+                self.logger.log("Failed to split and upload backup files: %s" %merge_backupfile)
+                return False
+            else:
+                self.logger.log("Merge done for location %s timestamp %s" %(location,timestamp))
+                ret_code = self.upload_split()
+                if ret_code == True:
+                    done = self.cleanup_files(output_file)
+
+                if done == False:
+                    self.logger.log("FATAL: could not complete merge for host %s" %location)
+                    return False
+                print "Cleaning up backup root"
+                os.system("rm -rf " + consts.BACKUP_ROOT + "/*")
+                return True
+
+    def main(self):
+        #download the bootstrap file from the s3 location
+        hostname = str(os.uname()[1])
+        filepath = "s3://%s/hostinfo-%s"%(consts.MBA_BOOTSTRAP_PATH,hostname)
+        status = self._download_file(filepath)
+
+        print "Cleaning up backup root"
+        os.system("rm -rf " + consts.BACKUP_ROOT + "/*")
+        if status != True:
+            self.logger.log("FAILED to download bootstrap file")
+            return False
+        else:
+            fd = open("hostinfo-%s"%hostname,'r')
+            line = fd.readline().strip()
+            while line:
+                self.location = line
+                status = self.merge_host(line)
+                if status != True:
+                    self.logger.log("FAILED to merge backup files from host %s" %line)
+                line = fd.readline().strip()
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 1:
+        print
+        print "Usage: %s <hostame list location>" %sys.argv[0]
+        sys.exit(1)
+
+    merge = MergeWrapper()
+    merge.main()

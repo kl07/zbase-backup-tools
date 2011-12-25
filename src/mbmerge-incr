@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python26
 #Description: Incremental merge script
 
 import time
@@ -48,16 +48,16 @@ class Merge:
 
     def __init__(self, output_file, filelog, cloud=None, game_id=None, hostname=None):
         try:
-            self.config = Config(consts.configfile) 
+            self.config = Config(consts.configfile)
             self.config.read()
             self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
         except Exception, e:
-            self.config.syslog_tag = consts.SYSLOG_TAG 
+            self.config.syslog_tag = consts.SYSLOG_TAG
             self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
             self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
 
         if cloud == None:
-            self.cloud = self.config.cloud 
+            self.cloud = self.config.cloud
         else:
             self.cloud = cloud
         if game_id == None:
@@ -74,12 +74,12 @@ class Merge:
         buffer_list = self.config.buffer_list.split(',')
         self.thread_count = len(buffer_list)
 
-        self.free_buffer_list = Queue.Queue() 
+        self.free_buffer_list = Queue.Queue()
         self.download_queue = Queue.Queue()
         self.file_count = 0
- 
+
         for b in buffer_list:
-            self.free_buffer_list.put(b) 
+            self.free_buffer_list.put(b)
         self.merge_queue = Queue.Queue()
 
     def _list_s3_files(self, s3path):
@@ -99,7 +99,7 @@ class Merge:
             mbb_files = filter(lambda x: x.endswith('.mbb'), files)
             if complete == False:
                 return []
-            return mbb_files 
+            return mbb_files
 
     def _download_file(self, s3path, filepath):
         get_cmd = "%s sync %s %s" %(consts.PATH_S3CMD_EXEC, s3path, filepath)
@@ -137,7 +137,7 @@ class Merge:
         self.logger.log("Fetching list of incremental backups")
         if not incremental_backup_list:
             self.logger.log("Could not find any incremental backups")
-            return False 
+            return False
 	return [ x for x in reversed(sorted(incremental_backup_list, key=natural_sortkey)) ]
 
     def populate_queue(self):
@@ -184,12 +184,12 @@ class Merge:
                 else:
                     self.exit(1)
             time.sleep(1)
-                
+
 
     def download_files(self):
         while True:
             self.logger.log("Attempt to obtain a file for download")
-            backup = self.download_queue.get() 
+            backup = self.download_queue.get()
             self.logger.log("SUCCESS: Attempt to obtain a file for download %s" %str(backup))
             buffer_path = self.free_buffer_list.get()
             self.logger.log("Obtained buffer %s" %buffer_path)
@@ -202,7 +202,7 @@ class Merge:
             self.download_queue.task_done()
 
     def main(self):
-        
+
         if os.path.exists(PID_FILE):
             pid = int(open(PID_FILE, 'r').read())
             try:
@@ -231,7 +231,7 @@ class Merge:
             f.write(i+'\n')
         f.close()
         self.logger.log("Merge completed successfully. Merged file can be found at %s" %self.output_file)
-        
+
 if __name__ == '__main__':
     args = parse_args()
     merge = Merge(output_file=args['output'], filelog=args['filelog'], hostname=args['hostname'])
