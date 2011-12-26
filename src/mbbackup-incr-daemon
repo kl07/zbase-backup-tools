@@ -31,6 +31,7 @@ class BackupProcess:
            self.logger.log("=== Starting Membase Backup Daemon ===")
         else:
             sys.exit(1)
+        self.processlist = Queue.Queue()
 	signal.signal(signal.SIGINT, self.graceful_exit)
 	signal.signal(signal.SIGQUIT, self.graceful_exit)
 	signal.signal(signal.SIGTERM, self.graceful_exit)
@@ -63,7 +64,6 @@ class BackupProcess:
                 self.logger.log("FAILED: s3cmd_zynga configuration not found at /root/.s3cfg")
                 self.exit(1)
 
-            self.processlist = Queue.Queue()
             self.free_buffer_list = Queue.Queue() 
             self.backup_queue = Queue.Queue()
             for b in buffer_list:
@@ -251,6 +251,12 @@ class BackupProcess:
             else:
                 time.sleep(interval+sleep_time)
 
+    def _get_checkpoints_frombackup(self, backup_filepath):
+        db = sqlite3.connect(backup_filepath)
+        cursor = db.execute('select cpoint_id from cpoint_state')
+        cpoint_list = map(lambda x: x[0], cursor.fetchall())
+        return sorted(cpoint_list)
+
     def _take_backup(self, backup_filepath, datetimestamp):
         """
         Create incremental backup
@@ -309,6 +315,25 @@ class BackupProcess:
                     self._remove_file(backup_filepath)
                     self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
                     return False
+            checkpoints = self._get_checkpoints_frombackup(backup_filepath)
+            if os.path.exists(consts.LAST_BACKUP_CHECKPOINT_FILE):
+                f = open(consts.LAST_BACKUP_CHECKPOINT_FILE)
+                last_backup_checkpoint = int(f.read())
+                f.close()
+            else:
+                last_backup_checkpoint = 0
+
+            if len(checkpoints):
+                if last_backup_checkpoint > 0:
+
+                    if last_backup_checkpoint + 1 != checkpoints[0]:
+                        self.logger.log("FAILED: Invalid backup. Last backup checkpoint = %d, New backup checkpoint = %s" %(last_backup_checkpoint, checkpoints[0]))
+                        self.exit(1)
+                    else:
+                        self.logger.log("Last backup_checkpoint: %d Current backup checkpoints: %s" %(last_backup_checkpoint, str(checkpoints)))
+                f = open(consts.LAST_BACKUP_CHECKPOINT_FILE, 'w')
+                f.write(str(checkpoints[-1]))
+                f.close()
 
         end_time = time.time()
         time_taken = end_time - start_time

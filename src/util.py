@@ -23,7 +23,6 @@ def getcommandoutput(cmd, queue):
     pipe = subprocess.Popen(args, shell=False, universal_newlines=True,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if queue != None:
-        print "adding item to queue"
         queue.put(pipe)
     output = str.join("", pipe.stdout.readlines()) 
     sts = pipe.wait()
