@@ -206,7 +206,6 @@ class BackupProcess:
             last_checkpoint = int(open(consts.LAST_CHECKPOINT_FILE).read())
         stats = self.mbstats('checkpoint')
         current_checkpoint = int(stats['vb_0:last_closed_checkpoint_id'])
-        num_checkpoints = int(stats['vb_0:num_checkpoints'])
         self.logger.log("Last closed checkpoint ID: %d, Current closed checkpoint ID: %d" %(last_checkpoint, current_checkpoint))
 	self.current_checkpoint = current_checkpoint
         if last_checkpoint != current_checkpoint:
@@ -235,9 +234,6 @@ class BackupProcess:
                 if status:
                     self.backup_queue.put((backup_filepath, buffer_path))
                     self.logger.log("Added %s to upload queue" %backup_filepath)
-                    f = open(consts.LAST_CHECKPOINT_FILE,'w')
-                    f.write(str(self.current_checkpoint))
-                    f.close()
                 else:
                     self.exit(1)
             else:
@@ -302,7 +298,7 @@ class BackupProcess:
         
         size = 0
         if status > 0:
-            self.logger.log("FAILED: %s" %msg)
+            self.logger.log("FAILED: mbbackup-incremental - %s" %msg)
             self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
             if os.path.exists(backup_filepath):
                 self._remove_file(backup_filepath)
@@ -316,8 +312,8 @@ class BackupProcess:
                     self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
                     return False
             checkpoints = self._get_checkpoints_frombackup(backup_filepath)
-            if os.path.exists(consts.LAST_BACKUP_CHECKPOINT_FILE):
-                f = open(consts.LAST_BACKUP_CHECKPOINT_FILE)
+            if os.path.exists(consts.LAST_CHECKPOINT_FILE):
+                f = open(consts.LAST_CHECKPOINT_FILE)
                 last_backup_checkpoint = int(f.read())
                 f.close()
             else:
@@ -331,7 +327,7 @@ class BackupProcess:
                         self.exit(1)
                     else:
                         self.logger.log("Last backup_checkpoint: %d Current backup checkpoints: %s" %(last_backup_checkpoint, str(checkpoints)))
-                f = open(consts.LAST_BACKUP_CHECKPOINT_FILE, 'w')
+                f = open(consts.LAST_CHECKPOINT_FILE, 'w')
                 f.write(str(checkpoints[-1]))
                 f.close()
 
