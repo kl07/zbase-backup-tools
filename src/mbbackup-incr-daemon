@@ -59,7 +59,12 @@ class BackupProcess:
             self.cloud = self.config.cloud 
             self.game_id = self.config.game_id
             self.hostname = socket.gethostname()
-            buffer_list = set(self.config.buffer_list.split(','))
+            raw_buffer_list = self.config.buffer_list.split(',')
+            buffer_list = set(raw_buffer_list)
+            if len(buffer_list) != len(raw_buffer_list):
+                self.logger.log("FAILED: Duplicate buffer list found in the config")
+                self.exit(1)
+
             f = open('/etc/mtab')
             lines = f.readlines()
             tmpfs_locations = map(lambda y: y.split(' ')[1], filter(lambda x: ' tmpfs ' in x, lines))
