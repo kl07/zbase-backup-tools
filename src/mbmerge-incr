@@ -92,13 +92,7 @@ class Merge:
 	else:
             lines = output.split('\n')
             files = map(lambda x: 's3://'+x.split('s3://')[-1], lines)
-            complete = False
-            for f in files:
-                if f.endswith('.done'):
-                    complete = True
             mbb_files = filter(lambda x: x.endswith('.mbb'), files)
-            if complete == False:
-                return []
             return mbb_files
 
     def _download_file(self, s3path, filepath):

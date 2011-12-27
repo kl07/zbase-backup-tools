@@ -17,7 +17,7 @@ import datetime
 import fnmatch
 
 DAY_EPOCH = 60*60*24
-PID_FILE = '/var/run/mbmerge.pid'
+PID_FILE = '/var/run/merge_wrap.pid'
 
 def epoch2date(epoch):
     lt = time.localtime(epoch)
@@ -39,11 +39,14 @@ class MergeWrapper:
         self.game_id = self.config.game_id
         self.s3bucket = self.config.s3bucket
         now=datetime.datetime.now()
-        self.timestamp = "%d:%d:%d" %(now.year,now.month,now.day)
+        self.timestamp = "%d:%d:%d-%d:%d" %(now.year,now.month,now.day, now.hour, now.minute)
 
 
-    def _download_file(self, s3path):
-        get_cmd = "%s get --force %s " %(consts.PATH_S3CMD_EXEC, s3path)
+    def _download_file(self, s3path, localpath=None):
+        if localpath != None:
+            get_cmd = "%s get %s %s" %(consts.PATH_S3CMD_EXEC, s3path, localpath)
+        else:
+            get_cmd = "%s get --force %s " %(consts.PATH_S3CMD_EXEC, s3path)
         retries = self.config.download_retries
         self.logger.log("Executing command %s" %get_cmd)
         for i in range(retries):
@@ -137,7 +140,8 @@ class MergeWrapper:
 
     def upload_split(self) :
         #list all .mbb files in /dev/shm and upload them to daily backup location
-        upload_location = "s3://%s/%s/%s/%s/daily-%s/" %(self.s3bucket, self.cloud, self.game_id, self.location, self.timestamp)
+        now=datetime.datetime.now()
+        upload_location = "s3://%s/%s/%s/%s/daily/%d:%d:%d/" %(self.s3bucket, self.cloud, self.game_id, self.location, now.year, now.month, now.day)
         print "upload location %s" %upload_location
         for file in os.listdir(consts.BACKUP_ROOT):
             if fnmatch.fnmatch(file, '*.mbb'):
@@ -147,14 +151,74 @@ class MergeWrapper:
                     self._nuke_path(upload_location)
                     self.logger.log("FAILED to upload file %s for hostname %s" %(file, self.location))
                     return False
+        # all done. Create a .done file in this location
+        os.system("touch /dev/shm/.done")
+        status = self._upload_file(".done", upload_location)
+        if status == False:
+            self.logger.log("FAILED to upload .done file for location %s" %upload_location)
+            return False
+        return True
+
+    def download_split(self, s3path):
+        splits = s3path.split("/")
+        file = filter(lambda x: x.endswith('.mbb'), splits)
+        status = self._download_file(s3path, consts.BACKUP_ROOT)
+        if status == True:
+            backup_file = consts.BACKUP_ROOT + "/" + file[0]
+            #invoke the split command on this file
+            strip_file = str(file[0]).split('.')
+            split_file_names = consts.BACKUP_ROOT + "/" + strip_file[0] + '-%.mbb'
+            split_cmd = "%s -o %s -m %d %s" %(consts.SPLIT_UPLOAD_CMD, split_file_names, consts.SPLIT_SIZE, backup_file)
+            self.logger.log("Executing split command %s" %split_cmd)
+            status,output = commands.getstatusoutput(split_cmd)
+
+            if status == 0:
+                os.system("rm " + backup_file)
+            else:
+                self.logger.log("FAILED to split : output %s" %output)
+                return False
 
         return True
+
+    def _list_s3_files(self, s3path):
+        ls_cmd = "%s ls %s" %(consts.PATH_S3CMD_EXEC, s3path)
+        self.logger.log("Executing command %s" %ls_cmd)
+        status, output = commands.getstatusoutput(ls_cmd)
+        if status !=0:
+            self.logger.log("FAILED: %s" %output)
+            return False
+        else:
+            lines = output.split('\n')
+            for each_line in lines:
+                word = each_line.split()
+                #if size of file is greater than 1G download split and upload
+                if  int(word[2]) > (1024 * 1024 * 1024):
+                    status = self.download_split(word[3])
+                    if status == False:
+                        return False
+                    else:
+                        for file in os.listdir(consts.BACKUP_ROOT):
+                            if fnmatch.fnmatch(file, '*.mbb'):
+                                status = self._upload_file(file, s3path)
+                                if status == False:
+                                    return False
+
+                    #all spits uploaded. Now delete the large file
+                    status = self._delete_file(word[3])
+                    if status == False:
+                        return False
+                    #cleanup backup root
+                    os.system("rm -rf " + consts.BACKUP_ROOT + "/*")
+                #endif
+            #endfor
+
+        return status
 
 
     def merge_host(self, location=None):
 
         now=datetime.datetime.now()
-        timestamp = "%d:%d:%d" %(now.year,now.month,now.day)
+        timestamp = "%d:%d:%d-%d:%d" %(now.year,now.month,now.day,now.hour,now.minute)
         merge_backupfile = "%s/%s-daily-%s" %(consts.BACKUP_ROOT,location,timestamp)
         output_file = "%s/%s-filelist-%s" %(consts.BACKUP_ROOT, location, timestamp)
         merge_cmd = "%s -h %s -o %s -l %s" %(consts.MERGE_CMD,location,merge_backupfile, output_file)
@@ -166,15 +230,16 @@ class MergeWrapper:
             self.logger.log("Failed to merge backupfiles from location: %s" %location)
             return False
         else:
+            self.logger.log(" Merge done for location %s" %location)
             split_file_names =  merge_backupfile + '-%.mbb'
-            split_upload_cmd = "%s -o %s -m 512 %s" %(consts.SPLIT_UPLOAD_CMD, split_file_names, merge_backupfile)
+            split_upload_cmd = "%s -o %s -m %d %s" %(consts.SPLIT_UPLOAD_CMD, split_file_names, consts.SPLIT_SIZE, merge_backupfile)
             print "Executing command %s" %split_upload_cmd
             status2,output2 = commands.getstatusoutput(split_upload_cmd)
             if status2:
                 self.logger.log("Failed to split and upload backup files: %s" %merge_backupfile)
                 return False
             else:
-                self.logger.log("Merge done for location %s timestamp %s" %(location,timestamp))
+                self.logger.log("Split done for file  %s timestamp %s" %(merge_backupfile,timestamp))
                 ret_code = self.upload_split()
                 if ret_code == True:
                     done = self.cleanup_files(output_file)
@@ -187,6 +252,19 @@ class MergeWrapper:
                 return True
 
     def main(self):
+
+        if os.path.exists(PID_FILE):
+            pid = int(open(PID_FILE, 'r').read())
+            try:
+                os.kill(pid, 0)
+                self.logger.log("Merge process is already running with PID %d" %pid)
+                os._exit(1)
+            except:
+                pass
+        fd = open(PID_FILE,'w')
+        fd.write(str(os.getpid()))
+        fd.close()
+
         #download the bootstrap file from the s3 location
         hostname = str(os.uname()[1])
         filepath = "s3://%s/hostinfo-%s"%(consts.MBA_BOOTSTRAP_PATH,hostname)
@@ -202,6 +280,7 @@ class MergeWrapper:
             line = fd.readline().strip()
             while line:
                 self.location = line
+                self._list_s3_files('s3://%s/%s/%s/%s/%s/' %(self.config.s3bucket, self.cloud, self.game_id, line, consts.INCR_DIRNAME))
                 status = self.merge_host(line)
                 if status != True:
                     self.logger.log("FAILED to merge backup files from host %s" %line)
