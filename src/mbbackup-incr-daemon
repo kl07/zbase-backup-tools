@@ -190,7 +190,7 @@ class BackupProcess:
         os._exit(self.exit_status)
 
     def exit(self, status):
-        self.exit = status
+        self.exit_status = status
         self.graceful_exit()
 
     def mbstats(self, item):
