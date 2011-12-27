@@ -17,6 +17,7 @@ PID_FILE = '/var/run/mbrestore.pid'
 
 setup_sqlite_lib()
 
+import sqlite3
 
 def epoch2date(epoch):
     lt = time.localtime(epoch)
@@ -60,6 +61,12 @@ class Restore:
         signal.signal(signal.SIGINT, self.graceful_exit)
         signal.signal(signal.SIGQUIT, self.graceful_exit)
         signal.signal(signal.SIGTERM, self.graceful_exit)
+
+    def _get_checkpoints_frombackup(self, backup_filepath):
+        db = sqlite3.connect(backup_filepath)
+        cursor = db.execute('select cpoint_id from cpoint_state')
+        cpoint_list = map(lambda x: x[0], cursor.fetchall())
+        return sorted(cpoint_list)
 
     def _list_s3_files(self, s3path, complete=True):
         ls_cmd = "%s ls %s" %(consts.PATH_S3CMD_EXEC, s3path)
@@ -196,15 +203,27 @@ class Restore:
 
     def perform_restore(self):
         shard = 0
+        last_checkpoint = None
         while shard < self.file_count:
-            self.logger.log("Waiting for restore file with shard %d" %shard)
+            self.logger.log("RESTORE: Waiting for backup file %d/%d" %(shard+1, self.file_count))
             restore_list = list(self.restore_queue.queue)
             restore_list.sort()
             if len(restore_list) > 0 and shard == restore_list[0][0]:
+                self.logger.log("Processing backup file %d/%d" %(shard+1, self.file_count))
                 backup = restore_list[0]
                 self.restore_queue.queue.remove(backup)
                 backup_file = backup[1]
                 buffer_path = backup[2]
+                checkpoints = self._get_checkpoints_frombackup(backup_file)
+                if shard == 0:
+                    last_checkpoint = checkpoints[0]
+                else:
+                    if last_checkpoint - 1 != checkpoints[-1]:
+                        self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
+                        self.exit(1)
+                    else:
+                        self.logger.log("Checkpoints in the current backup-file %s : %s" %(backup_file, str(checkpoints)))
+
                 if shard == self.file_count - 1:
                     complete = True
                 else:
@@ -217,7 +236,6 @@ class Restore:
                 else:
                     self.exit(1)
             time.sleep(1)
-                
 
     def download_files(self):
         while True:
