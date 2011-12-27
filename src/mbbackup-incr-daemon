@@ -128,7 +128,7 @@ class BackupProcess:
             return False
         else:
             self.logger.log(output)
-            self.logger.log("SUCCESS: Uploading %s to %s (retries=%d)" %(filepath, s3path, i+1))
+            self.logger.log("SUCCESS: Uploading %s to %s (retries=%d)" %(filepath, s3path, i))
         return True 
 
 
@@ -404,6 +404,7 @@ if __name__ == '__main__':
             os.kill(pid, signal.SIGTERM)
         else:
            print "Uploader Daemon is not running"
+           sys.exit(1)
 
     else:
         print "Usage: %s command\ncommand = start or stop\n" %sys.argv[0]
