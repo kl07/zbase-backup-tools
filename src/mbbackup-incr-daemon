@@ -1,4 +1,4 @@
-#!/usr/bin/python 
+#!/usr/bin/python
 #Description: Backup s3 uploader Daemon
 
 import sys
@@ -6,19 +6,18 @@ import os
 import re
 import consts
 from config import Config
-from logger import Logger 
+from logger import Logger
 import time
 import signal
 import socket
 from threading import Thread
-from mc_bin_client import MemcachedClient 
+from mc_bin_client import MemcachedClient
 from util import setup_sqlite_lib, getcommandoutput
 import Queue
+
+# Setup the sqlite3 LD_LIBRARY_PATH before importing sqlite3
 setup_sqlite_lib()
 import sqlite3
-
-
-PID_FILE = '/var/run/mbbackup-incr.pid'
 
 class BackupProcess:
     """
@@ -35,19 +34,19 @@ class BackupProcess:
 	signal.signal(signal.SIGINT, self.graceful_exit)
 	signal.signal(signal.SIGQUIT, self.graceful_exit)
 	signal.signal(signal.SIGTERM, self.graceful_exit)
-        
+
     def init_mb_object(self):
         status = True
         try:
-            self.config = Config(consts.configfile) 
+            self.config = Config(consts.CONFIG_FILE)
             self.config.read()
             self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
         except Exception, e:
-            self.config.syslog_tag = consts.SYSLOG_TAG 
+            self.config.syslog_tag = consts.SYSLOG_TAG
             self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
             self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
             status = False
-            logger_object = self.logger 
+            logger_object = self.logger
 
             class stderrlog(object):
                 def write(self, err):
@@ -56,7 +55,7 @@ class BackupProcess:
             sys.stderr = stderrlog
 
         try:
-            self.cloud = self.config.cloud 
+            self.cloud = self.config.cloud
             self.game_id = self.config.game_id
             self.hostname = socket.gethostname()
             raw_buffer_list = self.config.buffer_list.split(',')
@@ -76,27 +75,27 @@ class BackupProcess:
                 self.logger.log("FAILED: s3cmd_zynga configuration not found at /root/.s3cfg")
                 self.exit(1)
 
-            self.free_buffer_list = Queue.Queue() 
+            self.free_buffer_list = Queue.Queue()
             self.backup_queue = Queue.Queue()
             for b in buffer_list:
-                self.free_buffer_list.put(b) 
+                self.free_buffer_list.put(b)
         except Exception, e:
             self.logger.log("FAILED: %s " %str(e))
             status = False
-        return status 
+        return status
 
     def getstatusoutput(self, cmd):
         return getcommandoutput(cmd, self.processlist)
 
     def resume_process(self):
         self.logger.log("Looking for backup files to resume upload process")
-        dirpath_suffix = '%s/%s/%s/%s/' %(self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME) 
-       
+        dirpath_suffix = '%s/%s/%s/%s/' %(self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME)
+
         for b in list(self.free_buffer_list.queue):
             try:
                 flist = os.listdir(os.path.join(b, dirpath_suffix))
             except:
-                return    
+                return
             if len(flist) == 1:
                 filepath = os.path.join(b,dirpath_suffix,flist[0])
                 if self._is_backup_valid(filepath):
@@ -107,7 +106,7 @@ class BackupProcess:
                 else:
                     self._remove_file(filepath)
 
-    def _upload_file(self, filepath, buffer_path): 
+    def _upload_file(self, filepath, buffer_path):
         retries = self.config.upload_retries
         root_path = buffer_path
         if root_path[-1] == '/':
@@ -117,7 +116,7 @@ class BackupProcess:
         s3path = "s3://%s%s" %(self.config.s3bucket, s3suffix_path)
 
         self.logger.log("ATTEMPT: Uploading %s to %s " %(filepath, s3path))
-        upload_cmd = "%s -c /root/.s3cfg sync %s %s -v" %(consts.PATH_S3CMD_EXEC, 
+        upload_cmd = "%s -c /root/.s3cfg sync %s %s -v" %(consts.PATH_S3CMD_EXEC,
                 filepath,
                 s3path)
         self.logger.log("Executing command, %s " %upload_cmd)
@@ -134,7 +133,7 @@ class BackupProcess:
         else:
             self.logger.log(output)
             self.logger.log("SUCCESS: Uploading %s to %s (retries=%d)" %(filepath, s3path, i))
-        return True 
+        return True
 
 
     def _is_backup_valid(self, filepath):
@@ -158,7 +157,7 @@ class BackupProcess:
         except Exception, e:
             self.logger.log("FAILED: Unable to remove file %s (%s)" %(filepath, str(e)))
             return False
-        
+
     def upload_process_thread(self):
         upload_interval = self.config.upload_interval_mins*60
         while True:
@@ -186,7 +185,7 @@ class BackupProcess:
                 pass
 
         self.logger.log("Backup process terminated")
-        os.unlink(PID_FILE)
+        os.unlink(consts.MBBACKUP_PID_FILE)
         os._exit(self.exit_status)
 
     def exit(self, status):
@@ -237,7 +236,7 @@ class BackupProcess:
                 self.logger.log("Obtained buffer %s " %buffer_path)
                 now = time.localtime(time.time())
                 datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
-                backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S.mbb',now) 
+                backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S.mbb',now)
                 backup_root = buffer_path
                 backup_dir = os.path.join(backup_root, self.config.cloud, self.config.game_id,self.hostname, consts.INCR_DIRNAME)
                 backup_filepath = os.path.join(backup_dir, backup_filename)
@@ -275,8 +274,8 @@ class BackupProcess:
         #    self.logger.log("The host is a master. Exiting")
         #    self.exit(1)
 
-        if os.path.exists(consts.MBRESTORE_PIDFILE):
-            pid = int(open(consts.MBRESTORE_PIDFILE).read())
+        if os.path.exists(consts.MBRESTORE_PID_FILE):
+            pid = int(open(consts.MBRESTORE_PID_FILE).read())
             try:
                 os.kill(pid, 0)
                 self.logger.log("Restore process is on progress. Exiting")
@@ -307,7 +306,7 @@ class BackupProcess:
         self.logger.log("Creating Backup file : %s" %(backup_filepath))
         mbbackup_cmd = "/usr/bin/python26 %s -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
         status, msg = self.getstatusoutput(mbbackup_cmd)
-        
+
         size = 0
         if status > 0:
             self.logger.log("FAILED: mbbackup-incremental - %s" %msg)
@@ -348,7 +347,7 @@ class BackupProcess:
         self.logger.log("Completed Backup for %s" %(datetimestamp))
         self.logger.log("BACKUP SUMMARY: size: %d, time-taken: %d, backup-file: %s" %(size, int(time_taken), backup_filename))
         self.logger.log("==== END BACKUP ====")
-        return True 
+        return True
 
     def mainloop(self):
 
@@ -364,6 +363,7 @@ class BackupProcess:
             time.sleep(100)
 
 if __name__ == '__main__':
+# FIXME Don't really need root, do we?
     if os.getuid() != 0:
         print "Please run as root"
         sys.exit(1)
@@ -374,8 +374,8 @@ if __name__ == '__main__':
 
     if command == 'start':
 
-        if os.path.exists(PID_FILE): 
-            pid = int(open(PID_FILE).read())
+        if os.path.exists(consts.MBBACKUP_PID_FILE):
+            pid = int(open(consts.MBBACKUP_PID_FILE).read())
             try:
                 os.kill(pid, 0)
                 print "Uploader Daemon with PID:%d is already running" %pid
@@ -385,8 +385,7 @@ if __name__ == '__main__':
         try:
             pid = os.fork()
             if pid == 0:
-                os.setsid()
-                f = open(PID_FILE,'w')
+                f = open(consts.MBBACKUP_PID_FILE,'w')
                 f.write(str(os.getpid()))
                 f.close()
 	    else:
@@ -413,4 +412,3 @@ if __name__ == '__main__':
 
     else:
         print "Usage: %s command\ncommand = start or stop\n" %sys.argv[0]
-        
