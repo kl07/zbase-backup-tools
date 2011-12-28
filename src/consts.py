@@ -1,9 +1,11 @@
 #!/usr/bin/env python26
 #Description: Constants definitions
 
-SYSLOG_TAG = 'MembaseBackup'
-MBRESTORE_PIDFILE = '/var/run/mbrestore.pid'
-configfile = '/etc/membase-backup/default.ini'
+SYSLOG_TAG = 'membase-backup'
+MBRESTORE_PID_FILE = '/var/run/mbrestore.pid'
+MBBACKUP_PID_FILE = '/var/run/mbbackup.pid'
+MBMERGE_PID_FILE = '/var/run/mbmerge.pid'
+CONFIG_FILE = '/etc/membase-backup/default.ini'
 LAST_CHECKPOINT_FILE = '/opt/membase/membase-backup/last_closed_checkpoint'
 BACKUP_TAPNAME = 'backup'
 REPLICATION_TAPNAME = 'replication'
@@ -15,6 +17,8 @@ PERIODIC_DIRNAME = 'daily'
 MAX_BACKUP_SEARCH_TRIES = 4
 PATH_MBRESTORE_EXEC = '/opt/membase/lib/python/mbadm-online-restore'
 PATH_MBMERGE_EXEC = '/opt/membase/lib/python/mbbackup-merge-incremental'
+S3_BUCKET = 'membase-backup'
+DEFAULT_LOGLEVEL = 'INFO'
 MERGE_CMD = "/opt/membase/membase-backup/mbmerge-incr"
 BACKUP_ROOT = "/dev/shm"
 MBA_BOOTSTRAP_PATH="membase-backup/mba-hostinfo"
