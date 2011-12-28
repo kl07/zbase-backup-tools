@@ -189,6 +189,9 @@ class MergeWrapper:
             return False
         else:
             lines = output.split('\n')
+            if lines == ['']:
+                self.logger.log("WARNING: Empty incremental directory")
+                return True
             for each_line in lines:
                 word = each_line.split()
                 #if size of file is greater than 1G download split and upload
