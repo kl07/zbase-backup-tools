@@ -112,7 +112,7 @@ class BackupProcess:
         s3path = "s3://%s%s" %(self.config.s3bucket, s3suffix_path)
 
         self.logger.log("ATTEMPT: Uploading %s to %s " %(filepath, s3path))
-        upload_cmd = "%s -c % sync %s %s -v" %(consts.PATH_S3CMD_EXEC, consts.PATH_S3CMD_CONFIG, filepath, s3path)
+        upload_cmd = "%s -c %s sync %s %s -v" %(consts.PATH_S3CMD_EXEC, consts.PATH_S3CMD_CONFIG, filepath, s3path)
         self.logger.log("Executing command, %s " %upload_cmd)
         for i in range(retries):
             if i > 0:
