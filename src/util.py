@@ -19,13 +19,15 @@ def getcommandoutput(cmd, queue):
     """Return (status, output) of executing cmd in a shell."""
     """Add the process object to the queue"""
     import subprocess
-    args = args = shlex.split(cmd)
-    pipe = subprocess.Popen(args, shell=False, universal_newlines=True,
+    args = shlex.split(cmd)
+    p = subprocess.Popen(args, shell=False, universal_newlines=True,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if queue != None:
-        queue.put(pipe)
-    output = str.join("", pipe.stdout.readlines()) 
-    sts = pipe.wait()
+        queue.put(p)
+
+    output = str.join("", p.stdout.readlines())
+    sts = p.wait()
+
     if sts is None:
         sts = 0
     return sts, output
