@@ -397,7 +397,6 @@ if __name__ == '__main__':
 
         #Change the process user to nobody
         os.seteuid(nobody_uid)
-        os.setuid(nobody_uid)
         core = BackupProcess()
         core.mainloop()
     elif command == "stop":
