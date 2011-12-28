@@ -24,6 +24,7 @@ def epoch2date(epoch):
 class Restore:
 
     def __init__(self, hostname=None):
+        self.processlist = Queue.Queue()
         try:
             self.config = Config(consts.CONFIG_FILE)
             self.config.read()
@@ -35,7 +36,7 @@ class Restore:
             self.exit(1)
 
         self.logger.log("=== Starting Membase Restore ===")
-        self.processlist = Queue.Queue()
+
         self.cloud = self.config.cloud
         self.game_id = self.config.game_id
         if hostname == None:
@@ -66,7 +67,7 @@ class Restore:
         signal.signal(signal.SIGTERM, self.graceful_exit)
 
     def _list_s3_files(self, s3path, complete=True):
-        ls_cmd = "%s ls %s" %(consts.PATH_S3CMD_EXEC, s3path)
+        ls_cmd = "%s -c %s ls %s" %(consts.PATH_S3CMD_EXEC, consts.PATH_S3CMD_CONFIG, s3path)
         self.logger.log("Executing command %s" %ls_cmd)
         status, output = self.getstatusoutput(ls_cmd)
 	if status !=0:
@@ -88,7 +89,7 @@ class Restore:
             return mbb_files
 
     def _download_file(self, s3path, filepath):
-        get_cmd = "%s sync %s %s" %(consts.PATH_S3CMD_EXEC, s3path, filepath)
+        get_cmd = "%s -c %s sync %s %s" %(consts.PATH_S3CMD_EXEC, consts.PATH_S3CMD_CONFIG, s3path, filepath)
         retries = self.config.download_retries
         self.logger.log("Executing command %s" %get_cmd)
         for i in range(retries):
@@ -307,16 +308,18 @@ class Restore:
         self.logger.log("Restore completed successfully in %d seconds" %end_time-start_time)
 
 if __name__ == '__main__':
+    if os.getuid() != 0:
+        print "Please run as root"
+        sys.exit(1)
+
     args = sys.argv[1:]
-    if len(args) == 2:
+    hostname = None
+    if len(args) > 0:
         if args[0] == '-h':
             hostname = args[1]
         elif args[0] == '-u':
             print "Usage: %s -h slave-hostname" %(sys.argv[0])
             sys.exit(0)
-
-    else:
-        hostname = None
 
     restore = Restore(hostname)
     restore.main()
