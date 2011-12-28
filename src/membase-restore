@@ -231,13 +231,12 @@ class Restore:
                 buffer_path = backup[2]
                 checkpoints = self._get_checkpoints_frombackup(backup_file)
 
-                #TODO: Verification of checkpoint state to be done
-                #if shard == 0:
-                #    last_checkpoint = checkpoints[0]
-                #else:
-                #    if last_checkpoint - 1 != checkpoints[-1]:
-                #        self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
-                #        self.exit(1)
+                if shard == 0:
+                    last_checkpoint = checkpoints[0]
+                else:
+                    if not (last_checkpoint == checkpoints[-1] or last_checkpoint - 1 == checkpoints[-1]):
+                        self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
+                        self.exit(1)
 
                 self.logger.log("Checkpoints in the current backup-file %s : %s" %(backup_file, str(checkpoints)))
 
