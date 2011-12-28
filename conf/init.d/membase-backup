@@ -1,0 +1,64 @@
+#!/bin/bash 
+
+. /etc/init.d/functions
+PIDFILE=/var/run/mbbackup.pid
+
+
+command=$1
+
+start(){
+    if [ -e $PIDFILE ];
+    then
+        PID=$(cat $PIDFILE) 
+        kill -s 0 $PID && echo "Backup daemon is running with pid $PID" && exit 0
+    fi
+
+    /usr/bin/python26 /opt/membase/membase-backup/membase-backupd start >/dev/null 2>&1 
+    if [ $? -eq 0 ];
+    then
+        echo Started backup daemon && exit 0
+    else
+        echo Failed to start backup daemon && exit 1
+    fi
+}
+
+
+status(){
+    if [ -e $PIDFILE ]; 
+    then
+        PID=$(cat $PIDFILE) 
+        kill -s 0 $PID && echo "Backup daemon is running with pid $PID"
+    else
+        echo "Backup daemon is not running" 
+    fi
+}
+
+stop(){
+	/usr/bin/python26 /opt/membase/membase-backup/membase-backupd stop >/dev/null 2>&1
+    if [ $? -eq 0 ];
+    then
+        echo "Stopped backup daemon successfully"
+    else
+        echo "Failed to stop backup daemon"
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+    stop
+    ;;
+    status)
+    status; 
+    ;;
+    restart)
+    stop; start;
+    ;;
+    *)
+    echo $"Usage: $0 {start|stop|status|restart}"
+    exit 1
+esac
+
+
