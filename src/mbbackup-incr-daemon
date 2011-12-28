@@ -396,9 +396,9 @@ if __name__ == '__main__':
         core.mainloop()
 
     elif command == "stop":
-        if os.path.exists(PID_FILE): 
+        if os.path.exists(consts.MBBACKUP_PID_FILE):
             print "Issuing stop command for Backup Daemon"
-            pid = int(open(PID_FILE).read())
+            pid = int(open(consts.MBBACKUP_PID_FILE).read())
             try:
                 os.kill(pid, 0)
             except:
