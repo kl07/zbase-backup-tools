@@ -135,12 +135,13 @@ class Restore:
         """
         self.logger.log("Fetching Backup list from S3")
         epoch = time.time()
-        incremental_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/' %(self.config.s3bucket, self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME))
+        incremental_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/ -r' %(self.config.s3bucket, self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME))
         self.logger.log("Fetching list of incremental backups")
         if not incremental_backup_list:
             self.logger.log("Could not find any incremental backups")
             incremental_backup_list = []
 
+        '''
         master_backup_epoch = epoch
         self.logger.log("Searching for master backup")
         for attempt in xrange(consts.MAX_BACKUP_SEARCH_TRIES):
@@ -156,8 +157,11 @@ class Restore:
                 if attempt == consts.MAX_BACKUP_SEARCH_TRIES - 1:
                     self.logger.log("Could not find master backup. Maximum tries exceeded")
                     master_backup_list = []
+        '''
+        master_backup_list = []
 
         self.logger.log("Fetching list of periodic backups")
+        '''
         periodic_backup_list = []
         for date_epoch in xrange(int(master_backup_epoch), int(epoch) + DAY_EPOCH, DAY_EPOCH):
             date = epoch2date(date_epoch)
@@ -165,6 +169,14 @@ class Restore:
             if not periodic_file_list:
                 self.logger.log("Could not find periodic backup for %s" %date)
             periodic_backup_list.extend(periodic_file_list)
+        '''
+
+        periodic_backup_list = []
+        periodic_file_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/ -r' %(self.config.s3bucket, self.cloud, self.game_id, self.hostname, consts.PERIODIC_DIRNAME), False)
+        if not periodic_file_list:
+            self.logger.log("Could not find periodic backups")
+        else:
+            periodic_backup_list = periodic_file_list
 
         incremental_backup_list.sort(key=natural_sortkey)
         incremental_backup_list.reverse()
@@ -218,14 +230,16 @@ class Restore:
                 backup_file = backup[1]
                 buffer_path = backup[2]
                 checkpoints = self._get_checkpoints_frombackup(backup_file)
-                if shard == 0:
-                    last_checkpoint = checkpoints[0]
-                else:
-                    if last_checkpoint - 1 != checkpoints[-1]:
-                        self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
-                        self.exit(1)
-                    else:
-                        self.logger.log("Checkpoints in the current backup-file %s : %s" %(backup_file, str(checkpoints)))
+
+                #TODO: Verification of checkpoint state to be done
+                #if shard == 0:
+                #    last_checkpoint = checkpoints[0]
+                #else:
+                #    if last_checkpoint - 1 != checkpoints[-1]:
+                #        self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
+                #        self.exit(1)
+
+                self.logger.log("Checkpoints in the current backup-file %s : %s" %(backup_file, str(checkpoints)))
 
                 if shard == self.file_count - 1:
                     complete = True
