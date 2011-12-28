@@ -50,14 +50,14 @@ class Restore:
         self.free_buffer_list = Queue.Queue()
         self.download_queue = Queue.Queue()
         self.file_count = 0
-        logger_object = self.logger
 
         class stderrlog(object):
+            def __init__(self, logger):
+                self.logger = logger
             def write(self, err):
-                global logger_object
-                logger_object.log("FAILED: %s" %err)
+                self.logger.log("FAILED: %s" %err)
 
-        sys.stderr = stderrlog
+        sys.stderr = stderrlog(self.logger) 
 
         for b in buffer_list:
             self.free_buffer_list.put(b)
@@ -158,10 +158,10 @@ class Restore:
             lock_cmd = "%s -c %s put /tmp/.lock %s" %(consts.PATH_S3CMD_EXEC, consts.PATH_S3CMD_CONFIG, incremental_backup_s3path)
             status, output = self.getstatusoutput(lock_cmd)
             if status > 0:
-                self.log("FAILED: Unable to put incremental backup directory lock in s3")
+                self.logger.log("FAILED: Unable to put incremental backup directory lock in s3")
                 self.exit(1)
             else:
-                self.log("Locked incremental backup directory in s3")
+                self.logger.log("Locked incremental backup directory in s3")
 
         '''
         TODO: Master backups are disabled

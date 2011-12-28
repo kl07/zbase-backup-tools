@@ -37,13 +37,13 @@ class BackupProcess:
             self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
             self.exit(1)
 
-        logger_object = self.logger
         class stderrlog(object):
+            def __init__(self, logger):
+                self.logger = logger
             def write(self, err):
-                global logger_object
-                logger_object.log("FAILED: %s" %err)
+                self.logger.log("FAILED: %s" %err)
 
-        sys.stderr = stderrlog
+        sys.stderr = stderrlog(self.logger)
         try:
             self.hostname = socket.gethostname()
             raw_buffer_list = self.config.buffer_list.split(',')
