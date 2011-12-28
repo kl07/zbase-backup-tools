@@ -8,7 +8,7 @@ from logger import Logger
 from config import Config
 import Queue
 from threading import Thread
-from util import natural_sortkey, setup_sqlite_lib, getcommandoutput
+from util import natural_sortkey, setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
 import sys
 import signal
 
@@ -16,8 +16,6 @@ DAY_EPOCH = 60*60*24
 
 # Setup the sqlite3 LD_LIBRARY_PATH before importing sqlite3
 setup_sqlite_lib()
-
-import sqlite3
 
 def epoch2date(epoch):
     lt = time.localtime(epoch)
@@ -35,8 +33,8 @@ class Restore:
             self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
             self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
             self.exit(1)
-        self.logger.log("=== Starting Membase Restore ===")
 
+        self.logger.log("=== Starting Membase Restore ===")
         self.processlist = Queue.Queue()
         self.cloud = self.config.cloud
         self.game_id = self.config.game_id
@@ -44,6 +42,7 @@ class Restore:
             self.hostname = self.config.hostname
         else:
             self.hostname = hostname
+
         buffer_list = self.config.buffer_list.split(',')
         self.thread_count = len(buffer_list)
         self.free_buffer_list = Queue.Queue()
@@ -55,21 +54,16 @@ class Restore:
             def write(self, err):
                 global logger_object
                 logger_object.log("FAILED: %s" %err)
+
         sys.stderr = stderrlog
 
         for b in buffer_list:
             self.free_buffer_list.put(b)
-        self.restore_queue = Queue.Queue()
 
+        self.restore_queue = Queue.Queue()
         signal.signal(signal.SIGINT, self.graceful_exit)
         signal.signal(signal.SIGQUIT, self.graceful_exit)
         signal.signal(signal.SIGTERM, self.graceful_exit)
-
-    def _get_checkpoints_frombackup(self, backup_filepath):
-        db = sqlite3.connect(backup_filepath)
-        cursor = db.execute('select cpoint_id from cpoint_state')
-        cpoint_list = map(lambda x: x[0], cursor.fetchall())
-        return sorted(cpoint_list)
 
     def _list_s3_files(self, s3path, complete=True):
         ls_cmd = "%s ls %s" %(consts.PATH_S3CMD_EXEC, s3path)
@@ -90,6 +84,7 @@ class Restore:
             mbb_files = filter(lambda x: x.endswith('.mbb'), files)
             if complete == False:
                 return []
+
             return mbb_files
 
     def _download_file(self, s3path, filepath):
@@ -99,6 +94,7 @@ class Restore:
         for i in range(retries):
             if i > 0:
                 self.logger.log("Retrying download for %s" %s3path)
+
             status, output = self.getstatusoutput(get_cmd)
             self.logger.log("Downloading file %s to %s" %(s3path, filepath))
             if status == 0:
@@ -142,6 +138,7 @@ class Restore:
             incremental_backup_list = []
 
         '''
+        TODO: Master backups are disabled
         master_backup_epoch = epoch
         self.logger.log("Searching for master backup")
         for attempt in xrange(consts.MAX_BACKUP_SEARCH_TRIES):
@@ -158,10 +155,12 @@ class Restore:
                     self.logger.log("Could not find master backup. Maximum tries exceeded")
                     master_backup_list = []
         '''
-        master_backup_list = []
 
+        master_backup_list = []
         self.logger.log("Fetching list of periodic backups")
+
         '''
+        TODO: Limited search for periodic backups are disabled
         periodic_backup_list = []
         for date_epoch in xrange(int(master_backup_epoch), int(epoch) + DAY_EPOCH, DAY_EPOCH):
             date = epoch2date(date_epoch)
@@ -184,7 +183,6 @@ class Restore:
         master_backup_list.reverse()
         periodic_backup_list.sort(key=natural_sortkey)
         periodic_backup_list.reverse()
-
         return incremental_backup_list + periodic_backup_list + master_backup_list
 
     def populate_queue(self):
@@ -195,10 +193,13 @@ class Restore:
 
         for f in backup_files:
             self.logger.log("Found file %s" %f)
+
         if not backup_files:
             self.exit(1)
+
         for i,f in enumerate(backup_files):
             self.download_queue.put((i, f, 'backup-%05d.mbb' %i))
+
         self.file_count = len(self.download_queue.queue)
 
     def _do_online_restore(self, backup_file, complete=False):
@@ -229,20 +230,25 @@ class Restore:
                 self.restore_queue.queue.remove(backup)
                 backup_file = backup[1]
                 buffer_path = backup[2]
-                checkpoints = self._get_checkpoints_frombackup(backup_file)
+                try:
+                    checkpoints = get_checkpoints_frombackup(backup_file)
+                except Exception, e:
+                    self.logger.log("FAILED: sqlite file %s is corrupt (%s)" %(backup_file, str(e)))
+                    self.exit(1)
 
                 if shard > 0:
                     if not (last_checkpoint == checkpoints[-1] or last_checkpoint - 1 == checkpoints[-1]):
                         self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
                         self.exit(1)
-                last_checkpoint = checkpoints[-1]
 
+                last_checkpoint = checkpoints[-1]
                 self.logger.log("Checkpoints in the current backup-file %s : %s" %(backup_file, str(checkpoints)))
 
                 if shard == self.file_count - 1:
                     complete = True
                 else:
                     complete = False
+
                 status = self._do_online_restore(backup_file, complete)
                 if status:
                     os.unlink(backup_file)
@@ -250,6 +256,7 @@ class Restore:
                     shard +=1
                 else:
                     self.exit(1)
+
             time.sleep(1)
 
     def download_files(self):
@@ -264,12 +271,11 @@ class Restore:
                 self.restore_queue.put((backup[0], '%s/%s' %(buffer_path, backup[2]), buffer_path))
             else:
                 self.exit(1)
+
             self.download_queue.task_done()
 
     def main(self):
-
         start_time = int(time.time())
-
         if os.getuid() != 0:
             print "Please run as root"
             sys.exit(1)
@@ -300,14 +306,17 @@ class Restore:
         end_time = int(time.time())
         self.logger.log("Restore completed successfully in %d seconds" %end_time-start_time)
 
-
 if __name__ == '__main__':
-
-    #Usage: mbrestore-incr -h hostname
     args = sys.argv[1:]
-    if len(args) == 2 and args[0] == '-h':
-        hostname = args[1]
+    if len(args) == 2:
+        if args[0] == '-h':
+            hostname = args[1]
+        elif args[0] == '-u':
+            print "Usage: %s -h slave-hostname" %(sys.argv[0])
+            sys.exit(0)
+
     else:
         hostname = None
+
     restore = Restore(hostname)
     restore.main()

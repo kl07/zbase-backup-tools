@@ -31,3 +31,11 @@ def getcommandoutput(cmd, queue):
     if sts is None:
         sts = 0
     return sts, output
+
+def get_checkpoints_frombackup(backup_filepath):
+    setup_sqlite_lib()
+    import sqlite3
+    db = sqlite3.connect(backup_filepath)
+    cursor = db.execute('select cpoint_id from cpoint_state')
+    cpoint_list = map(lambda x: x[0], cursor.fetchall())
+    return sorted(cpoint_list)
