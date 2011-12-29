@@ -24,7 +24,7 @@ def epoch2date(epoch):
 def parse_args():
     options = {}
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'h:o:l:')
+        opts, args = getopt.getopt(sys.argv[1:], 'h:o:l:x:')
     except getopt.GetoptError, err:
         print str(err)
         sys.exit(2)
@@ -35,6 +35,8 @@ def parse_args():
             options['output'] = a
         elif o == '-l':
             options['filelog'] = a
+        elif o == '-x':
+            options['exclude_list'] = a
         else:
             assert False, "Unknown option"
 
@@ -46,7 +48,7 @@ def parse_args():
 
 class Merge:
 
-    def __init__(self, output_file, filelog, cloud=None, game_id=None, hostname=None):
+    def __init__(self, output_file, filelog, exclude_list=None, cloud=None, game_id=None, hostname=None):
         try:
             self.config = Config(consts.CONFIG_FILE)
             self.config.read()
@@ -68,6 +70,7 @@ class Merge:
             self.hostname = self.config.hostname
         else:
             self.hostname = hostname
+        self.exclude_list = exclude_list
 
         self.output_file = output_file
         self.s3filelist = filelog
@@ -220,14 +223,17 @@ class Merge:
 
         self.download_queue.join()
         t.join()
+        f = open(self.exclude_list)
+        exclude_list_items = map(lambda x: x.strip(), f.readlines())
+        incremental_backup_filtered_list = set(self.incremental_backup_list) - set(exclude_list_items)
         f = open(self.s3filelist, 'w')
-        for i in self.incremental_backup_list:
+        for i in incremental_backup_filtered_list:
             f.write(i+'\n')
         f.close()
         self.logger.log("Merge completed successfully. Merged file can be found at %s" %self.output_file)
 
 if __name__ == '__main__':
     args = parse_args()
-    merge = Merge(output_file=args['output'], filelog=args['filelog'], hostname=args['hostname'])
+    merge = Merge(output_file=args['output'], filelog=args['filelog'], hostname=args['hostname'], exclude_list=args['exclude_list'])
     merge.main()
 
