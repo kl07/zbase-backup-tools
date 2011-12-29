@@ -4,13 +4,13 @@
 import time
 import os
 import consts
-from logger import Logger
-from config import Config
-import Queue
-from threading import Thread
-from util import natural_sortkey, setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
 import sys
 import signal
+import Queue
+from threading import Thread
+from logger import Logger
+from config import Config
+from util import natural_sortkey, setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
 
 DAY_EPOCH = 60*60*24
 
@@ -58,7 +58,6 @@ class Restore:
                 self.logger.log("FAILED: %s" %err)
 
         sys.stderr = stderrlog(self.logger) 
-
         for b in buffer_list:
             self.free_buffer_list.put(b)
 
