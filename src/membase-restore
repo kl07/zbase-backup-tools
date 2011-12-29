@@ -26,6 +26,8 @@ class Restore:
     def __init__(self, hostname=None):
         self.processlist = Queue.Queue()
         self.s3_lock_file = None
+        self.exit_status = 0
+        self.restore_complete = False
         try:
             self.config = Config(consts.CONFIG_FILE)
             self.config.read()
@@ -284,6 +286,8 @@ class Restore:
 
             time.sleep(1)
 
+        self.restore_complete = True
+
     def download_files(self):
         while True:
             self.logger.log("Waiting for obtaining download buffer")
@@ -326,8 +330,9 @@ class Restore:
         t.daemon = True
         t.start()
 
-        self.download_queue.join()
-        t.join()
+        while not self.restore_complete:
+            time.sleep(10)
+
         end_time = int(time.time())
         self.logger.log("Restore completed successfully in %d seconds" %(end_time-start_time))
 
