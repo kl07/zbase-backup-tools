@@ -84,8 +84,11 @@ class MergeWrapper:
             return True
 
 
-    def _upload_file(self, file, s3path):
-        put_cmd = "%s sync %s/%s %s " %(consts.PATH_S3CMD_EXEC, consts.BACKUP_ROOT, file, s3path + file)
+    def _upload_file(self, file, s3path, build_path=True):
+        if build_path == False:
+            put_cmd = "%s sync %s %s " %(consts.PATH_S3CMD_EXEC, file, s3path)
+        else :
+            put_cmd = "%s sync %s/%s %s " %(consts.PATH_S3CMD_EXEC, consts.BACKUP_ROOT, file, s3path + file)
         retries = self.config.download_retries
         self.logger.log("Executing command %s" %put_cmd)
         for i in range(retries):
@@ -126,8 +129,46 @@ class MergeWrapper:
             self.logger.log("Completed nuking file %s" %s3path)
             return True
 
+    def check_lock(self, s3path, upload_manifest=False, output_file=None):
+        lock_file = consts.BACKUP_ROOT + "/.lock"
+        self._download_file(s3path + ".lock", lock_file)
+        status = os.path.isfile(lock_file)
+        if status == True:
+            os.system("rm " + lock_file)
+            self.logger.log("WARNING: .lock file present. Skipping delete")
+            #upload the manifest file to this location
+            if upload_manifest == True and output_file != None:
+                if self.manifest_file and os.path.isfile(self.manifest_file) :
+                    #manifest file already exists. merge these two files and delete the old manifest
+                    fd = open(self.manifest_file, "r")
+                    fd2 = open(output_file, "a")
+                    line = fd.readline()
+                    while line:
+                        fd2.write(line)
+                        line = fd.readline()
+
+                    fd.close()
+                    fd2.close()
+                    splits = self.manifest_file.split("/")
+                    delete_file = filter(lambda x: x.endswith('.del'), splits)
+                    status = self._delete_file(self.s3path + delete_file[0])
+                    if status == False:
+                        self.logger.log("FAILED to delete old manifest file %s" %delete_file[0])
+                        return -1
+
+                status = self._upload_file(output_file, self.s3path + "%s-manifest.del" %self.timestamp, False)
+                if status == False:
+                    self.logger.log("FAILED to upload manifest file %s to location %s" %(output_file, self.s3path))
+                    return -1 # failure
+                else:
+                    return 1  # lock exists, skip delete
+            return 1
+        return 0              # no lock exists, clear to delete
+
+
     def cleanup_files(self, output_file=None):
         #parse the output and remove those files from the s3 bucket
+
         fd = open(output_file)
         line = fd.readline().strip()
         while line:
@@ -178,6 +219,44 @@ class MergeWrapper:
                 self.logger.log("FAILED to split : output %s" %output)
                 return False
 
+        if status == False:
+            self.logger.log("FAILED to download incremental backup file %s" %s3path)
+            return False
+
+        return True
+
+
+    def process_manifest(self, s3path):
+
+        splits = s3path.split("/")
+        file = filter(lambda x: x.endswith('.del'), splits)
+        manifest_file = consts.BACKUP_ROOT + "/" + file[0]
+        status = self._download_file(s3path, manifest_file)
+
+        #check if the lock file exists.
+        return_code = self.check_lock(self.s3path, False)
+        if return_code == -1:
+            self.logger.log("FAILED to check lock ")
+            return False
+        elif return_code == 1:
+            # we might need to add to this file later
+            self.manifest_file = manifest_file
+            return True
+
+        if status == True:
+            status = self.cleanup_files(manifest_file)
+            if status == False:
+                self.logger.log("FAILED to cleanup manifest file %s" %manifest_file)
+                return False
+            status = self._delete_file(s3path)
+            os.system("rm " + manifest_file)
+            if status == False:
+                self.logger.log("FAILED to delete manifest file %s" %manifest_file)
+                return False
+        else :
+            self.logger.log("FAILED to download manifest file %s" %s3path)
+            return False
+
         return True
 
     def _list_s3_files(self, s3path):
@@ -195,6 +274,9 @@ class MergeWrapper:
             for each_line in lines:
                 word = each_line.split()
                 #if size of file is greater than 1G download split and upload
+                if word[3].find("-manifest") != -1 :
+                    #delete manifest file exists.
+                    status = self.process_manifest(word[3])
                 if  int(word[2]) > (1024 * 1024 * 1024):
                     status = self.download_split(word[3])
                     if status == False:
@@ -207,11 +289,22 @@ class MergeWrapper:
                                     return False
 
                     #all spits uploaded. Now delete the large file
-                    status = self._delete_file(word[3])
-                    if status == False:
-                        return False
-                    #cleanup backup root
-                    os.system("rm -rf " + consts.BACKUP_ROOT + "/*")
+                    if os.path.isfile(self.manifest_file) :
+                        #manifest file is present, add this file name to it and upload
+                        fd = open(self.manifest_file, "a")
+                        fd.write(word[3] + "\n")
+                        fd.close()
+                        status = self._upload_file(self.manifest_file, s3path, False)
+                        if status == False:
+                            self.logger.log("FAILED: unable to upload manifest file in _list_s3_files. %s" %self.manifest_file)
+
+                    else:
+                        status2 = self._delete_file(word[3])
+                    if status2 == False:
+                        self.logger.log("FAILED: unable to delete large backup file %s" %word[3])
+                        status = status2
+                    #cleanup all the mbb files
+                    os.system("rm -rf " + consts.BACKUP_ROOT + "/*.mbb")
                 #endif
             #endfor
 
@@ -224,13 +317,16 @@ class MergeWrapper:
         timestamp = "%d:%d:%d-%d:%d" %(now.year,now.month,now.day,now.hour,now.minute)
         merge_backupfile = "%s/%s-daily-%s" %(consts.BACKUP_ROOT,location,timestamp)
         output_file = "%s/%s-filelist-%s" %(consts.BACKUP_ROOT, location, timestamp)
-        merge_cmd = "%s -h %s -o %s -l %s" %(consts.MERGE_CMD,location,merge_backupfile, output_file)
+        if self.manifest_file:
+            merge_cmd = "%s -h %s -o %s -l %s -x %s" %(consts.MERGE_CMD,location,merge_backupfile, output_file, self.manifest_file)
+        else:
+            merge_cmd = "%s -h %s -o %s -l %s" %(consts.MERGE_CMD,location,merge_backupfile, output_file)
         print "executing command %s" %merge_cmd
         status, output = commands.getstatusoutput(merge_cmd)
         print "%s %s" %(output,status)
         done = False
         if status:
-            self.logger.log("Failed to merge backupfiles from location: %s" %location)
+            self.logger.log("FAILED to merge backupfiles from location: %s" %location)
             return False
         else:
             self.logger.log(" Merge done for location %s" %location)
@@ -239,13 +335,20 @@ class MergeWrapper:
             print "Executing command %s" %split_upload_cmd
             status2,output2 = commands.getstatusoutput(split_upload_cmd)
             if status2:
-                self.logger.log("Failed to split and upload backup files: %s" %merge_backupfile)
+                self.logger.log("FAILED to split and upload backup files: %s" %merge_backupfile)
                 return False
             else:
                 self.logger.log("Split done for file  %s timestamp %s" %(merge_backupfile,timestamp))
                 ret_code = self.upload_split()
                 if ret_code == True:
-                    done = self.cleanup_files(output_file)
+                    #check lock and upload manifest
+                    return_code = self.check_lock(self.s3path, True, output_file)
+                    if return_code == 0:
+                        done = self.cleanup_files(output_file)
+                    elif return_code == -1:
+                        done = False
+                    else:
+                        done = True
 
                 if done == False:
                     self.logger.log("FATAL: could not complete merge for host %s" %location)
@@ -283,7 +386,9 @@ class MergeWrapper:
             line = fd.readline().strip()
             while line:
                 self.location = line
-                self._list_s3_files('s3://%s/%s/%s/%s/%s/' %(self.config.s3bucket, self.cloud, self.game_id, line, consts.INCR_DIRNAME))
+                self.manifest_file = None
+                self.s3path = "s3://%s/%s/%s/%s/%s/" %(self.config.s3bucket, self.cloud, self.game_id, line, consts.INCR_DIRNAME)
+                self._list_s3_files(self.s3path)
                 status = self.merge_host(line)
                 if status != True:
                     self.logger.log("FAILED to merge backup files from host %s" %line)
