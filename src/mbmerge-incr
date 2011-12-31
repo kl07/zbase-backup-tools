@@ -165,7 +165,7 @@ class Merge:
             self.logger.log("Could not find any incremental backups")
             return False
 
-	return [ x for x in reversed(sorted(incremental_backup_list, key=natural_sortkey)) ]
+	return [ x for x in reversed(sorted(self.incremental_backup_list, key=natural_sortkey)) ]
 
     def populate_queue(self):
         backup_files = self.fetch_backuplist()
