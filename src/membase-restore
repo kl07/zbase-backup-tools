@@ -8,6 +8,7 @@ import sys
 import signal
 import Queue
 from threading import Thread
+from mc_bin_client import MemcachedClient
 from logger import Logger
 from config import Config
 from util import natural_sortkey, setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
@@ -61,6 +62,12 @@ class Restore:
 
         sys.stderr = stderrlog(self.logger) 
         for b in buffer_list:
+            rm_buffer_cmd = "rm -rf %s/*" %b
+            self.logger.log("Clearing buffer %s" %b)
+            status, output = self.getstatusoutput(rm_buffer_cmd)
+            if status > 0:
+                self.logger.log("FAILED: Clearing buffer %s (%s)" %(b, output))
+                self.exit(1)
             self.free_buffer_list.put(b)
 
         self.restore_queue = Queue.Queue()
@@ -68,7 +75,69 @@ class Restore:
         signal.signal(signal.SIGQUIT, self.graceful_exit)
         signal.signal(signal.SIGTERM, self.graceful_exit)
 
+    def setup_restore_env(self):
+        self.logger.log("Setting up restore environment for membase server")
+        if os.path.exists(consts.MEMCACHED_PID_FILE):
+            memcached_pid = int(open(consts.MEMCACHED_PID_FILE).read())
+            try:
+                os.kill(memcached_pid, 0)
+                self.logger.log("Found running membase instance. Terminating" \
+                        " membase process")
+                os.kill(memcached_pid, 9)
+            except:
+                pass
+
+        self.logger.log("Cleaning up membase db directory")
+        rm_db_cmd = "rm -rf /db/membase/*"
+        status, output = self.getstatusoutput(rm_db_cmd)
+        if status > 0:
+            self.logger.log("FAILED: Failed to clean membase db directory" \
+                    " (%s)" %output)
+            self.exit(1)
+
+        self.logger.log("Updating membase config file to start as restore mode")
+        f = open(consts.MEMCACHED_SYSCONFIG_FILE)
+        sysconfig = f.read().split(';')
+        param, endlimiter = sysconfig[-1].split("'")
+        sysconfig = sysconfig[:-1]
+        sysconfig.append(param)
+        restore_param = 'restore_mode=true'
+        for p in sysconfig:
+            if 'restore' in p:
+                sysconfig.remove(p)
+
+        sysconfig.append(restore_param)
+        sysconfig_str = ";".join(sysconfig)
+        sysconfig_str += "'%s" %endlimiter
+        f = open(consts.MEMCACHED_SYSCONFIG_FILE, 'w')
+        f.write(sysconfig_str)
+        f.close()
+        self.logger.log("Starting membase")
+        start_membase_cmd = "/sbin/service memcached start"
+        status, output = self.getstatusoutput(start_membase_cmd)
+        if status > 0:
+            self.logger.log("Unable to start membase (%s)" %(output))
+            self.exit(1)
+
+        for i in range(20):
+            try:
+                mb = MemcachedClient(host='127.0.0.1', port=11211)
+                mb.stats('all')
+                break
+            except:
+                time.sleep(1)
+
+        register_tap_cmd = "python26 %s -h 0:11211 -r %s" \
+                %(consts.PATH_MBTAP_REGISTER_EXEC, consts.BACKUP_TAPNAME)
+        self.logger.log("Registering Backup TAP Cursor")
+        status, output = self.getstatusoutput(register_tap_cmd)
+        if status > 0:
+            self.logger.log("FAILED: Backup tap registration (%s)" %output)
+            self.exit(1)
+
     def _list_s3_files(self, s3path, complete=True):
+        exclude_list = []
+        found_dot_done = False
         ls_cmd = "%s -c %s ls %s" %(consts.PATH_S3CMD_EXEC, consts.PATH_S3CMD_CONFIG, s3path)
         self.logger.log("Executing command %s" %ls_cmd)
         status, output = self.getstatusoutput(ls_cmd)
@@ -78,13 +147,29 @@ class Restore:
 	else:
             lines = output.split('\n')
             files = map(lambda x: 's3://'+x.split('s3://')[-1], lines)
+
+            for f in files:
+                if f.endswith('.done'):
+                    found_dot_done = True
+
+                if f.endswith('manifest.del'):
+                    self.logger.log("Downloading delete manifest file")
+                    dlmanifest_cmd = '%s -c %s get %s /tmp/manifest.del' \
+                            %(consts.PATH_S3CMD_EXEC, consts.PATH_S3CMD_CONFIG, f)
+                    status, output = self.getstatusoutput(dlmanifest_cmd)
+                    if status > 0:
+                        self.logger.log("WARNING: Unable to download" \
+                                "delete manifest file (%s)" %output)
+                    else:
+                        exclude_lines = open('/tmp/manifest.del').readlines()
+                        for l in exclude_lines:
+                            exclude_list.append(l.strip())
+
             if complete == False:
-                for f in files:
-                    if f.endswith('.done'):
-                        complete = True
-                        break
+                complete = found_dot_done
 
             mbb_files = filter(lambda x: x.endswith('.mbb'), files)
+            mbb_files = list(set(mbb_files) - set(exclude_list))
             if complete == False:
                 return []
 
@@ -117,7 +202,8 @@ class Restore:
             except:
                 pass
         self.clean_s3_lock()
-        os.unlink(consts.MBRESTORE_PID_FILE)
+        if os.path.exists(consts.MBRESTORE_PID_FILE):
+            os.unlink(consts.MBRESTORE_PID_FILE)
         self.logger.log("Restore process terminated")
         os._exit(self.exit_status)
 
@@ -245,48 +331,52 @@ class Restore:
             return False
 
     def perform_restore(self):
-        shard = 0
-        last_checkpoint = None
-        while shard < self.file_count:
-            self.logger.log("RESTORE: Waiting for backup file %d/%d" %(shard+1, self.file_count))
-            restore_list = list(self.restore_queue.queue)
-            restore_list.sort()
-            if len(restore_list) > 0 and shard == restore_list[0][0]:
-                self.logger.log("Processing backup file %d/%d" %(shard+1, self.file_count))
-                backup = restore_list[0]
-                self.restore_queue.queue.remove(backup)
-                backup_file = backup[1]
-                buffer_path = backup[2]
-                try:
-                    checkpoints = get_checkpoints_frombackup(backup_file)
-                except Exception, e:
-                    self.logger.log("FAILED: sqlite file %s is corrupt (%s)" %(backup_file, str(e)))
-                    self.exit(1)
-
-                if shard > 0:
-                    if not (last_checkpoint == checkpoints[-1] or last_checkpoint - 1 == checkpoints[-1]):
-                        self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
+        try:
+            shard = 0
+            last_checkpoint = None
+            while shard < self.file_count:
+                self.logger.log("RESTORE: Waiting for backup file %d/%d" %(shard+1, self.file_count))
+                restore_list = list(self.restore_queue.queue)
+                restore_list.sort()
+                if len(restore_list) > 0 and shard == restore_list[0][0]:
+                    self.logger.log("Processing backup file %d/%d" %(shard+1, self.file_count))
+                    backup = restore_list[0]
+                    self.restore_queue.queue.remove(backup)
+                    backup_file = backup[1]
+                    buffer_path = backup[2]
+                    try:
+                        checkpoints = get_checkpoints_frombackup(backup_file)
+                    except Exception, e:
+                        self.logger.log("FAILED: sqlite file %s is corrupt (%s)" %(backup_file, str(e)))
                         self.exit(1)
 
-                last_checkpoint = checkpoints[-1]
-                self.logger.log("Checkpoints in the current backup-file %s : %s" %(backup_file, str(checkpoints)))
+                    if shard > 0:
+                        if not (last_checkpoint == checkpoints[-1] or last_checkpoint - 1 == checkpoints[-1]):
+                            self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
+                            self.exit(1)
 
-                if shard == self.file_count - 1:
-                    complete = True
-                else:
-                    complete = False
+                    last_checkpoint = checkpoints[-1]
+                    self.logger.log("Checkpoints in the current backup-file %s : %s" %(backup_file, str(checkpoints)))
 
-                status = self._do_online_restore(backup_file, complete)
-                if status:
-                    os.unlink(backup_file)
-                    self.free_buffer_list.put(buffer_path)
-                    shard +=1
-                else:
-                    self.exit(1)
+                    if shard == self.file_count - 1:
+                        complete = True
+                    else:
+                        complete = False
 
-            time.sleep(1)
+                    status = self._do_online_restore(backup_file, complete)
+                    if status:
+                        os.unlink(backup_file)
+                        self.free_buffer_list.put(buffer_path)
+                        shard +=1
+                    else:
+                        self.exit(1)
 
-        self.restore_complete = True
+                time.sleep(1)
+
+            self.restore_complete = True
+        except Exception, e:
+            self.logger.log("Thread stopped with exception (%s)" %str(e))
+            self.exit(1)
 
     def download_files(self):
         while True:
@@ -351,4 +441,5 @@ if __name__ == '__main__':
             sys.exit(0)
 
     restore = Restore(hostname)
+    restore.setup_restore_env()
     restore.main()
