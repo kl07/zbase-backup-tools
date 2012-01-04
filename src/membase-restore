@@ -424,6 +424,7 @@ class Restore:
             time.sleep(10)
 
         end_time = int(time.time())
+        self.clean_s3_lock()
         self.logger.log("Restore completed successfully in %d seconds" %(end_time-start_time))
 
 if __name__ == '__main__':
