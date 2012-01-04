@@ -24,6 +24,7 @@ start(){
     fi
 
     /usr/bin/python26 /opt/membase/membase-backup/membase-backupd start >/dev/null 2>&1 
+    sleep 1
     status | grep 'is running' 2> /dev/null
     if [ $? -eq 0 ];
     then
