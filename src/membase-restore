@@ -434,11 +434,11 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     hostname = None
     if len(args) > 0:
-        if args[0] == '-h':
+        if args[0] == '-h' and len(args) == 2:
             hostname = args[1]
-        elif args[0] == '-u':
-            print "Usage: %s -h slave-hostname" %(sys.argv[0])
-            sys.exit(0)
+        else:
+	    print "Usage: %s -h slave-hostname" %(sys.argv[0])
+	    sys.exit(0)
 
     restore = Restore(hostname)
     restore.setup_restore_env()
