@@ -200,14 +200,14 @@ class BackupProcess:
             self.logger.log("FAILED: Unable to query stats from Membase:11211 (%s)" %str(e))
             self.exit(1)
 
-    def is_tap_alive(self, tapname):
+    def is_cursor_valid(self, cursor_name):
         try:
-            tap_stats = self.mbstats('tap')
+            checkpoint_stats = self.mbstats('checkpoint')
         except Exception:
             self.logger.log("FAILED: Could not fetch tap stats from membase server")
             self.exit(1)
 
-        if len(filter(lambda x: 'eq_tapq:%s:' %(tapname) in x, tap_stats)):
+        if len(filter(lambda x: 'eq_tapq:%s' %(cursor_name) in x, checkpoint_stats)):
             return True
         return False
 
@@ -262,10 +262,9 @@ class BackupProcess:
         Create incremental backup
         """
 
-        #TODO: Waiting for checkpoint stats to show cursor names
-        #if self.is_tap_alive(consts.REPLICATION_TAPNAME):
-        #    self.logger.log("The host is a master. Exiting")
-        #    self.exit(1)
+        if self.is_cursor_valid(consts.REPLICATION_TAPNAME):
+            self.logger.log("The host is a master. Exiting")
+            self.exit(1)
 
         if os.path.exists(consts.MBRESTORE_PID_FILE):
             pid = int(open(consts.MBRESTORE_PID_FILE).read())
@@ -280,11 +279,10 @@ class BackupProcess:
         self.logger.log("==== START BACKUP ====")
         self.logger.log("Creating Backup for %s " %(datetimestamp))
 
-        #TODO: Waiting for checkpoint stats to show cursor names
-        #if not self.is_tap_alive(consts.BACKUP_TAPNAME):
-        #    self.logger.log("FAILED: No registered TAP for Backup found")
-        #    self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
-        #    return False
+        if not self.is_cursor_valid(consts.BACKUP_TAPNAME):
+            self.logger.log("FAILED: No registered TAP for Backup found")
+            self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
+            return False
 
         backup_dir = os.path.dirname(backup_filepath)
         backup_filename = os.path.basename(backup_filepath)
