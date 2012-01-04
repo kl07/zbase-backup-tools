@@ -184,7 +184,8 @@ class BackupProcess:
                 pass
 
         self.logger.log("Backup process terminated")
-        os.unlink(consts.MBBACKUP_PID_FILE)
+        if os.path.exists(consts.MBBACKUP_PID_FILE):
+            os.unlink(consts.MBBACKUP_PID_FILE)
         os._exit(self.exit_status)
 
     def exit(self, status):
