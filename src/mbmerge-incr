@@ -185,7 +185,7 @@ class Merge:
 
     def _do_merge(self, backup_file):
         self.logger.log("Performing merge using from %s" %backup_file)
-        merge_cmd = "python26 %s -o %s %s" %(consts.PATH_MBMERGE_EXEC, self.output_file, backup_file)
+        merge_cmd = "python26 %s -f -o %s %s" %(consts.PATH_MBMERGE_EXEC, self.output_file, backup_file)
         self.logger.log("Executing command %s" %merge_cmd)
         status, output = self.getstatusoutput(merge_cmd)
         if status == 0:
