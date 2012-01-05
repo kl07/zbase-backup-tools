@@ -62,7 +62,7 @@ class Restore:
 
         sys.stderr = stderrlog(self.logger) 
         for b in buffer_list:
-            rm_buffer_cmd = "rm -rf %s/*" %b
+            rm_buffer_cmd = "find %s -type f -delete" %b
             self.logger.log("Clearing buffer %s" %b)
             status, output = self.getstatusoutput(rm_buffer_cmd)
             if status > 0:
@@ -88,7 +88,7 @@ class Restore:
                 pass
 
         self.logger.log("Cleaning up membase db directory")
-        rm_db_cmd = "rm -rf /db/membase/*"
+        rm_db_cmd = "find /db/membase/ -type f -delete"
         status, output = self.getstatusoutput(rm_db_cmd)
         if status > 0:
             self.logger.log("FAILED: Failed to clean membase db directory" \
