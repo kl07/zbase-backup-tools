@@ -114,15 +114,15 @@ class Restore:
         f.close()
         self.logger.log("Starting membase")
         start_membase_cmd = "/sbin/service memcached start"
-        status, output = self.getstatusoutput(start_membase_cmd)
+        status = os.system(start_membase_cmd)
         if status > 0:
-            self.logger.log("Unable to start membase (%s)" %(output))
+            self.logger.log("Unable to start membase")
             self.exit(1)
 
         for i in range(120):
             try:
                 mb = MemcachedClient(host='127.0.0.1', port=11211)
-                mb.stats('all')
+                mb.stats('')
                 break
             except:
                 time.sleep(1)
