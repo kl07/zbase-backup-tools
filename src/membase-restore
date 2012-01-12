@@ -62,6 +62,7 @@ class Restore:
 
         sys.stderr = stderrlog(self.logger) 
         for b in buffer_list:
+            os.system("mkdir -p %s" %b)
             rm_buffer_cmd = "find %s -type f -delete" %b
             self.logger.log("Clearing buffer %s" %b)
             status, output = self.getstatusoutput(rm_buffer_cmd)
