@@ -15,7 +15,7 @@ def setup_sqlite_lib():
     else:
         os.environ['LD_LIBRARY_PATH'] = ld_path
 
-def getcommandoutput(cmd, queue):
+def getcommandoutput(cmd, queue=None):
     """Return (status, output) of executing cmd in a shell."""
     """Add the process object to the queue"""
     import subprocess
