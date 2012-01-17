@@ -34,8 +34,6 @@ def init_logger():
     handler_file.setFormatter(formatter)
     logger.addHandler(handler_file)
 
-init_logger()
-
 def log(msg):
     global logger
     print msg 
@@ -397,6 +395,8 @@ class BlobrestoreManager:
             os.makedirs(consts.BLOBRESTORE_PROCESSED_JOBS_DIR)
         except:
             pass
+
+        init_logger()
 
         for s in [signal.SIGINT, signal.SIGTERM, signal.SIGQUIT]:
             signal.signal(s, self.stop)
