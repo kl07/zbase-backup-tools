@@ -511,6 +511,40 @@ class BlobrestoreManager:
         sys.exit(0)
 
 if __name__ == '__main__':
-    bm = BlobrestoreManager()
-    bm.start()
+
+    pidfile = consts.BLOBRESTORED_PID_FILE
+    pid = 0
+
+    if os.path.exists(pidfile):
+        pid = int(open(pidfile).read())
+
+    if len(sys.argv) == 2:
+        command = sys.argv[1]
+        if command == 'start':
+            if os.path.exists(pidfile):
+                try:
+                    os.kill(pid, 0)
+                    print "Blobrestore daemon is already running with pid %d" %pid
+                    sys.exit(0)
+                except:
+                    os.unlink(pidfile)
+
+            f = open(pidfile, 'w')
+            f.write(str(os.getpid()))
+            f.close()
+            bm = BlobrestoreManager()
+            bm.start()
+
+        elif command == 'stop':
+            if pid == 0:
+                print "Blobrestore daemon is not running"
+            else:
+                os.kill(pid, signal.SIGTERM)
+                print "Stopped Blobrestore Daemon"
+        elif command == 'status':
+            try:
+                os.kill(pid, 0)
+                print "Blobrestore daemon is running with pid %d" %pid
+            except:
+                print "Blobrestore daemon is not running"
 

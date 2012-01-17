@@ -1,0 +1,40 @@
+#!/bin/bash 
+
+. /etc/init.d/functions
+
+
+command=$1
+status(){
+    /usr/bin/python26 /opt/membase/membase-backup/blobrestore_utils/blobrestored status
+}
+
+start(){
+
+    /usr/bin/python26 /opt/membase/membase-backup/blobrestore_utils/blobrestored start
+}
+
+
+stop(){
+
+    /usr/bin/python26 /opt/membase/membase-backup/blobrestore_utils/blobrestored stop
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+    stop
+    ;;
+    status)
+    status; 
+    ;;
+    restart)
+    stop; start;
+    ;;
+    *)
+    echo $"Usage: $0 {start|stop|status|restart}"
+    exit 1
+esac
+
+
