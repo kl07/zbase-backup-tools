@@ -26,6 +26,7 @@ class BackupProcess:
     """
     def __init__(self):
         self.exit_status = 0
+        self.upload_only_mode = False
         self.processlist = Queue.Queue()
         try:
             self.config = Config(consts.CONFIG_FILE)
@@ -169,6 +170,11 @@ class BackupProcess:
                 self._remove_file(backup_filepath)
             else:
                 self.exit(1)
+
+            if self.upload_only_mode:
+                if len(self.backup_queue.queue) == 0:
+                    os._exit(0)
+                continue
 
             end_time = time.time()
             total_time = int(end_time-start_time)
@@ -360,6 +366,11 @@ class BackupProcess:
         while True:
             time.sleep(100)
 
+    def upload_only_loop(self):
+        self.upload_only_mode = True
+        self.resume_process()
+        self.upload_process_thread()
+
 if __name__ == '__main__':
     if os.getuid() != 0:
         print "Please run as root"
@@ -407,6 +418,11 @@ if __name__ == '__main__':
         else:
            print "Uploader Daemon is not running"
            os._exit(1)
+
+    elif command == 'upload-only':
+        core = BackupProcess()
+        core.upload_only_loop()
+        sys.exit(0)
 
     else:
         print "Usage: %s command\ncommand = start or stop\n" %sys.argv[0]
