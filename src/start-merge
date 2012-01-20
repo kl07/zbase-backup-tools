@@ -37,7 +37,6 @@ class MergeWrapper:
 
         self.cloud = self.config.cloud
         self.game_id = self.config.game_id
-        self.s3bucket = self.config.s3bucket
         now=datetime.datetime.now()
         self.now = now
         self.timestamp = "%d:%d:%d-%d:%d" %(now.year,now.month,now.day, now.hour, now.minute)
@@ -47,7 +46,7 @@ class MergeWrapper:
         if localpath != None:
             get_cmd = "%s get %s %s" %(consts.PATH_S3CMD_EXEC, s3path, localpath)
         else:
-            get_cmd = "%s get --force %s " %(consts.PATH_S3CMD_EXEC, s3path)
+            get_cmd = "%s get %s " %(consts.PATH_S3CMD_EXEC, s3path)
         retries = self.config.download_retries
         self.logger.log("Executing command %s" %get_cmd)
         for i in range(retries):
@@ -108,11 +107,7 @@ class MergeWrapper:
             return True
 
     def _nuke_path(self, s3path):
-        #create an empty directory
-        empty_dir = "/tmp/nuke-%s" %self.timestamp
-        if not os.path.exists(empty_dir):
-            os.makedirs(empty_dir)
-        nuke_cmd = "%s sync --delete-removed %s %s " %(consts.PATH_S3CMD_EXEC, empty_dir, s3path)
+        nuke_cmd = "%s del %s" %(consts.PATH_S3CMD_EXEC, s3path)
         retries = self.config.download_retries
         self.logger.log("Executing command %s" %nuke_cmd)
         for i in range(retries):
@@ -183,7 +178,7 @@ class MergeWrapper:
     def upload_split(self) :
         #list all .mbb files in /dev/shm and upload them to daily backup location
         now=datetime.datetime.now()
-        upload_location = "s3://%s/%s/%s/%s/daily/%d-%d-%d/" %(self.s3bucket, self.cloud, self.game_id, self.location, now.year, now.month, now.day)
+        upload_location = "s3://%s/%s/%s/daily/%d-%d-%d/" %(self.game_id, self.location, self.cloud, now.year, now.month, now.day)
         print "upload location %s" %upload_location
         for file in os.listdir(consts.BACKUP_ROOT):
             if fnmatch.fnmatch(file, '*.mbb'):
@@ -415,7 +410,7 @@ class MergeWrapper:
             while line:
                 self.location = line
                 self.manifest_file = None
-                self.s3path = "s3://%s/%s/%s/%s/%s/" %(self.config.s3bucket, self.cloud, self.game_id, line, consts.INCR_DIRNAME)
+                self.s3path = "s3://%s/%s/%s/%s/" %(self.game_id, line, self.cloud, consts.INCR_DIRNAME)
                 self._list_s3_files(self.s3path)
                 status = self.merge_host(line)
                 if status != True:

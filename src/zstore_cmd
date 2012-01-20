@@ -1,0 +1,152 @@
+#!/bin/bash
+
+# Functions used.
+main () {
+
+	STORAGE_SERVER="mbbackup.zynga.com"
+
+	# Route to function depending on command. Defaults to usage.
+	case "$1" in
+        get)
+            download $@
+            ;;
+         
+        put)
+            upload $@
+            ;;
+         
+		sync)
+			sync $@   
+			;;
+        ls)
+            list $@
+            ;;
+
+        del)
+            delete $@
+            ;;
+
+        --help)
+            die
+            ;;
+         
+        -h)
+			die
+			;;
+
+        *)
+            die "\nUsage: Need a command.\n"
+	esac
+}
+
+# Verify md5 hash of local and remote file.
+verifyFile () {
+	url="$1&list=true"
+	file_path=$2
+	local_hash=$(md5sum $file_path | sed "s/ .*//")
+	#local_hash=$(md5sum $file_path | awk '{print $1}')
+	remote_hash=$(curl -sI  $url | grep Etag | sed 's/Etag: //' | tr -d \\r)
+	
+	[ "${local_hash}" = "${remote_hash}" ] && return 0
+	return 1
+
+}
+
+# List files in storage server.
+# curl 'http://empire.mbbackup.zynga.com/?path=empire:empire-user-b-012/inc/&list=true' 	
+list () {
+	path=$2
+	url=$(getUrlPrefix $path)
+	curl -s "$url&list=true" | sed "s/\(.*\):/s3:\/\/\1\//"
+	exit $?
+}
+
+
+# Download file from storage server.
+# curl -L -o /tmp/download mbbackup.zynga.com?path=empire:empire-user-b-012/inc/jnk
+download () {
+	path=$2
+	file_path=$3
+	game_name=$(getGameName $path)
+	url=$(getUrlPrefix $path)
+	dir_path=$(dirname $file_path)
+	[ -d "$dirname" ] || mkdir -p "$dir_path"
+	verifyFile $url $file_path
+	[[ $? -eq 0 ]] && echo 0
+	curl -sL -o "$file_path" "$url"
+	verifyFile $url $file_path
+	exit $?
+}
+
+# Sync file or folder.
+# zstore_cmd sync source destination.
+sync () {
+	
+	# If source is s3.
+	if [[ "$2" =~ "s3://" ]]
+	then
+		download $@
+	# If source is local file or folder.
+	else
+		upload $@
+	fi
+}
+
+# Upload file to storage server.
+# curl -F userfile=@/tmp/download http://empire.mbbackup.zynga.com/'?path=empire:empire-user-b-012/inc/shabeeb&upload=true'
+upload () {
+	file_path=$2
+	path=$3
+	game_name=$(getGameName $path)
+	url=$(getUrlPrefix $path)
+
+	[[ ${url: -1} = "/" ]] && file_name=$(basename $file_path) && url="$url$file_name"
+	verifyFile $url $file_path
+	[[ $? -eq 0 ]] && echo 0
+	curl  -s -F "userfile=@$file_path" "$url&upload=true"
+	verifyFile $url $file_path
+	exit $?
+}
+
+# Delete file from storage server.
+delete () {
+	path=$2
+	url=$(getUrlPrefix $path)
+	curl -s "$url&delete=true"
+	exit $?
+}
+
+# Create url prefix.
+getUrlPrefix () {
+	path="$1"
+	game_name=$(getGameName $path)
+	url_path=$(expr "$path" : 's3://[a-zA-Z]*/\(.*\)') 
+        url="$game_name.$STORAGE_SERVER/?path=$game_name:$url_path"
+	echo $url
+}
+
+# Get game name from path.
+# Ex. empire from empire:empire-user-b-012/inc/
+getGameName () {
+	path=$1
+	echo $(expr "$path" : 's3://\([a-zA-Z]*\)/')
+}
+
+die () {
+	[ "$1" != "" ] && echo -e $1
+	echo  -e "$(basename $0)  <command> [arg(s)]\n"
+	echo  "Commands:"
+	echo  "  List files or folder."
+	echo  "     $(basename $0)  ls  s3://<game_name>/host_name/path"
+	echo  "  Download a file."
+	echo  "     $(basename $0)  get  s3://<game_name>/host_name/path  <file>"
+	echo  "  Upload a file."
+	echo  "     $(basename $0)  put  <file> s3://<game_name>/host_name/path"
+	echo  "  Delete file."
+	echo  "     $(basename $0)  del  s3://<game_name>/host_name/path"
+    exit 1
+}
+
+
+# Script starts here.
+main $@

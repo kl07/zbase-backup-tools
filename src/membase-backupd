@@ -84,7 +84,7 @@ class BackupProcess:
 
     def resume_process(self):
         self.logger.log("Looking for backup files to resume upload process")
-        dirpath_suffix = '%s/%s/%s/%s/' %(self.config.cloud, self.config.game_id, self.hostname, consts.INCR_DIRNAME)
+        dirpath_suffix = '%s/%s/%s/%s/' %(self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
 
         for b in list(self.free_buffer_list.queue):
             try:
@@ -108,12 +108,12 @@ class BackupProcess:
         if root_path[-1] == '/':
             root_path = root_path[:-1]
 
-        regex = re.compile('^%s(/.*)' %root_path)
+        regex = re.compile('^%s/(.*)' %root_path)
         s3suffix_path = regex.findall(filepath)[0]
-        s3path = "s3://%s%s" %(self.config.s3bucket, s3suffix_path)
+        s3path = "s3://%s" %(s3suffix_path)
 
         self.logger.log("ATTEMPT: Uploading %s to %s " %(filepath, s3path))
-        upload_cmd = "%s -c %s sync %s %s -v" %(consts.PATH_S3CMD_EXEC, consts.PATH_S3CMD_CONFIG, filepath, s3path)
+        upload_cmd = "%s sync %s %s" %(consts.PATH_S3CMD_EXEC, filepath, s3path)
         self.logger.log("Executing command, %s " %upload_cmd)
         for i in range(retries):
             if i > 0:
@@ -244,7 +244,7 @@ class BackupProcess:
                 datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
                 backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S.mbb',now)
                 backup_root = buffer_path
-                backup_dir = os.path.join(backup_root, self.config.cloud, self.config.game_id,self.hostname, consts.INCR_DIRNAME)
+                backup_dir = os.path.join(backup_root, self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
                 backup_filepath = os.path.join(backup_dir, backup_filename)
                 status = self._take_backup(backup_filepath, datetimestamp)
                 if status:

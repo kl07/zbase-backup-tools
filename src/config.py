@@ -9,13 +9,11 @@ class Config:
     def __init__(self, conf_file = None):
         self.conf_file = conf_file 
         self.config = ConfigParser.ConfigParser()
-        self.s3bucket = consts.S3_BUCKET
         self.log_level = consts.DEFAULT_LOGLEVEL
         self.syslog_tag = consts.SYSLOG_TAG
 
     def read(self):
         self.config.read(self.conf_file)
-        self.s3bucket = self.config.get('s3', 'bucket')
         self.backup_interval_mins = int(self.config.get('backup', 'interval'))
         self.upload_interval_mins = int(self.config.get('backup', 'upload_interval'))
         log_level = self.config.get('log', 'level')

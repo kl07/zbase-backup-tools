@@ -152,7 +152,7 @@ class Merge:
 
         self.logger.log("Fetching Backup list from S3")
         epoch = time.time()
-	incremental_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/' %(self.config.s3bucket, self.cloud, self.game_id, self.hostname, consts.INCR_DIRNAME))
+	incremental_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.INCR_DIRNAME))
         if self.exclude_list:
             f = open(self.exclude_list)
             exclude_list_items = map(lambda x: x.strip(), f.readlines())
