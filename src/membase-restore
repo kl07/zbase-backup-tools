@@ -104,7 +104,7 @@ class Restore:
         sysconfig.append(param)
         restore_param = 'restore_mode=true'
         for p in sysconfig:
-            if 'restore' in p:
+            if 'restore_mode' in p:
                 sysconfig.remove(p)
 
         sysconfig.append(restore_param)
