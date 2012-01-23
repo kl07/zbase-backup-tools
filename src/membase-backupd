@@ -99,12 +99,19 @@ class BackupProcess:
             for f in flist:
                 self.resume_process_mode = True
                 filepath = os.path.join(b,dirpath_suffix,f)
-                if self._is_backup_valid(filepath):
+                valid = True
+                files = glob.glob(f.replace('%','*'))
+                for bf in files:
+                    if not self._is_backup_valid(bf):
+                        valid = False
+
+                if valid:
                     self.logger.log("Found backup file %s. Pusing to uploader queue" %flist[0])
                     item = (filepath, b)
                     self.backup_queue.put(item)
                 else:
-                    self._remove_file(filepath)
+                    for bf in files:
+                        self._remove_file(bf)
             self.free_buffer_list.queue.remove(b)
 
     def _upload_file(self, filepath, buffer_path):
