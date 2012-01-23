@@ -124,7 +124,7 @@ class BackupProcess:
         s3suffix_path = regex.findall(filepath)[0]
         s3path = "s3://%s" %(s3suffix_path)
 
-        split_backup_files = glob.glob(filepath)
+        split_backup_files = glob.glob(filepath.replace('%','*'))
 
         for f in split_backup_files:
             self.logger.log("ATTEMPT: Uploading %s to %s " %(f, s3path))
