@@ -41,22 +41,29 @@ main () {
 
 # Verify md5 hash of local and remote file.
 verifyFile () {
+	# Get hash of local and remote file and compare.
 	url="$1&list=true"
 	file_path=$2
 	local_hash=$(md5sum $file_path | sed "s/ .*//")
-	#local_hash=$(md5sum $file_path | awk '{print $1}')
 	remote_hash=$(curl -sI  $url | grep Etag | sed 's/Etag: //' | tr -d \\r)
 	
-	[ "${local_hash}" = "${remote_hash}" ] && return 0
-	return 1
+	[ "${local_hash}" = "${remote_hash}" ] && echo 0
+	[ "${local_hash}" != "${remote_hash}" ] && echo 1
 
 }
 
 # List files in storage server.
 # curl 'http://empire.mbbackup.zynga.com/?path=empire:empire-user-b-012/inc/&list=true' 	
 list () {
+	# Exit if number of args is not 2.
+	[[ $# -ne 2 ]] && exit 1
+
 	path=$2
+	
+	# Construct url based on remote path.
 	url=$(getUrlPrefix $path)
+	
+	# Execute curl
 	curl -s "$url&list=true" | sed "s/\(.*\):/s3:\/\/\1\//"
 	exit $?
 }
@@ -65,17 +72,42 @@ list () {
 # Download file from storage server.
 # curl -L -o /tmp/download mbbackup.zynga.com?path=empire:empire-user-b-012/inc/jnk
 download () {
-	path=$2
-	file_path=$3
-	game_name=$(getGameName $path)
+	# If number of args is not 2 or 3, quit
+	[[ $# -ne 2 ]] && [[ $# -ne 3 ]] && exit 1	
+
+	# If number of args is 3
+	[[ $# -eq 3 ]] && path=$2 && file_path=$3 
+
+	# If filepath is only filename, append current directory.
+	[[ $# -eq 3 ]] && [[ "${file_path:0:1}" != "/" ]] && file_path="$PWD/$file_path"
+	
+	# If filepath does not have filename, use remote filename.
+	[[ $# -eq 3 ]] && [[ "${file_path: -1}" = "/" ]] && file_path="$file_path$(basename $path)"
+
+	# If number of args is 2
+	[[ $# -eq 2 ]] && path=$2 && file_path="$PWD/$(basename $path)"
+
+	# Construct url based on remote path.
 	url=$(getUrlPrefix $path)
+
+	# Directory to which the file should be downloaded to.
 	dir_path=$(dirname $file_path)
-	[ -d "$dirname" ] || mkdir -p "$dir_path"
-	verifyFile $url $file_path
-	[[ $? -eq 0 ]] && echo 0
+	
+	# Create directory if directory does not exist.
+	[ -d "$dir_path" ] || mkdir -p "$dir_path"
+
+	# If local file exists and  md5hash of local and remote file match do not download again.
+	[[ -f $file_path ]] && verified=$(verifyFile $url $file_path) && [[ $verified -eq 0 ]] && exit 0
+
+	# If md5hash does not match and file exists, delete file and download again.
+	[[ -f $file_path ]] && rm -f $file_path
+
+	# Execute curl
 	curl -sL -o "$file_path" "$url"
-	verifyFile $url $file_path
-	exit $?
+
+	# Check if md5hash of local and remote file match.
+	verified=$(verifyFile $url $file_path)
+	exit $verified
 }
 
 # Sync file or folder.
@@ -95,23 +127,41 @@ sync () {
 # Upload file to storage server.
 # curl -F userfile=@/tmp/download http://empire.mbbackup.zynga.com/'?path=empire:empire-user-b-012/inc/shabeeb&upload=true'
 upload () {
+	# if number of args is not 2 or 3, quit
+	[[ $# -ne 3 ]] && exit 1	
+
 	file_path=$2
 	path=$3
 	game_name=$(getGameName $path)
+
+	# Construct url based on remote path.
 	url=$(getUrlPrefix $path)
 
+	# If remote path does not have file name, append file name to remote path
 	[[ ${url: -1} = "/" ]] && file_name=$(basename $file_path) && url="$url$file_name"
-	verifyFile $url $file_path
-	[[ $? -eq 0 ]] && echo 0
+
+	# If local file exists and md5hash of local and remote file match do not upload again.
+	[[ -f $file_path ]] && verified=$(verifyFile $url $file_path) && [[ $verified -eq 0 ]] && exit 0
+	
+	# Execute curl
 	curl  -s -F "userfile=@$file_path" "$url&upload=true"
-	verifyFile $url $file_path
-	exit $?
+
+	# Check if md5hash of local and remote file match.
+	verified=$(verifyFile $url $file_path)
+	exit $verified
 }
 
 # Delete file from storage server.
 delete () {
+	# Exit if number of args is not 2.
+	[[ $# -ne 2 ]] && exit 1
+
 	path=$2
+
+	# Construct url based on remote path.
 	url=$(getUrlPrefix $path)
+
+	# Execute curl
 	curl -s "$url&delete=true"
 	exit $?
 }
@@ -139,11 +189,14 @@ die () {
 	echo  "  List files or folder."
 	echo  "     $(basename $0)  ls  s3://<game_name>/host_name/path"
 	echo  "  Download a file."
+	echo  "     $(basename $0)  get  s3://<game_name>/host_name/path"
 	echo  "     $(basename $0)  get  s3://<game_name>/host_name/path  <file>"
 	echo  "  Upload a file."
 	echo  "     $(basename $0)  put  <file> s3://<game_name>/host_name/path"
 	echo  "  Delete file."
 	echo  "     $(basename $0)  del  s3://<game_name>/host_name/path"
+	echo  "  Sync file."
+	echo  "     $(basename $0)  sync  source destination"
     exit 1
 }
 
