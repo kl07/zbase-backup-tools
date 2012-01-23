@@ -86,11 +86,13 @@ class BackupProcess:
 
     def resume_process(self):
         self.logger.log("Looking for backup files to resume upload process")
-        dirpath_suffix = '%s/%s/%s/%s/' %(self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
+        dirpath_suffix = '%s/%s/%s/%s' %(self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
 
         for b in list(self.free_buffer_list.queue):
             try:
-                flist = os.listdir(os.path.join(b, dirpath_suffix))
+                flist = list(set(map(lambda x: x[:-10]+'-%.mbb',
+                    glob.glob("%s/*.mbb"
+                    %os.path.join(b, dirpath_suffix)))))
             except:
                 return
 
@@ -100,10 +102,10 @@ class BackupProcess:
                 if self._is_backup_valid(filepath):
                     self.logger.log("Found backup file %s. Pusing to uploader queue" %flist[0])
                     item = (filepath, b)
-                    self.free_buffer_list.queue.remove(b)
                     self.backup_queue.put(item)
                 else:
                     self._remove_file(filepath)
+            self.free_buffer_list.queue.remove(b)
 
     def _upload_file(self, filepath, buffer_path):
         retries = self.config.upload_retries
