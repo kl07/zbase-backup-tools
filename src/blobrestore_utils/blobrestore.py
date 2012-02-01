@@ -152,6 +152,9 @@ def parse_args(args):
                 options['restore_date'] = a
             elif o == '-g':
                 options['game_id'] = a
+                if len(a.split('-')) != 2:
+                    usage("ERROR: game_id should be in the format zc1-empire")
+
             elif o == '-p':
                 options['hostname_prefix'] = a
             elif o == '-f':
@@ -509,6 +512,10 @@ class BlobrestoreDispatcher:
                 restored_key = ks.read()
 
 if __name__ == '__main__':
+    if os.getuid() != 0:
+        print "Please run as root"
+        sys.exit(1)
+
     init_logger()
     options = parse_args(sys.argv)
     bd = BlobrestoreDispatcher(options)
