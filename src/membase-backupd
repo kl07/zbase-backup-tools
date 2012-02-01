@@ -359,6 +359,7 @@ class BackupProcess:
                 checkpoints = []
                 for f in backup_split_files:
                     checkpoints.extend(get_checkpoints_frombackup(f))
+                checkpoints.sort()
             except Exception, e:
                 self.logger.log("FAILED: sqlite file %s is corrupt (%s)" %(backup_filepath, str(e)))
                 self.exit(1)
