@@ -58,20 +58,18 @@ class BackupServer:
                 backup_types = [consts.PERIODIC_DIRNAME] 
 
             for btype in backup_types:
-                s3path = 's3://%s/%s/%s/%s/%s/' %(self.game_id,
+                backup_dir = '%s/%s/%s/%s/%s/%s/' %(consts.STORAGE_SERVER_ROOT, self.game_id,
                         self.hostname, self.cloud, btype, datestamp)
-                ls_cmd = "%s ls %s" %(consts.PATH_S3CMD_EXEC, s3path) 
+                ls_cmd = "/usr/bin/find -L %s -type f" %backup_dir 
                 status, output = getcommandoutput(ls_cmd, None)
                 if status != 0:
-                    return False
-                else:
-                    lines = output.split('\n')
-                    files = filter(lambda y: y.endswith('.mbb'), map(lambda x:
-                        's3://'+x.split('s3://')[-1], lines))
-                    for f in files:
-                        regex = re.compile('-(\d+).mbb')
-                        split_no = int(regex.findall(f)[0])
-                        backups.append(Backup(f, datestamp, split_no))
+                    output = ''
+                lines = output.split('\n')
+                files = filter(lambda y: y.endswith('.mbb'), lines)
+                for f in files:
+                    regex = re.compile('-(\d+).mbb')
+                    split_no = int(regex.findall(f)[0])
+                    backups.append(Backup(f, datestamp, split_no))
 
         return backups
 
@@ -161,6 +159,9 @@ class Backup:
     def setLogger(self, func):
         self.log = func
 
+    def set_localpath(self):
+        self.localpath = self.path
+
     def download_to_dir(self, dirpath):
         filename = self.path.split('/')[-1]
         self.localpath = os.path.join(dirpath, "%d_%s" %(random.randint(1,1000), filename))
@@ -175,7 +176,6 @@ class Backup:
 
     def close_db(self):
         self.db.close()
-        os.unlink(self.localpath)
 
     def get_key(self, key):
         query = 'select cpoint_id,key,flg,exp,cas,val,"%s" from cpoint_op where key="%s" and op="m"' %(self.date, key)
@@ -263,20 +263,16 @@ class Job:
                 if len(backup_search_list):
                     for b in backup_search_list:
                         self.log("Found backup %s" %b.path)
-                        self.download_queue.put(b)
+                        b.set_localpath()
+                        self.restore_queue.put(b)
                 else:
                     self.log("No backups found")
             else:
                 self.log("Downloading backup list failed")
-            dt = Thread(target=self.download_process)
-            dt.daemon = True
-            dt.start()
 
             rt = Thread(target=self.restore_process)
             rt.daemon = True
             rt.start()
-
-            dt.join()
             rt.join()
         except Exception, e:
             self.log("Failed blobrestore process (ERROR: %s)" %str(e))
@@ -289,29 +285,6 @@ class Job:
     def remove_from_keylist(self, keys):
         for k in keys:
             self.keylist.remove(k)
-
-    def download_process(self):
-        try:
-            self.log("Starting download process for Job #%s" %self.hostname)
-            while len(self.download_queue.queue) and not self.exit_status:
-                self.download_onprogress = True
-                self.buffers.acquire()
-                backup = self.download_queue.get()
-                self.log("Attempt: Downloading backup : %s" %backup.path)
-                if not backup.download_to_dir(os.path.join(self.dirpath,
-                    'downloads/')):
-                    self.log("Failed: Downloading backup : %s" %backup.path)
-                    self.log("Failed download process for Job #%s" %self.hostname)
-                    self.exit_status = 1
-                    return
-                self.log("Complete: Downloading backup : %s" %backup.path)
-                self.restore_queue.put(backup)
-                self.download_onprogress = False
-            self.log("Completed download process for Job #%s" %self.hostname)
-        except Exception, e:
-            self.log("Failed download process (ERROR: %s)" %str(e))
-            self.exit_status = 1
-
         
     def restore_process(self):
         try:
@@ -327,11 +300,14 @@ class Job:
                     self.remove_from_keylist(found_keys.keys())
                     keystore.write(found_keys)
                     backup.close_db()
-                    self.buffers.release()
                 else:
                     time.sleep(1)
 
             keystore.close()
+
+            for k in self.keylist:
+                self.log("KEY: %s STATUS:NOT-FOUND" %k)
+
             if not self.exit_status:
                 self.log("Completed restore process for Job #%s" %(self.hostname))
         except Exception, e:

@@ -13,13 +13,12 @@ import tempfile
 import sqlite3
 
 PYTHON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../')
+SSH_KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'blobrestore_sshkey')
 sys.path.insert(0, PYTHON_PATH)
 
 import consts
 from mc_bin_client import MemcachedClient
 from util import getcommandoutput
-
-
 
 def init_logger():
     global logger
@@ -87,26 +86,29 @@ def group_keys(key_file, shard_count):
     return groups
 
 def remote_filecopy(src_file, dest_file):
-    status = os.system("scp -r -q -o PasswordAuthentication=no -o" \
-            "StrictHostKeyChecking=no %s %s" %(src_file, dest_file))
+    status = os.system("scp -i %s -r -q -o PasswordAuthentication=no -o" \
+            "StrictHostKeyChecking=no %s blobrestore@%s" %(SSH_KEY_PATH, src_file, dest_file))
     if not status:
         return True
     else:
         return False
 
 def remote_cmd(server, cmd):
-    #TODO: Attach ssh key with driver
-    cmd = 'ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no %s "%s"' \
-            %(server, cmd)
+    cmd = 'ssh -i %s -o PasswordAuthentication=no -o StrictHostKeyChecking=no blobrestore@%s "%s"' \
+            %(SSH_KEY_PATH, server, cmd)
     return commands.getstatusoutput(cmd)
 
-def get_array_iplist():
+def get_array_iplist(game_id):
     """
     Get the ipaddress list of operational nodes in server array
     """
     tmpfile = '/tmp/array_ips.list'
-    os.unlink(tmpfile)
-    if download_file(consts.BACKUP_ARRAY_IPLIST, tmpfile):
+    try:
+        os.unlink(tmpfile)
+    except:
+        pass
+
+    if download_file("%s/%s" %(consts.BACKUP_ARRAY_IPLIST, game_id), tmpfile):
         ips = []
         for ip in open(tmpfile):
             ip = ip.strip()
@@ -115,7 +117,7 @@ def get_array_iplist():
             else:
                 continue
     else:
-        log("Downloading Array iplist failed")
+        log("Downloading Backup Array iplist failed")
         sys.exit(1)
     return ips
 
@@ -368,7 +370,7 @@ class BlobrestoreDispatcher:
         job_id = random.randint(0,10000000000)
         self.options['job_id'] = job_id
         #TODO: Dynamic scaling array
-        array_node_list = get_array_iplist()
+        array_node_list = get_array_iplist(options['game_id'])
         array_node_count = len(array_node_list)
         grouped_keys = group_keys(self.options['key_file'], self.options['shard_count'])
         for host_shard in grouped_keys:
@@ -450,21 +452,11 @@ class BlobrestoreDispatcher:
             yesno = raw_input("Do you want to reschedule/retry notfound jobs "
                     "(y/n)? ")
             if yesno == 'y':
-                array_ip_list = set(map(lambda x: x.ipaddr,
-                    self.node_job.values()))
-
-                latest_array_ip_list = set(get_array_iplist())
-                free_array_nodes = latest_array_ip_list - array_ip_list
 
                 for nodejob in reschedule_jobs:
                     nodejob.write_to_file()
                     if not nodejob.push_to_node():
-                        if len(free_array_nodes) >= 1:
-                            nodejob.ipaddr = free_array_nodes[0]
-                            del free_array_nodes[0]
-                        else:
-                            log("No free blobrestore array nodes available for rescheduling job")
-                            sys.exit(1)
+                        sys.exit(1)
                 self._create_batchjob_file()
                 log("Rescheduling jobs completed successfully")
         else:
