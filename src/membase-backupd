@@ -330,7 +330,7 @@ class BackupProcess:
                 return False
 
         self.logger.log("Creating Backup file : %s" %(backup_filepath))
-        mbbackup_cmd = "/usr/bin/python26 %s -s 512 -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
+        mbbackup_cmd = "/usr/bin/python26 %s -d -s 512 -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
         status, msg = self.getstatusoutput(mbbackup_cmd)
 
         backup_split_files = glob.glob(backup_filepath.replace('%','*'))
