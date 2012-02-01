@@ -34,6 +34,6 @@ DEL_COMMAND = "del"
 BLOBRESTORE_JOBS_DIR = '/home/blobrestore/jobs/'
 BLOBRESTORE_PROCESSED_JOBS_DIR = '/home/blobrestore/processed_jobs/'
 SYSLOG_TAG_BLOBRESTORE = 'blobrestore'
-BLOBRESTORE_DAEMON_LOG = '/var/opt/blobrestore/daemon.log'
+BLOBRESTORE_DAEMON_LOG = '/var/log/blobrestore_daemon.log'
 BACKUP_ARRAY_IPLIST = 's3://zynga-common/membase-backup-production-test2/configs/blobrestore-arrays'
 STORAGE_SERVER_ROOT = '/var/www/html'

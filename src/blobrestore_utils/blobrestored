@@ -75,8 +75,7 @@ class BackupServer:
 
 def create_nodejob_tracker(nodejob):
     nodejob_tracker_instance = NodeJobTracker(nodejob)
-    job_count = len(nodejob.jobs)
-    for i in range(job_count):
+    for i in nodejob.jobs:
         j = Job()
         j.parse_nodejob(i, nodejob, nodejob_tracker_instance)
         nodejob_tracker_instance.jobs.append(j)
@@ -216,7 +215,6 @@ class Job:
     def __init__(self):
         self.config = BlobrestoreManager.configclass
         self.exit_status = 0
-        self.buffers = Semaphore(self.config.download_buffers_per_job)
         self.download_queue = Queue.Queue()
         self.restore_queue = Queue.Queue()
         self.total_keys_count = 0

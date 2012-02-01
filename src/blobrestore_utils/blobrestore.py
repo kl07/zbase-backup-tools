@@ -86,8 +86,15 @@ def group_keys(key_file, shard_count):
     return groups
 
 def remote_filecopy(src_file, dest_file):
-    status = os.system("scp -i %s -r -q -o PasswordAuthentication=no -o" \
-            "StrictHostKeyChecking=no %s blobrestore@%s" %(SSH_KEY_PATH, src_file, dest_file))
+    if ':' in src_file:
+        src_file = "blobrestore@%s" %src_file
+
+    if ':' in dest_file:
+        dest_file = "blobrestore@%s" %dest_file
+ 
+    cmd = "scp -i %s -r -q -o PasswordAuthentication=no -o" \
+            "StrictHostKeyChecking=no %s %s" %(SSH_KEY_PATH, src_file, dest_file)
+    status = os.system(cmd)
     if not status:
         return True
     else:
