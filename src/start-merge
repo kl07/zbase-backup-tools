@@ -298,9 +298,9 @@ class MergeWrapper:
         merge_backupfile = "%s/%s-daily-%s" %(consts.BACKUP_ROOT,location,timestamp)
         output_file = "%s/%s-filelist-%s" %(consts.BACKUP_ROOT, location, timestamp)
         if self.manifest_file:
-            merge_cmd = "%s -h %s -o %s -l %s -x %s" %(consts.MERGE_CMD,location,merge_backupfile, output_file, self.manifest_file)
+            merge_cmd = "%s -h %s -o %s -l %s -x %s -t %s" %(consts.MERGE_CMD,location,merge_backupfile, output_file, self.manifest_file, consts.PERIODIC_DIRNAME)
         else:
-            merge_cmd = "%s -h %s -o %s -l %s" %(consts.MERGE_CMD,location,merge_backupfile, output_file)
+            merge_cmd = "%s -h %s -o %s -l %s -t %s" %(consts.MERGE_CMD,location,merge_backupfile, output_file, consts.PERIODIC_DIRNAME)
         print "executing command %s" %merge_cmd
         status, output = commands.getstatusoutput(merge_cmd)
         print "%s %s" %(output,status)
