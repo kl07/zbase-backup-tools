@@ -282,7 +282,7 @@ class MergeWrapper:
 
         now=datetime.datetime.now()
         #before starting check if the done  file exists in the incremental backup directory
-        backup_path = self.s3path + "incremental/"
+        backup_path = self.s3path
         status = self.check_done(backup_path)
         if status == True:
             self.logger.log("Warning: Daily backups already generated for this host")
@@ -359,7 +359,7 @@ class MergeWrapper:
 
         #download the bootstrap file from the s3 location
         hostname = str(os.uname()[1])
-        filepath = "s3://%s/hostinfo-%s"%(consts.MBA_BOOTSTRAP_PATH,hostname)
+        filepath = "s3://%s/%s/hostinfo-%s"%(consts.MBA_BOOTSTRAP_PATH,hostname,hostname)
         status = self._download_file(filepath)
 
         print "Cleaning up backup root"
