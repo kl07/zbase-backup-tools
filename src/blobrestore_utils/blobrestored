@@ -52,15 +52,19 @@ class BackupServer:
             difference = datetime.timedelta(days=-(i))
             datestamp = (datetime_object + difference).strftime('%Y-%m-%d')
             if master_backup:
-                backup_types = [consts.PERIODIC_DIRNAME, consts.MASTER_DIRNAME] 
+                backup_types = [consts.MASTER_DIRNAME, consts.PERIODIC_DIRNAME]
             else:
                 backup_types = [consts.PERIODIC_DIRNAME] 
 
             for btype in backup_types:
+                master_backup_exists = False
                 backup_dir = '%s/%s/%s/%s/%s/%s/' %(consts.STORAGE_SERVER_ROOT, self.game_id,
                         self.hostname, self.cloud, btype, datestamp)
                 ls_cmd = "/usr/bin/find -L %s -type f" %backup_dir 
                 status, output = getcommandoutput(ls_cmd, None)
+                if btype == consts.MASTER_DIRNAME and status == 0:
+                    master_backup_exists = True
+
                 if status != 0:
                     output = ''
                 lines = output.split('\n')
@@ -69,6 +73,9 @@ class BackupServer:
                     regex = re.compile('-(\d+).mbb')
                     split_no = int(regex.findall(f)[0])
                     backups.append(Backup(f, datestamp, split_no))
+
+                if master_backup_exists:
+                    break
 
         return backups
 
@@ -253,7 +260,7 @@ class Job:
     def process(self):
         try:
             bs = BackupServer(self.game_id, self.hostname)
-            self.log("Searching for daily backups")
+            self.log("Searching for backups")
             backup_search_list = bs.list_backups(self.restore_date,
                     self.force_find_days, self.check_master_backup)
             if backup_search_list:
