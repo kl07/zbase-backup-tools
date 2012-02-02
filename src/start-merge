@@ -267,43 +267,6 @@ class MergeWrapper:
             if lines == ['']:
                 self.logger.log("WARNING: Empty incremental directory")
                 return True
-            for each_line in lines:
-                word = each_line.split()
-                #if size of file is greater than 1G download split and upload
-                if word[3].find("-manifest") != -1 :
-                    #delete manifest file exists.
-                    status = self.process_manifest(word[3])
-                if  int(word[2]) > (1024 * 1024 * 1024):
-                    status = self.download_split(word[3])
-                    if status == False:
-                        return False
-                    else:
-                        for file in os.listdir(consts.BACKUP_ROOT):
-                            if fnmatch.fnmatch(file, '*.mbb'):
-                                status = self._upload_file(file, s3path)
-                                if status == False:
-                                    return False
-
-                    #all spits uploaded. Now delete the large file
-                    if os.path.isfile(self.manifest_file) :
-                        #manifest file is present, add this file name to it and upload
-                        fd = open(self.manifest_file, "a")
-                        fd.write(word[3] + "\n")
-                        fd.close()
-                        status = self._upload_file(self.manifest_file, s3path, False)
-                        if status == False:
-                            self.logger.log("FAILED: unable to upload manifest file in _list_s3_files. %s" %self.manifest_file)
-
-                    else:
-                        status2 = self._delete_file(word[3])
-                    if status2 == False:
-                        self.logger.log("FAILED: unable to delete large backup file %s" %word[3])
-                        status = status2
-                    #cleanup all the mbb files
-                    os.system("rm -rf " + consts.BACKUP_ROOT + "/*.mbb")
-                #endif
-            #endfor
-
         return status
 
     def check_done(self, s3path):

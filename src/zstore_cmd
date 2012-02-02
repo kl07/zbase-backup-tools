@@ -18,6 +18,11 @@ main () {
 		sync)
 			sync $@   
 			;;
+        la)
+	    	RECURSIVE="true"
+            list $@
+            ;;
+
         ls)
             list $@
             ;;
@@ -45,11 +50,10 @@ verifyFile () {
 	url="$1&list=true"
 	file_path=$2
 	local_hash=$(md5sum $file_path | sed "s/ .*//")
-	remote_hash=$(curl -sI  $url | grep Etag | sed 's/Etag: //' | tr -d \\r)
+	remote_hash=$(curl -sIL  $url | grep Etag | sed 's/Etag: //' | tr -d \\r)
 	
 	[ "${local_hash}" = "${remote_hash}" ] && echo 0
 	[ "${local_hash}" != "${remote_hash}" ] && echo 1
-
 }
 
 # List files in storage server.
@@ -63,8 +67,11 @@ list () {
 	# Construct url based on remote path.
 	url=$(getUrlPrefix $path)
 	
+	url="$url&list=true"
+	[[ $RECURSIVE = "true" ]] && url="$url&recursive=true"
+
 	# Execute curl
-	curl -s "$url&list=true" | sed "s/\(.*\):/s3:\/\/\1\//"
+	curl -sL "$url" | sed "s/\([a-zA-Z]*\):/s3:\/\/\1\//"
 	exit $?
 }
 
@@ -96,18 +103,21 @@ download () {
 	# Create directory if directory does not exist.
 	[ -d "$dir_path" ] || mkdir -p "$dir_path"
 
+	actual_url=$(curl  -sL "$url&get_url=true")
+
 	# If local file exists and  md5hash of local and remote file match do not download again.
-	[[ -f $file_path ]] && verified=$(verifyFile $url $file_path) && [[ $verified -eq 0 ]] && exit 0
+	[[ -f $file_path ]] && verified=$(verifyFile $actual_url $file_path) 
+	[[ -n $verified ]] && [[ $verified -eq 0 ]] && exit 0
 
 	# If md5hash does not match and file exists, delete file and download again.
 	[[ -f $file_path ]] && rm -f $file_path
 
 	# Execute curl
-	curl -sL -o "$file_path" "$url"
+        # Check if md5hash of local and remote file match.
+        curl -sfL -o "$file_path" "$url" && verified=$(verifyFile $actual_url $file_path) 
+        [[ -n $verified ]] && [[ $verified -eq 0 ]] && exit 0
 
-	# Check if md5hash of local and remote file match.
-	verified=$(verifyFile $url $file_path)
-	exit $verified
+        exit 1
 }
 
 # Sync file or folder.
@@ -140,14 +150,17 @@ upload () {
 	# If remote path does not have file name, append file name to remote path
 	[[ ${url: -1} = "/" ]] && file_name=$(basename $file_path) && url="$url$file_name"
 
+	actual_url=$(curl  -sL "$url&get_url=true")
+
 	# If local file exists and md5hash of local and remote file match do not upload again.
-	[[ -f $file_path ]] && verified=$(verifyFile $url $file_path) && [[ $verified -eq 0 ]] && exit 0
+	[[ -f $file_path ]] && verified=$(verifyFile $actual_url $file_path) 
+	[[ -n $verified ]] && [[ $verified -eq 0 ]] && exit 0
 	
 	# Execute curl
-	curl  -s -F "userfile=@$file_path" "$url&upload=true"
+	curl  -s -F "userfile=@$file_path" "$actual_url&upload=true"
 
 	# Check if md5hash of local and remote file match.
-	verified=$(verifyFile $url $file_path)
+	verified=$(verifyFile $actual_url $file_path)
 	exit $verified
 }
 
@@ -162,7 +175,7 @@ delete () {
 	url=$(getUrlPrefix $path)
 
 	# Execute curl
-	curl -s "$url&delete=true"
+	curl -sL "$url&delete=true"
 	exit $?
 }
 
@@ -186,17 +199,20 @@ die () {
 	[ "$1" != "" ] && echo -e $1
 	echo  -e "$(basename $0)  <command> [arg(s)]\n"
 	echo  "Commands:"
-	echo  "  List files or folder."
+	echo  -e "\n  List files or folder."
 	echo  "     $(basename $0)  ls  s3://<game_name>/host_name/path"
-	echo  "  Download a file."
+	echo  -e "\n  List folders recursively."
+	echo  "     $(basename $0)  la  s3://<game_name>/host_name/path/"
+	echo  -e "\n  Download a file."
 	echo  "     $(basename $0)  get  s3://<game_name>/host_name/path"
 	echo  "     $(basename $0)  get  s3://<game_name>/host_name/path  <file>"
-	echo  "  Upload a file."
+	echo  -e "\n  Upload a file."
 	echo  "     $(basename $0)  put  <file> s3://<game_name>/host_name/path"
-	echo  "  Delete file."
+	echo  -e "\n  Delete file."
 	echo  "     $(basename $0)  del  s3://<game_name>/host_name/path"
-	echo  "  Sync file."
+	echo  -e "\n  Sync file."
 	echo  "     $(basename $0)  sync  source destination"
+	echo  -e "\n"
     exit 1
 }
 
