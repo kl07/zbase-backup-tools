@@ -1,0 +1,368 @@
+#!/usr/bin/env python26
+#Description: Create master backups and upload them
+
+import Queue
+import os
+from threading import Thread
+import time
+import re
+import sys
+import signal
+import traceback
+import getopt
+import sqlite3
+
+from util import create_split_db, copy_checkpoint_op_records 
+from util import copy_checkpoint_state_records, getcommandoutput
+from merge import Merge
+import consts
+from config import Config
+from logger import Logger
+
+
+
+class BackupUploader:
+    
+    def __init__(self, options):
+        self.cloud = options['cloud']
+        self.game_id = options['game_id']
+        self.hostname = options['hostname']
+        self.date = options['date']
+        self.upload_retries = options['upload_retries']
+        self.logger = options['logger']
+        self.backup_file = options['backup_file']
+        self.buffer_count = options['buffer_count']
+        self.buffer_path = options['buffer_path']
+        self.upload_threads_count = options['upload_threads_count']
+
+        self.buffers = Queue.Queue()
+        self.split_queue = Queue.Queue()
+        self.processlist = Queue.Queue()
+        self.split_complete = False
+        self.exit_status = 0
+        self.split_no = 0
+        self.threads = []
+
+        for i in range(self.buffer_count):
+            path = os.path.join(self.buffer_path, str(i))
+            try:
+                os.makedirs(path)
+            except:
+                pass
+            self.buffers.put(path)
+
+    def getstatusoutput(self, cmd):
+        return getcommandoutput(cmd, self.processlist)
+
+    def kill_subprocesses(self, sig=None, frame=None):
+        for process in self.processlist.queue:
+            try:
+                process.terminate()
+            except:
+                pass
+
+        for t in self.threads:
+            try:
+                t._Thread__stop()
+            except:
+                pass
+
+        cmd = "%s del s3://%s/%s/%s/%s/%s" %(consts.PATH_S3CMD_EXEC,
+                self.game_id, self.hostname, self.cloud, consts.MASTER_DIRNAME,
+                self.date)
+        
+        for i in range(self.upload_retries): 
+            if os.system(cmd) != 0:
+                continue
+            else:
+                break
+
+        self.exit_status = 1
+
+    def done(self):
+        dirpath = os.path.join('/tmp',self.game_id,
+                self.hostname, self.cloud, consts.MASTER_DIRNAME, \
+                self.date)
+        try:
+            os.makedirs(dirpath)
+        except:
+            pass
+
+        os.system("touch %s" %os.path.join(dirpath, '.done'))
+        os.unlink(self.backup_file)
+
+        if not self._upload_file(os.path.join(dirpath,'.done'), '/tmp'):
+            self.kill_subprocesses()
+            return False
+        return True
+
+    def _upload_file(self, filepath, buffer_path):
+        retries = self.upload_retries
+        root_path = buffer_path
+        if root_path[-1] == '/':
+            root_path = root_path[:-1] 
+
+        regex = re.compile('^%s(/.*)' %root_path)
+        s3suffix_path = regex.findall(filepath)[0]
+        s3path = "s3:/%s" %(s3suffix_path)
+
+        self.logger.log("ATTEMPT: Uploading %s to %s " %(filepath, s3path))
+        upload_cmd = "%s sync %s %s" %(consts.PATH_S3CMD_EXEC, filepath, s3path)
+        self.logger.log("Executing command, %s " %upload_cmd)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Retrying upload for %s " %filepath)
+
+            self.logger.log("Uploading file %s to %s " %(filepath, s3path))
+            status, output = self.getstatusoutput(upload_cmd)
+            if status == 0:
+                break
+
+        if status > 0:
+            self.logger.log("FAILED: Upload to S3 failed for backup file %s (%s)" %(filepath, output))
+            return False
+        else:
+            self.logger.log(output)
+            self.logger.log("SUCCESS: Uploading %s to %s (retries=%d)" %(filepath, s3path, i))
+
+        return True  
+
+    def splitter_process(self):
+
+        try:
+            self.logger.log("ATTEMPT: Obtaining buffer for creating backup split")
+            buffer_path = self.buffers.get()
+            self.logger.log("SUCCESS: Obtaining buffer - %s" %buffer_path)
+
+            dirpath = os.path.join(buffer_path, self.game_id,
+                    self.hostname, self.cloud, consts.MASTER_DIRNAME, \
+                    self.date)
+
+            if os.path.exists(dirpath):
+                self.getstatusoutput("rm -rf %s" %dirpath)
+            os.makedirs(dirpath)
+
+            ## Find the next split output file to start with
+            next_split_output_file = os.path.join(dirpath, "master_backup_%s-%s.mbb" %(self.date, \
+                        str(self.split_no).zfill(5)))
+            self.logger.log("Creating backup split file : %s" %next_split_output_file)
+
+            split_db = create_split_db(next_split_output_file, consts.SPLIT_SIZE)
+            merged_db = sqlite3.connect(self.backup_file)
+            merged_db.text_factory = str
+            md_cursor = merged_db.cursor()
+            md_cursor.arraysize = 5000
+
+            ## Copy checkpoint_state records into the first split db.
+            ## Note that the number of checkpoint_state records is usually small even in the merged db.
+            md_cursor.execute("select vbucket_id, cpoint_id, prev_cpoint_id, state, source, updated_at " \
+                            "from cpoint_state")
+            checkpoint_states = md_cursor.fetchall()
+            copy_checkpoint_state_records(checkpoint_states, split_db)
+
+            op_records = []
+            ## Copy checkpoint_operation records into the multiple split database files.
+            md_cursor.execute("select vbucket_id, cpoint_id, seq, op, key, flg, exp, cas, val " \
+                            "from cpoint_op")
+            while True:
+                op_records = md_cursor.fetchmany(md_cursor.arraysize)
+                if op_records == []:
+                    break
+                if copy_checkpoint_op_records(op_records, split_db) != True:
+                    ## The current split database size exceeds the max size allowed.
+                    ## Create the next split database and continue to copy records.
+                    try:
+                        split_db.rollback()
+                    except sqlite3.Error, e: ## Can't find the better error code for rollback failure.
+                        pass
+                    split_db.close()
+                    self.split_queue.put((buffer_path, next_split_output_file))
+                    
+                    self.logger.log("ATTEMPT: Obtaining buffer for creating backup split")
+                    buffer_path = self.buffers.get()
+                    self.logger.log("SUCCESS: Obtaining buffer - %s" %buffer_path)
+                    self.split_no += 1
+
+                    dirpath = os.path.join(buffer_path, self.game_id,
+                            self.hostname, self.cloud, consts.MASTER_DIRNAME, \
+                            self.date)
+
+                    if os.path.exists(dirpath):
+                        self.getstatusoutput("rm -rf %s" %dirpath)
+                    os.makedirs(dirpath)
+
+                    ## Find the next split output file to start with
+                    next_split_output_file = os.path.join(dirpath, "master_backup_%s-%s.mbb" %(self.date, \
+                                str(self.split_no).zfill(5)))
+                    self.logger.log("Creating backup split file : %s" %next_split_output_file)
+                    split_db = create_split_db(next_split_output_file, consts.SPLIT_SIZE)
+                    copy_checkpoint_state_records(checkpoint_states, split_db)
+                    copy_checkpoint_op_records(op_records, split_db)
+
+            merged_db.close()
+            split_db.close()
+            self.split_queue.put((buffer_path, next_split_output_file))
+
+        except Exception as e:
+            self.logger.log("Error occured: %s"
+                    %traceback.print_exc(file=sys.stdout))
+            self.exit_status = 0
+        self.split_complete = True
+
+    def upload_process(self):
+        while len(self.split_queue.queue) or self.split_complete==False:
+            buffer_path, backup_file = self.split_queue.get()
+            if self._upload_file(backup_file, buffer_path):
+                self.buffers.put(buffer_path)
+                os.unlink(backup_file)
+            else:
+                self.exit_status = 0
+
+    def execute(self):
+        self.logger.log("Starting split and uploader for %s" %self.backup_file)
+
+        for i in range(self.upload_threads_count):
+            t = Thread(target=self.upload_process)
+            t.daemon = True
+            t.start()
+            self.threads.append(t)
+
+        t = Thread(target=self.splitter_process)
+        t.daemon = True
+        t.start()
+        self.threads.append(t)
+
+        while not (self.split_complete and len(self.split_queue.queue)==0):
+            if self.exit_status != 0:
+                self.kill_subprocesses()
+                return False
+
+            time.sleep(1)
+        if self.done():
+            return True
+        else:
+            return False
+
+class MasterBackup:
+    def __init__(self, options):
+        self.options = options
+        self.options['btype'] = consts.MASTER_DIRNAME
+        tmpfile = os.path.join(options['buffer_path'], "master-backup.mbb")
+        self.options['output'] = options['backup_file'] = tmpfile
+        self.logger = self.options['logger']
+        self.merger = False
+        self.uploader = False
+
+    def process(self):
+        self.logger.log("======= Starting master backup =========")
+        self.logger.log("DATE: %s HOST: %s" %(self.options['date'],
+            self.options['hostname']))
+
+
+        m = Merge(self.options)
+        self.merger = m
+        rv = m.execute()
+        if rv[0] == True:
+            status, filelist = rv
+        else:
+            status = rv[0]
+
+        if status:
+            if filelist == []:
+                self.logger.log("Master backup already exists")
+                return True
+            else:
+                bu = BackupUploader(self.options)
+                self.uploader = bu
+                status = bu.execute()
+                if status:
+                    self.logger.log("Master backup created successfully")
+                    return True
+                else:
+                    self.logger.log("Master backup creation failed")
+                    self.kill_subprocesses()
+                    return False
+        else:
+            self.logger.log("Master backup creation failed")
+
+
+    def kill_subprocesses(self,s,f):
+
+        cmd = "%s del s3://%s/%s/%s/%s/%s" %(consts.PATH_S3CMD_EXEC,
+                self.options['game_id'], self.options['hostname'],
+                self.options['cloud'], consts.MASTER_DIRNAME,
+                self.options['date'])
+
+        if self.merger:
+            self.merger.kill_subprocesses()
+
+        if self.uploader:
+            for i in range(self.options['upload_retries']): 
+                if os.system(cmd) != 0:
+                    continue
+                else:
+                    break
+            self.uploader.kill_subprocesses()
+
+        os.system("rm -rf %s/*" %self.options["buffer_path"])
+        self.logger.log("Master backup creation failed")
+
+def parse_args():
+    options = {}
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 'h:d:b:c:')
+    except getopt.GetoptError, err:
+        print str(err)
+        sys.exit(2)
+
+    for o,a in opts:
+        if o == '-h':
+            options['hostname'] = a
+        elif o == '-b':
+            options['buffer_path'] = a
+        elif o == '-c':
+            options['buffer_count'] = int(a)
+        elif o == '-d':
+            options['date'] = a
+        else:
+            assert False, "Unknown option"
+
+    if len(options) < 4:
+        usage("More arguments required")
+
+    return options
+
+def usage(msg):
+    print "Usage: %s -h hostname -d date -b buffer_path -c buffer_count" %sys.argv[0]
+    print msg
+    sys.exit(2)
+
+
+if __name__ == '__main__':
+    try:
+        config = Config(consts.CONFIG_FILE)
+        config.read()
+        logger = Logger(tag = config.syslog_tag, level = config.log_level)
+    except Exception, e:
+        config.syslog_tag = consts.SYSLOG_TAG
+        logger = Logger(tag = config.syslog_tag, level = config.log_level)
+        logger.log("FAILED: Parsing config file (%s)" %(str(e)))
+
+    options = parse_args()
+    options['logger'] = logger
+    options['cloud'] = config.cloud
+    options['game_id'] = config.game_id
+    options['download_retries'] = config.download_retries
+    options['upload_retries'] = config.upload_retries
+    options['buffer_list'] = config.buffer_list.split(',')
+    options['download_threads_count'] = len(options['buffer_list'])
+    options['upload_threads_count'] = len(options['buffer_list'])
+
+    mb = MasterBackup(options)
+    for sig in [signal.SIGINT, signal.SIGQUIT, signal.SIGTERM]:
+        signal.signal(sig, mb.kill_subprocesses)
+
+    status = mb.process()
+    if not status:
+        sys.exit(1)
+

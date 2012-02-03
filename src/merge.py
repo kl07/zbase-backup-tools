@@ -60,7 +60,11 @@ class Merge:
     def __init__(self, options):
         self.logger = options['logger']
         self.output_file = options['output']
-        self.filelog = options['filelog']
+        if options.has_key('filelog'):
+            self.filelog = options['filelog']
+        else:
+            self.filelog = None
+
         if options.has_key('exclude_list'):
             self.exclude_list = options['exclude_list']
         else:
@@ -73,7 +77,16 @@ class Merge:
         self.cloud = options['cloud']
         self.game_id = options['game_id']
         self.download_retries = options['download_retries']
-        buffer_list = options['buffer_list']
+        self.download_threads_count = options['download_threads_count']
+
+        if options.has_key('buffer_list'):
+            buffer_list = options['buffer_list']
+        else:
+            self.buffer_count = options['buffer_count']
+            self.buffer_path = options['buffer_path']
+            for i in range(self.download_threads_count):
+                buffer_list = os.path.join(self.buffer_path, str(i))
+
         self.processlist = Queue.Queue()
         self.exit_status = 0
         self.merge_complete = False
@@ -121,7 +134,7 @@ class Merge:
 
             mbb_files = filter(lambda x: x.endswith('.mbb'), files)
             if len(mbb_files) and complete_check and complete_backup == False:
-                self.logger.log(".done marker cannot be found in the backup directory")
+                self.logger.log("Files found, but .done marker cannot be found in the backup directory")
                 return False
 
             return mbb_files
@@ -332,6 +345,7 @@ if __name__ == '__main__':
     options['game_id'] = config.game_id
     options['download_retries'] = config.download_retries
     options['buffer_list'] = config.buffer_list.split(',')
+    options['download_threads_count'] = len(options['buffer_list'])
 
     fd = open(consts.MBMERGE_PID_FILE,'w')
     fd.write(str(os.getpid()))
