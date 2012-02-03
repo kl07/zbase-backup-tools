@@ -1,5 +1,5 @@
 #!/usr/bin/python26
-#Description: Incremental merge script
+#Description: Merge library to merge daily and master backups into a single backup
 
 import time
 import os
