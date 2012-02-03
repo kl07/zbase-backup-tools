@@ -384,7 +384,7 @@ class BlobrestoreDispatcher:
         array_node_count = len(array_node_list)
         grouped_keys = group_keys(self.options['key_file'], self.options['shard_count'])
         for host_shard in grouped_keys:
-            i = host_shard % array_node_count
+            i = (host_shard+1) % array_node_count
             if self.node_job.has_key(i):
                 self.node_job[i].add_shard_and_keys(host_shard,
                         grouped_keys[host_shard])
