@@ -327,7 +327,7 @@ if __name__ == '__main__':
         logger = Logger(tag = config.syslog_tag, level = config.log_level)
     except Exception, e:
         config.syslog_tag = consts.SYSLOG_TAG
-        logger = Logger(tag = syslog_tag, level = config.log_level)
+        logger = Logger(tag = consts.syslog_tag, level = config.log_level)
         logger.log("FAILED: Parsing config file (%s)" %(str(e)))
 
     if os.path.exists(consts.MBMERGE_PID_FILE):
