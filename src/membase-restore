@@ -48,7 +48,8 @@ class Restore:
         else:
             self.hostname = hostname
 
-        buffer_list = self.config.buffer_list.split(',')
+        #TODO: Phase-2 Separate tmpfs 
+        buffer_list = map(lambda x: '/dev/shm'+ x, self.config.buffer_list.split(','))
         self.thread_count = len(buffer_list)
         self.free_buffer_list = Queue.Queue()
         self.download_queue = Queue.Queue()
