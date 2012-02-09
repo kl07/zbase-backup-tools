@@ -54,7 +54,7 @@ def usage(e=0):
             "[ -c ] [ -m ]\n" %(sys.argv[0])
     print "%s status restore_ID.job\n" %(sys.argv[0])
     print "%s fetchlog restore_ID.job\n" %(sys.argv[0])
-    print "%s server-restore restore_ID.job -l target_server_list [ -r ]\n" %(sys.argv[0])
+    print "%s restore-server restore_ID.job -l target_server_list [ -r ]\n" %(sys.argv[0])
 
     sys.exit(e)
 
