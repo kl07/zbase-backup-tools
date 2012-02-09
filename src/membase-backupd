@@ -287,8 +287,15 @@ class BackupProcess:
         interval = self.config.backup_interval_mins*60
         while True:
             start_time = time.time()
-            master_backup_attempt = self.is_master_backup()
+            if self.is_cursor_valid(consts.REPLICATION_TAPNAME):
+                self.logger.log("The host is a master. Exiting")
+                self.exit(1)
 
+            if not self.is_cursor_valid(consts.BACKUP_TAPNAME):
+                self.logger.log("FAILED: Registered TAP for Backup not found")
+                self.exit(1)
+
+            master_backup_attempt = self.is_master_backup()
             if self.is_closed_checkpoint_moved() or master_backup_attempt or self.first_master_backup:
                 self.logger.log("Waiting for obtaining free ramfs buffer")
                 buffer_path = self.free_buffer_list.get()
@@ -342,11 +349,6 @@ class BackupProcess:
         else:
             btype =  "incremental"
 
-        #TODO: Enable for 1.7.3 r7
-        #if self.is_cursor_valid(consts.REPLICATION_TAPNAME):
-        #    self.logger.log("The host is a master. Exiting")
-        #    self.exit(1)
-
         if os.path.exists(consts.MBRESTORE_PID_FILE):
             pid = int(open(consts.MBRESTORE_PID_FILE).read())
             try:
@@ -359,12 +361,6 @@ class BackupProcess:
         start_time = time.time()
         self.logger.log("==== START BACKUP ====")
         self.logger.log("Creating %s Backup for %s " %(btype, datetimestamp))
-
-        #TODO: Enable for 1.7.3 r7
-        #if not self.is_cursor_valid(consts.BACKUP_TAPNAME):
-        #    self.logger.log("FAILED: No registered TAP for Backup found")
-        #    self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
-        #    return False
 
         backup_dir = os.path.dirname(backup_filepath)
         backup_filename = os.path.basename(backup_filepath)
