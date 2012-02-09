@@ -58,13 +58,14 @@ class BackupProcess:
                 self.logger.log("FAILED: Duplicate buffer list found in the config")
                 self.exit(1)
 
-            f = open('/etc/mtab')
-            lines = f.readlines()
-            tmpfs_locations = map(lambda y: y.split(' ')[1], filter(lambda x: ' tmpfs ' in x, lines))
-            for b in buffer_list:
-                if len(filter(lambda x: x in b, tmpfs_locations)) == 0:
-                    self.logger.log("FAILED: Buffer %s is not a tmpfs location" %b)
-                    self.exit(1)
+            #TODO: Phase2 - Enable this
+            #f = open('/etc/mtab')
+            #lines = f.readlines()
+            #tmpfs_locations = map(lambda y: y.split(' ')[1], filter(lambda x: ' tmpfs ' in x, lines))
+            #for b in buffer_list:
+            #    if len(filter(lambda x: x in b, tmpfs_locations)) == 0:
+            #        self.logger.log("FAILED: Buffer %s is not a tmpfs location" %b)
+            #        self.exit(1)
 
             if not os.path.exists(consts.PATH_S3CMD_CONFIG):
                 self.logger.log("FAILED: s3cmd_zynga configuration not found at %s" %(consts.PATH_S3CMD_CONFIG))
