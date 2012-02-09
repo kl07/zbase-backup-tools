@@ -9,6 +9,8 @@ import signal
 import socket
 import Queue
 import glob
+import datetime
+import random
 from threading import Thread
 from pwd import getpwnam
 import consts
@@ -28,6 +30,7 @@ class BackupProcess:
     def __init__(self):
         self.exit_status = 0
         self.upload_only_mode = False
+        self.first_master_backup = False
         self.resume_process_mode = False
         self.processlist = Queue.Queue()
         try:
@@ -258,12 +261,35 @@ class BackupProcess:
         else:
             return False
 
+    def is_master_backup(self):
+        now = datetime.datetime.now()
+        if os.path.exists(consts.LAST_MASTER_BACKUP_TIME):
+            timestamp = open(consts.LAST_MASTER_BACKUP_TIME, 'r').read() 
+            year, month, day, hr, mins, secs, msecs = map(lambda x: int(x), timestamp.split('-'))
+            last_backup_time = datetime.datetime(year, month, day, hr, mins, secs, msecs)
+            if (now - last_backup_time).total_seconds() >= int(self.config.master_backup_interval_days*24*60*60):
+                return True
+
+        return False
+
+    def _create_master_backup_marker(self, timestamp=None):
+        if timestamp == None:
+            rand = random.random(0, self.config.master_backup_interval_days)
+            last_backup_time = datetime.datetime.now() + datetime.timedelta(days=-(rand))
+            timestamp = last_backup_time.strftime('%Y-%m-%d-%H-%M-%S-000000')
+
+        f = open(consts.LAST_MASTER_BACKUP_TIME, 'w')
+        f.write(timestamp)
+        f.close()
+
+
     def backup_process_thread(self):
         interval = self.config.backup_interval_mins*60
         while True:
             start_time = time.time()
+            master_backup_attempt = self.is_master_backup()
 
-            if self.is_closed_checkpoint_moved():
+            if self.is_closed_checkpoint_moved() or master_backup_attempt or self.first_master_backup:
                 self.logger.log("Waiting for obtaining free ramfs buffer")
                 buffer_path = self.free_buffer_list.get()
                 self.logger.log("Obtained buffer %s " %buffer_path)
@@ -271,10 +297,26 @@ class BackupProcess:
                 datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
                 backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S-%.mbb',now)
                 backup_root = buffer_path
-                backup_dir = os.path.join(backup_root, self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
+                if self.first_master_backup or master_backup_attempt:
+                    backup_dir = os.path.join(backup_root, self.config.game_id,
+                            self.hostname, self.config.cloud,
+                            consts.MASTER_DIRNAME, "%s"
+                            %(time.strftime('%Y-%m-%d', now)))
+                    self.first_master_backup = False
+                    full_backup = True
+                else:
+                    backup_dir = os.path.join(backup_root, self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
+                    full_backup = False
+
                 backup_filepath = os.path.join(backup_dir, backup_filename)
-                status = self._take_backup(backup_filepath, datetimestamp)
+                status = self._take_backup(backup_filepath, datetimestamp, full_backup)
                 if status:
+                    if self.first_master_backup:
+                        self._create_master_backup_marker()
+                        self.first_master_backup = False
+                    elif master_backup_attempt:
+                        self._create_master_backup_marker(time.strftime('%Y-%m-%d-%H-%M-%S-000000',now))
+
                     self.backup_queue.put((backup_filepath, buffer_path))
                     self.logger.log("Added %s to upload queue" %backup_filepath)
                 else:
@@ -290,10 +332,15 @@ class BackupProcess:
             else:
                 time.sleep(interval+sleep_time)
 
-    def _take_backup(self, backup_filepath, datetimestamp):
+    def _take_backup(self, backup_filepath, datetimestamp, full_backup):
         """
         Create incremental backup
         """
+
+        if full_backup:
+            btype = "master"
+        else:
+            btype =  "incremental"
 
         #TODO: Enable for 1.7.3 r7
         #if self.is_cursor_valid(consts.REPLICATION_TAPNAME):
@@ -311,7 +358,7 @@ class BackupProcess:
 
         start_time = time.time()
         self.logger.log("==== START BACKUP ====")
-        self.logger.log("Creating Backup for %s " %(datetimestamp))
+        self.logger.log("Creating %s Backup for %s " %(btype, datetimestamp))
 
         #TODO: Enable for 1.7.3 r7
         #if not self.is_cursor_valid(consts.BACKUP_TAPNAME):
@@ -330,7 +377,11 @@ class BackupProcess:
                 return False
 
         self.logger.log("Creating Backup file : %s" %(backup_filepath))
-        mbbackup_cmd = "/usr/bin/python26 %s -d -s 512 -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
+        if full_backup:
+            mbbackup_cmd = "/usr/bin/python26 %s -d -f -s %s -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, consts.SPLIT_SIZE, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
+        else:
+            mbbackup_cmd = "/usr/bin/python26 %s -d -s %s -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, consts.SPLIT_SIZE, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
+
         status, msg = self.getstatusoutput(mbbackup_cmd)
 
         backup_split_files = glob.glob(backup_filepath.replace('%','*'))
@@ -387,7 +438,7 @@ class BackupProcess:
         end_time = time.time()
         time_taken = end_time - start_time
         self.logger.log("Completed Backup for %s" %(datetimestamp))
-        self.logger.log("BACKUP SUMMARY: size: %d, time-taken: %d, backup-file:%s" %(total_size, int(time_taken), backup_filename))
+        self.logger.log("BACKUP SUMMARY: type:%s size: %d, time-taken: %d, backup-file:%s" %(btype, total_size, int(time_taken), backup_filename))
         self.logger.log("==== END BACKUP ====")
         return True
 
@@ -417,7 +468,7 @@ if __name__ == '__main__':
     except:
         command = None
 
-    if command == 'start':
+    if command == 'start' or command == 'start-with-fullbackup':
         if os.path.exists(consts.MBBACKUP_PID_FILE):
             pid = int(open(consts.MBBACKUP_PID_FILE).read())
             try:
@@ -439,6 +490,9 @@ if __name__ == '__main__':
             os._exit(2)
 
         core = BackupProcess()
+        if command == 'start-with-fullbackup':
+            core.first_master_backup = True
+
         core.mainloop()
     elif command == "stop":
         if os.path.exists(consts.MBBACKUP_PID_FILE):

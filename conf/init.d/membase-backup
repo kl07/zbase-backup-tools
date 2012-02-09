@@ -23,7 +23,13 @@ start(){
         kill -s 0 $PID 2> /dev/null && echo "Backup daemon is running with pid $PID" && exit 0
     fi
 
-    /usr/bin/python26 /opt/membase/membase-backup/membase-backupd start >/dev/null 2>&1 
+    if [ $1 -eq 1 ];
+    then
+        /usr/bin/python26 /opt/membase/membase-backup/membase-backupd start-with-fullbackup >/dev/null 2>&1 
+    else
+        /usr/bin/python26 /opt/membase/membase-backup/membase-backupd start >/dev/null 2>&1 
+    fi
+
     sleep 1
     status | grep 'is running' 2> /dev/null
     if [ $? -eq 0 ];
@@ -47,7 +53,10 @@ stop(){
 
 case "$1" in
     start)
-        start
+        start 0
+        ;;
+    start-with-fullbackup)
+        start 1
         ;;
     stop)
     stop
@@ -56,7 +65,7 @@ case "$1" in
     status; 
     ;;
     restart)
-    stop; start;
+    stop; start 0;
     ;;
     *)
     echo $"Usage: $0 {start|stop|status|restart}"

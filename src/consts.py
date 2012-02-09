@@ -38,3 +38,4 @@ BLOBRESTORE_DAEMON_LOG = '/var/log/blobrestore_daemon.log'
 BACKUP_ARRAY_IPLIST = 's3://zynga-common/membase-backup-production-test2/configs/blobrestore-arrays'
 STORAGE_SERVER_ROOT = '/var/www/html/membase_backup'
 MAX_BACKUP_LOOKUP_DAYS = 10
+LAST_MASTER_BACKUP_TIME = '/db/last_master_backup'
