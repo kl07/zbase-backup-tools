@@ -411,7 +411,7 @@ class BackupProcess:
                 self.logger.log("FAILED: sqlite file %s is corrupt (%s)" %(backup_filepath, str(e)))
                 self.exit(1)
 
-            if os.path.exists(consts.LAST_CHECKPOINT_FILE):
+            if os.path.exists(consts.LAST_CHECKPOINT_FILE) and not full_backup:
                 f = open(consts.LAST_CHECKPOINT_FILE)
                 last_backup_checkpoint = int(f.read())
                 f.close()
