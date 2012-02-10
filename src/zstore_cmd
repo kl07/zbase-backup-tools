@@ -114,7 +114,10 @@ download () {
 
 	# Execute curl
         # Check if md5hash of local and remote file match.
-        curl -sfL -o "$file_path" "$url" && verified=$(verifyFile $actual_url $file_path) 
+        #curl -sfL -o "$file_path" "$url" && verified=$(verifyFile $actual_url $file_path) 
+	#wget --quiet --level=0 -O /tmp/blah empire.mbbackup.zynga.com/?path=empire:empire-mba-02/hostinfo-empire-mba-02
+
+        wget --quiet --level=0 -O "$file_path" "$url" && verified=$(verifyFile $actual_url $file_path) 
         [[ -n $verified ]] && [[ $verified -eq 0 ]] && exit 0
 
         exit 1
