@@ -267,6 +267,13 @@ class MergeWrapper:
             if lines == ['']:
                 self.logger.log("WARNING: Empty incremental directory")
                 return True
+	    for each_line in lines:
+		if each_line.find("-manifest") != -1 :
+		    #delete manifest file exists. 
+                    status = self.process_manifest(each_line)
+		#endif       
+	    #endfor 
+
         return status
 
     def check_done(self, s3path):
