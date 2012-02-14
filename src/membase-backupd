@@ -18,6 +18,7 @@ from config import Config
 from logger import Logger
 from mc_bin_client import MemcachedClient
 from util import setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
+from backuplib import BackupFactory
 
 # Setup the sqlite3 LD_LIBRARY_PATH before importing sqlite3
 setup_sqlite_lib()
@@ -58,14 +59,13 @@ class BackupProcess:
                 self.logger.log("FAILED: Duplicate buffer list found in the config")
                 self.exit(1)
 
-            #TODO: Phase2 - Enable this
-            #f = open('/etc/mtab')
-            #lines = f.readlines()
-            #tmpfs_locations = map(lambda y: y.split(' ')[1], filter(lambda x: ' tmpfs ' in x, lines))
-            #for b in buffer_list:
-            #    if len(filter(lambda x: x in b, tmpfs_locations)) == 0:
-            #        self.logger.log("FAILED: Buffer %s is not a tmpfs location" %b)
-            #        self.exit(1)
+            f = open('/etc/mtab')
+            lines = f.readlines()
+            tmpfs_locations = map(lambda y: y.split(' ')[1], filter(lambda x: ' tmpfs ' in x, lines))
+            for b in buffer_list:
+                if len(filter(lambda x: x in b, tmpfs_locations)) == 0:
+                    self.logger.log("FAILED: Buffer %s is not a tmpfs location" %b)
+                    self.exit(1)
 
             if not os.path.exists(consts.PATH_S3CMD_CONFIG):
                 self.logger.log("FAILED: s3cmd_zynga configuration not found at %s" %(consts.PATH_S3CMD_CONFIG))
@@ -126,32 +126,27 @@ class BackupProcess:
         if root_path[-1] == '/':
             root_path = root_path[:-1]
 
-        regex = re.compile('^%s/(.*/)[^/]*.mbb' %root_path)
+        regex = re.compile('^%s/(.*.mbb)' %root_path)
         s3suffix_path = regex.findall(filepath)[0]
         s3path = "s3://%s" %(s3suffix_path)
+        self.logger.log("ATTEMPT: Uploading %s to %s " %(filepath, s3path))
+        upload_cmd = "%s sync %s %s" %(consts.PATH_S3CMD_EXEC, filepath, s3path)
+        self.logger.log("Executing command, %s " %upload_cmd)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Retrying upload for %s " %filepath)
 
-        split_backup_files = glob.glob(filepath.replace('%','*'))
+            self.logger.log("Uploading file %s to %s " %(filepath, s3path))
+            status, output = self.getstatusoutput(upload_cmd)
+            if status == 0:
+                break
 
-        for f in split_backup_files:
-            self.logger.log("ATTEMPT: Uploading %s to %s " %(f, s3path))
-            upload_cmd = "%s sync %s %s" %(consts.PATH_S3CMD_EXEC, f, s3path)
-            self.logger.log("Executing command, %s " %upload_cmd)
-            for i in range(retries):
-                if i > 0:
-                    self.logger.log("Retrying upload for %s " %f)
-
-                self.logger.log("Uploading file %s to %s " %(f, s3path))
-                status, output = self.getstatusoutput(upload_cmd)
-                if status == 0:
-                    break
-
-            if status > 0:
-                self.logger.log("FAILED: Upload to S3 failed for backup file %s (%s)" %(f, output))
-                return False
-            else:
-                self.logger.log(output)
-                self.logger.log("SUCCESS: Uploading %s to %s (retries=%d)" %(f, s3path, i))
-
+        if status > 0:
+            self.logger.log("FAILED: Upload to S3 failed for backup file %s (%s)" %(filepath, output))
+            return False
+        else:
+            self.logger.log(output)
+            self.logger.log("SUCCESS: Uploading %s to %s (retries=%d)" %(filepath, s3path, i))
         return True
 
 
@@ -177,6 +172,26 @@ class BackupProcess:
         except Exception, e:
             self.logger.log("FAILED: Unable to remove file %s (%s)" %(filepath, str(e)))
             return False
+
+    def _ss_remove_file(self, buffer_path, filepath):
+        retries = self.config.upload_retries
+
+        root_path = buffer_path
+        if root_path[-1] == '/':
+            root_path = root_path[:-1]
+
+        regex = re.compile('^%s/(.*/[^/]*.mbb)' %root_path)
+        s3suffix_path = regex.findall(filepath)[0]
+        s3path = "s3://%s" %(s3suffix_path)
+        del_cmd = "%s del %s" %(consts.PATH_S3CMD_EXEC, s3path)
+        self.logger.log("Executing command, %s " %del_cmd)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Retrying delete for %s " %f)
+            status, output = self.getstatusoutput(del_cmd)
+            if status == 0:
+                break
+        return status
 
     def upload_process_thread(self):
         upload_interval = self.config.upload_interval_mins*60
@@ -288,6 +303,15 @@ class BackupProcess:
         interval = self.config.backup_interval_mins*60
         while True:
             start_time = time.time()
+            if os.path.exists(consts.MBRESTORE_PID_FILE):
+                pid = int(open(consts.MBRESTORE_PID_FILE).read())
+                try:
+                    os.kill(pid, 0)
+                    self.logger.log("Restore process is on progress. Exiting")
+                    self.exit(1)
+                except:
+                    pass
+
             if self.is_cursor_valid(consts.REPLICATION_TAPNAME):
                 self.logger.log("The host is a master. Exiting")
                 self.exit(1)
@@ -298,22 +322,19 @@ class BackupProcess:
 
             master_backup_attempt = self.is_master_backup()
             if self.is_closed_checkpoint_moved() or master_backup_attempt or self.first_master_backup:
-                self.logger.log("Waiting for obtaining free ramfs buffer")
-                buffer_path = self.free_buffer_list.get()
-                self.logger.log("Obtained buffer %s " %buffer_path)
+
                 now = time.localtime(time.time())
                 datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
                 backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S-%.mbb',now)
-                backup_root = buffer_path
                 if self.first_master_backup or master_backup_attempt:
-                    backup_dir = os.path.join(backup_root, self.config.game_id,
+                    backup_dir = os.path.join(self.config.game_id,
                             self.hostname, self.config.cloud,
                             consts.MASTER_DIRNAME, "%s"
                             %(time.strftime('%Y-%m-%d', now)))
                     self.first_master_backup = False
                     full_backup = True
                 else:
-                    backup_dir = os.path.join(backup_root, self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
+                    backup_dir = os.path.join(self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
                     full_backup = False
 
                 backup_filepath = os.path.join(backup_dir, backup_filename)
@@ -324,9 +345,6 @@ class BackupProcess:
                         self.first_master_backup = False
                     elif master_backup_attempt:
                         self._create_master_backup_marker(time.strftime('%Y-%m-%d-%H-%M-%S-000000',now))
-
-                    self.backup_queue.put((backup_filepath, buffer_path))
-                    self.logger.log("Added %s to upload queue" %backup_filepath)
                 else:
                     self.exit(1)
             else:
@@ -344,98 +362,83 @@ class BackupProcess:
         """
         Create incremental backup
         """
+        total_size = 0
+        size = 0
+        checkpoints = []
 
         if full_backup:
-            btype = "master"
+            btype = "full"
         else:
             btype =  "incremental"
-
-        if os.path.exists(consts.MBRESTORE_PID_FILE):
-            pid = int(open(consts.MBRESTORE_PID_FILE).read())
-            try:
-                os.kill(pid, 0)
-                self.logger.log("Restore process is on progress. Exiting")
-                self.exit(1)
-            except:
-                pass
 
         start_time = time.time()
         self.logger.log("==== START BACKUP ====")
         self.logger.log("Creating %s Backup for %s " %(btype, datetimestamp))
 
-        backup_dir = os.path.dirname(backup_filepath)
-        backup_filename = os.path.basename(backup_filepath)
-        if not os.path.exists(backup_dir):
+        try:
+            bf_instance = BackupFactory(backup_filepath, btype,
+                    consts.BACKUP_TAPNAME, self.logger, 'localhost',11211) 
+        except Exception, e:
+            self.logger.log("FAILED: Initializing backup factory instance")
+            self.log(str(e))
+            self.exit(1)
+
+        while not bf_instance.is_complete():
+	    self.logger.log("Waiting for obtaining free ramfs buffer")
+	    buffer_path = self.free_buffer_list.get()
+            self.logger.log("Obtained buffer %s " %buffer_path)
             try:
-                os.makedirs(backup_dir)
-            except Exception, e:
-                self.logger.log("FAILED: Creating Backup directory %s (%s)" %(backup_dir, e.strerror))
-                self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
-                return False
-
-        self.logger.log("Creating Backup file : %s" %(backup_filepath))
-        if full_backup:
-            mbbackup_cmd = "/usr/bin/python26 %s -d -f -s %s -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, consts.SPLIT_SIZE, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
-        else:
-            mbbackup_cmd = "/usr/bin/python26 %s -d -s %s -h %s:%d -o %s %s" %(consts.PATH_MBBACKUP_EXEC, consts.SPLIT_SIZE, "127.0.0.1", 11211, backup_filepath, consts.BACKUP_TAPNAME)
-
-        status, msg = self.getstatusoutput(mbbackup_cmd)
-
-        backup_split_files = glob.glob(backup_filepath.replace('%','*'))
-        total_size = 0
-        size = 0
-        if status > 0:
-            self.logger.log("FAILED: mbbackup-incremental - %s" %msg)
-            self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
-            for f in backup_split_files:
-                if os.path.exists(f):
-                    self._remove_file(f)
-            return False
-        else:
-            for f in backup_split_files:
-                size = os.stat(f).st_size
+                filepath = bf_instance.create_next_split(buffer_path)
+                size = os.stat(filepath).st_size
                 total_size += size
-                if size <= 3072:
-                    if not self._is_backup_valid(f):
+
+                if size <= 4096:
+                    if not self._is_backup_valid(filepath):
                         self.logger.log("FAILED: Backup size is %d" %size)
-                        for sf in backup_split_files:
-                            self._remove_file(sf)
-                        self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
-                        return False
+                        raise Exception("Backup is invalid")
 
-            try:
-                checkpoints = []
-                for f in backup_split_files:
-                    checkpoints.extend(get_checkpoints_frombackup(f))
-                checkpoints.sort()
+                try:
+                    checkpoints.extend(get_checkpoints_frombackup(filepath))
+                except Exception, e:
+                    self.logger.log("FAILED: sqlite file %s is corrupt (%s)" %(backup_filepath, str(e)))
+                    raise Exception("Sqlite file corrupt")
+                self.backup_queue.put((filepath, buffer_path))
+                self.logger.log("Added %s to upload queue" %filepath)
             except Exception, e:
-                self.logger.log("FAILED: sqlite file %s is corrupt (%s)" %(backup_filepath, str(e)))
-                self.exit(1)
+                self.logger.log(str(e))
+                self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
+                for b,f in bf_instance.list_splits():
+                    self._remove_file(f)
+                    self._ss_remove_file(buffer_path, f)
+                    self.exit(1)
 
-            if os.path.exists(consts.LAST_CHECKPOINT_FILE) and not full_backup:
-                f = open(consts.LAST_CHECKPOINT_FILE)
-                last_backup_checkpoint = int(f.read())
-                f.close()
-            else:
-                last_backup_checkpoint = 0
 
-            if len(checkpoints):
-                if last_backup_checkpoint > 0:
+        checkpoints.sort()
+        if os.path.exists(consts.LAST_CHECKPOINT_FILE) and not full_backup:
+            f = open(consts.LAST_CHECKPOINT_FILE)
+            last_backup_checkpoint = int(f.read())
+            f.close()
+        else:
+            last_backup_checkpoint = 0
 
-                    if last_backup_checkpoint + 1 != checkpoints[0]:
-                        self.logger.log("FAILED: Invalid backup. Last backup checkpoint = %d, New backup checkpoint = %s" %(last_backup_checkpoint, checkpoints[0]))
-                        self.exit(1)
-                    else:
-                        self.logger.log("Last backup_checkpoint: %d Current backup checkpoints: %s" %(last_backup_checkpoint, str(checkpoints)))
 
-                f = open(consts.LAST_CHECKPOINT_FILE, 'w')
-                f.write(str(checkpoints[-1]))
-                f.close()
+        if len(checkpoints):
+            if last_backup_checkpoint > 0:
+
+                if last_backup_checkpoint + 1 != checkpoints[0]:
+                    self.logger.log("FAILED: Invalid backup. Last backup checkpoint = %d, New backup checkpoint = %s" %(last_backup_checkpoint, checkpoints[0]))
+                    self.exit(1)
+                else:
+                    self.logger.log("Last backup_checkpoint: %d Current backup checkpoints: %s" %(last_backup_checkpoint, str(checkpoints)))
+
+            f = open(consts.LAST_CHECKPOINT_FILE, 'w')
+            f.write(str(checkpoints[-1]))
+            f.close()
 
         end_time = time.time()
         time_taken = end_time - start_time
         self.logger.log("Completed Backup for %s" %(datetimestamp))
-        self.logger.log("BACKUP SUMMARY: type:%s size: %d, time-taken: %d, backup-file:%s" %(btype, total_size, int(time_taken), backup_filename))
+        self.logger.log("BACKUP SUMMARY: type:%s size:%d, time-taken: %d, backup-file:%s split-count:%d" %(btype, total_size, int(time_taken), backup_filepath, len(bf_instance.list_splits())))
         self.logger.log("==== END BACKUP ====")
         return True
 

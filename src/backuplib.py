@@ -11,7 +11,7 @@ import consts
 
 MBB_VERSION = "1"
 TIMEOUT = 0
-TXN_SIZE = 7000
+TXN_SIZE = 200000
 
 cmdInfo = {
     memcacheConstants.CMD_TAP_MUTATION: ('mutation', 'm'),
@@ -179,6 +179,9 @@ class BackupFactory:
 
     def is_complete(self):
         return self.complete
+
+    def list_splits(self):
+        return self.split_backup_files
        
     def create_next_split(self, buffer_path):
         if self.complete:
@@ -189,8 +192,17 @@ class BackupFactory:
         filepath = self._get_next_file(buffer_path)
         if os.path.exists(filepath):
             raise Exception("File already exists")
+        else:
+            backup_dir = os.path.dirname(filepath)
+            if not os.path.exists(backup_dir):
+                try:
+                    os.makedirs(backup_dir)
+                except Exception, e:
+                    raise Exception ("FAILED: Creating Backup directory %s (%s)" %(backup_dir, e.strerror))
+
+        self.logger.log("Creating Backup file : %s" %(filepath))
         db = create_backup_db(filepath, consts.SPLIT_SIZE, True, True)
-        self.split_backup_files.append(filepath)
+        self.split_backup_files.append((buffer_path, filepath))
         c = db.cursor()
         if self.current_checkpoint_id > 0:
             t = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
@@ -243,7 +255,7 @@ class BackupFactory:
                     self.update_count = 0
                     self.op_records = []
                     self.current_checkpoint_id = i
-                    backfill_chk_start = True
+                    self.backfill_chk_start = True
 
                 if not vbucketId in self.vbmap:
                     msg = "%s with unknown vbucketId: %s" % (cmdName, vbucketId)
@@ -264,7 +276,6 @@ class BackupFactory:
                                                   key, flg, exp, cas, val))
                 self.update_count = self.update_count + 1
                 if result == False:
-                    print "exceeeded", len(self.op_records)
                     ## The current backup db file is full
                     try:
                         db.rollback()
@@ -288,7 +299,7 @@ class BackupFactory:
                 checkpointStartExists = False
                 self.current_checkpoint_id = checkpoint_id[0]
 
-                if backfill_chk_start:
+                if self.backfill_chk_start:
                     del self.vbmap[vbucketId]
 
                 if vbucketId in self.vbmap:
