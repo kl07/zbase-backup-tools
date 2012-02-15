@@ -324,8 +324,8 @@ class BackupProcess:
 
             master_backup_attempt = self.is_master_backup()
             if self.is_closed_checkpoint_moved() or master_backup_attempt or self.first_master_backup:
-
                 now = time.localtime(time.time())
+
                 datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
                 backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S-%.mbb',now)
                 if self.first_master_backup or master_backup_attempt:
@@ -350,7 +350,11 @@ class BackupProcess:
                     full_backup = False
 
                 backup_filepath = os.path.join(backup_dir, backup_filename)
+                f = open(consts.BACKUP_TIME, 'w')
+                f.write(str(now))
+                f.close()
                 status = self._take_backup(backup_filepath, datetimestamp, full_backup)
+                os.unlink(consts.BACKUP_TIME)
                 if status:
                     if self.first_master_backup:
                         self._create_master_backup_marker()
