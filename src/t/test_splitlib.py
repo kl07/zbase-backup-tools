@@ -14,8 +14,11 @@ if __name__ == '__main__':
     base_filepath = "test/test-%.mbb"
     backup_type = "full" # full or incr
     tapname = "backup"
-    bo = BackupFactory(base_filepath, backup_type, tapname,logger, '0', 11211)
+    txn_size = 7000
+    bo = BackupFactory(base_filepath, backup_type, tapname,logger, '0', 1121, txn_size)
     while not bo.is_complete():
         print bo.create_next_split('/dev/shm')
         #create file at /dev/shm/test/test-%.mbb
+
+    print bo.list_splits()
 
