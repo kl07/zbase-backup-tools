@@ -127,6 +127,12 @@ class Restore:
                 mb.stats('')
                 break
             except:
+                if i == 119:
+                    start_membase_cmd = "/sbin/service memcached restart"
+                    status = os.system(start_membase_cmd)
+                    if status > 0:
+                        self.logger.log("Unable to start membase")
+                        self.exit(1)
                 time.sleep(1)
 
         register_tap_cmd = "python26 %s -h 0:11211 -r %s" \
