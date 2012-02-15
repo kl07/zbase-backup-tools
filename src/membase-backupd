@@ -279,6 +279,8 @@ class BackupProcess:
 
     def is_master_backup(self):
         now = datetime.datetime.now()
+        if int(self.config.master_backup_interval_days) == 0:
+            return False
         if os.path.exists(consts.LAST_MASTER_BACKUP_TIME):
             timestamp = open(consts.LAST_MASTER_BACKUP_TIME, 'r').read() 
             year, month, day, hr, mins, secs, msecs = map(lambda x: int(x), timestamp.split('-'))
@@ -334,7 +336,17 @@ class BackupProcess:
                     self.first_master_backup = False
                     full_backup = True
                 else:
-                    backup_dir = os.path.join(self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
+                    last_checkpoint = 0
+                    if os.path.exists(consts.LAST_CHECKPOINT_FILE):
+                        last_checkpoint = int(open(consts.LAST_CHECKPOINT_FILE).read())
+
+                    if last_checkpoint == 0:
+                        backup_dir = os.path.join(self.config.game_id,
+                                self.hostname, self.config.cloud,
+                                consts.MASTER_DIRNAME, "%s"
+                                %(time.strftime('%Y-%m-%d', now)))
+                    else:
+                        backup_dir = os.path.join(self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
                     full_backup = False
 
                 backup_filepath = os.path.join(backup_dir, backup_filename)
