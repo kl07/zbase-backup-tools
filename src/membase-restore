@@ -440,6 +440,16 @@ if __name__ == '__main__':
         print "Please run as root"
         sys.exit(1)
 
+
+    if os.path.exists(consts.MBRESTORE_PID_FILE):
+        pid = int(open(consts.MBRESTORE_PID_FILE).read())
+        try:
+            os.kill(pid, 0)
+            print "Restore process with PID:%d is already running" %pid
+            os._exit(1)
+        except:
+            pass
+
     args = sys.argv[1:]
     hostname = None
     if len(args) > 0:

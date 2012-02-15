@@ -489,7 +489,7 @@ if __name__ == '__main__':
             pid = int(open(consts.MBBACKUP_PID_FILE).read())
             try:
                 os.kill(pid, 0)
-                print "Uploader Daemon with PID:%d is already running" %pid
+                print "Backup Daemon with PID:%d is already running" %pid
                 os._exit(1)
             except:
                 pass
