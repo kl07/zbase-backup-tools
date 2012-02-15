@@ -357,7 +357,7 @@ class Restore:
                             self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
                             self.exit(1)
 
-                    last_checkpoint = checkpoints[-1]
+                    last_checkpoint = checkpoints[0]
                     self.logger.log("Checkpoints in the current backup-file %s : %s" %(backup_file, str(checkpoints)))
 
                     if shard == self.file_count - 1:
