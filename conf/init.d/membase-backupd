@@ -3,6 +3,7 @@
 . /etc/init.d/functions
 PIDFILE=/var/run/mbbackup.pid
 
+export LD_LIBRARY_PATH=/opt/sqlite3/lib/:$LD_LIBRARY_PATH
 
 command=$1
 status(){
