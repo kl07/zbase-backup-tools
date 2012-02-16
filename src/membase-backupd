@@ -80,6 +80,11 @@ class BackupProcess:
             self.logger.log("FAILED: %s " %str(e))
             self.exit(1)
 
+        try:
+            os.makedirs(os.path.dirname(consts.NAGIOS_BACKUP_TIME))
+        except:
+            pass
+
         self.logger.log("=== Starting Membase Backup Daemon ===")
 	signal.signal(signal.SIGINT, self.graceful_exit)
 	signal.signal(signal.SIGQUIT, self.graceful_exit)
@@ -350,11 +355,11 @@ class BackupProcess:
                     full_backup = False
 
                 backup_filepath = os.path.join(backup_dir, backup_filename)
-                f = open(consts.BACKUP_TIME, 'w')
+                f = open(consts.NAGIOS_BACKUP_TIME, 'w')
                 f.write(str(now))
                 f.close()
                 status = self._take_backup(backup_filepath, datetimestamp, full_backup)
-                os.unlink(consts.BACKUP_TIME)
+                os.unlink(consts.NAGIOS_BACKUP_TIME)
                 if status:
                     if self.first_master_backup:
                         self._create_master_backup_marker()
