@@ -434,7 +434,23 @@ class Restore:
 
         end_time = int(time.time())
         self.clean_s3_lock()
+
+        f = open(consts.MEMCACHED_SYSCONFIG_FILE)
+        sysconfig = f.read().split(';')
+        param, endlimiter = sysconfig[-1].split("'")
+        sysconfig = sysconfig[:-1]
+        sysconfig.append(param)
+        for p in sysconfig:
+            if 'restore_mode' in p:
+                sysconfig.remove(p)
+
+        sysconfig_str = ";".join(sysconfig)
+        sysconfig_str += "'%s" %endlimiter
+        f = open(consts.MEMCACHED_SYSCONFIG_FILE, 'w')
+        f.write(sysconfig_str)
+        f.close()
         self.logger.log("Restore completed successfully in %d seconds" %(end_time-start_time))
+
 
 if __name__ == '__main__':
     if os.getuid() != 0:
