@@ -27,7 +27,7 @@ tap_stmt = "INSERT OR REPLACE into cpoint_op" \
             "(vbucket_id, cpoint_id, seq, op, key, flg, exp, cas, val)" \
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
-del_chk_start_stmt = "DELETE FROM cpoint_state WHERE state=\"open\""
+del_chk_start_stmt = "DELETE FROM cpoint_state WHERE state=\"closed\" and cpoint_id=%d"
 
 def readTap(mc):
     ext = ''
@@ -169,6 +169,7 @@ class BackupFactory:
         self.mc._sendCmd(memcacheConstants.CMD_TAP_CONNECT, tapname, val, 0, ext)
         self.sinput = [self.mc.s]
         self.op_records = []
+        self.openchk = 0
 
         self.vbmap = {} # Key is vbucketId, value is [checkpointId, seq].
 
@@ -298,6 +299,7 @@ class BackupFactory:
                 checkpoint_id = struct.unpack(">Q", val)
                 checkpointStartExists = False
                 self.current_checkpoint_id = checkpoint_id[0]
+                self.openchk = self.current_checkpoint_id
 
                 if self.backfill_chk_start:
                     del self.vbmap[vbucketId]
@@ -331,6 +333,10 @@ class BackupFactory:
                     self.op_records = []
                     self.update_count = 0
                 checkpoint_id = struct.unpack(">Q", val)
+
+                if self.openchk == checkpoint_id[0]:
+                    self.openchk = 0
+
                 if not vbucketId in self.vbmap:
                     raise Exception("ERROR: unmatched checkpoint end: %s vb: %s"
                              % (checkpoint_id[0], vbucketId))
@@ -358,7 +364,8 @@ class BackupFactory:
                             self.op_records = []
                             self.update_count = 0
                         ## Clear all checkpoint state records that have "open" state.
-                        c.execute(del_chk_start_stmt)
+                        if self.openchk > 0:
+                            c.execute(del_chk_start_stmt %self.openchk)
                         db.commit()
                         self.update_count = 0
                         self.complete = True
