@@ -36,8 +36,7 @@ def log(msg):
     logger.info(msg)
 
 def download_file(s3path, localpath):
-    dl_cmd = "%s -c %s sync %s %s" %(consts.PATH_S3CMD_ZYNGA_EXEC,
-            consts.PATH_S3CMD_CONFIG, s3path, localpath) 
+    dl_cmd = "%s get %s %s" %(consts.PATH_S3CMD_ZYNGA_EXEC, s3path, localpath) 
     status, output = getcommandoutput(dl_cmd)
     if not status:
         return True

@@ -11,7 +11,7 @@ Packager: Sarath Lakshman <slakshman@zynga.com>
 Membase 1.7.3 backup and restore tools
 
 %prep 
-%define _rpmfilename %%{NAME}._COMMIT.%%{ARCH}.rpm
+%define _rpmfilename %%{NAME}-_COMMIT.%%{ARCH}.rpm
 %setup
 
 %install 
@@ -32,3 +32,6 @@ chmod 700 $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobresto
 %files
 /etc/membase-backup/*
 /opt/membase/membase-backup/*
+
+%post
+ln -f -s /opt/membase/membase-backup/zstore_cmd   /usr/bin/zstore_cmd
