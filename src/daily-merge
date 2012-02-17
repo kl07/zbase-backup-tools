@@ -18,6 +18,7 @@ import fnmatch
 import multiprocessing
 import re
 import time
+import pdb
 
 DAY_EPOCH = 60*60*24
 PID_FILE = '/var/run/merge_wrap.pid'
@@ -74,7 +75,7 @@ class DailyMerge(multiprocessing.Process):
         listfiles = output
         lines = output.split("\n")
         #check for existence of done file
-        done_file = "%s/done-%s:%s" %(incr_location, self.now.month, self.now.day)
+        done_file = "%s/done-%02d:%02d" %(incr_location, self.now.month, self.now.day)
         if os.path.isfile(done_file) :
             self.logger.log("Warning: Daily merge has already been run today for location %s" %location)
             return True
@@ -106,9 +107,11 @@ class DailyMerge(multiprocessing.Process):
         listmbb = "  "
         for line in lines:
             listmbb = "%s %s" %(listmbb, line)
-        output_location = "%s/daily/%d-%d-%d" %(location, self.now.year, self.now.month, self.now.day)
+        output_location = "%s/daily/%d-%02d-%02d" %(location, self.now.year, self.now.month, self.now.day)
         self.logger.log("Executing command: mkdir -p  %s" %output_location)
         os.system("mkdir -p %s" %output_location)
+        # remove any existing merged files in this location
+        os.system("rm -f %s/*.mbb" %output_location)
         output_file = "%s/daily-%s.mbb" %(output_location, self.timestamp)
 
         merge_cmd = " %s -o %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, listmbb)
@@ -144,6 +147,8 @@ class DailyMerge(multiprocessing.Process):
         if output != 0:
             self.logger.log (" Failed to add done file %s" %done_file)
             return False
+
+        self.logger.log(" Sucess: Merged file created successfully %s" %output_file)
 
         return True
 
@@ -200,11 +205,12 @@ class DailyMerge(multiprocessing.Process):
 
 if __name__ == '__main__':
 
+    #pdb.set_trace()
     if os.path.exists(PID_FILE):
         pid = int(open(PID_FILE, 'r').read())
         try:
             os.kill(pid, 0)
-            self.logger.log("Merge process is already running with PID %d" %pid)
+            print("Merge process is already running with PID %d" %pid)
             os._exit(1)
         except:
             pass
@@ -217,9 +223,17 @@ if __name__ == '__main__':
         print "Usage: %s <hostame list location>" %sys.argv[0]
         sys.exit(1)
 
+    jobs = []
 
     for i in range(7):
         pathname = "/data_%d" %(i+1)
         #pathname = "/data_3"
         merge = DailyMerge(pathname)
+        jobs.append(merge)
         merge.start()
+
+    jobs[-1].terminate()
+    for j in jobs:
+        j.join()
+
+    os._exit(0)
