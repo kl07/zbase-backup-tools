@@ -1,0 +1,182 @@
+#!/usr/bin/python26
+#Description: Wrapper script that downloads, merges and uploads
+
+import time
+import os
+import consts
+import commands
+from logger import Logger
+from config import Config
+import Queue
+from threading import Thread
+from util import natural_sortkey
+import sys
+import re
+import getopt
+import datetime
+import fnmatch
+import multiprocessing
+import re
+import time
+
+DAY_EPOCH = 60*60*24
+PID_FILE = '/var/run/merge_wrap.pid'
+
+def epoch2date(epoch):
+    lt = time.localtime(epoch)
+    return time.strftime('%Y-%m-%d',lt)
+
+class MasterMerge(multiprocessing.Process):
+
+    def __init__(self, pathname=None):
+        multiprocessing.Process.__init__(self)
+
+    def run(self):
+
+        try:
+            self.config = Config(consts.CONFIG_FILE)
+            self.config.read()
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+        except Exception, e:
+            self.config.syslog_tag = consts.SYSLOG_TAG
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+            self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
+
+        self.game_id = self.config.game_id
+        now=datetime.datetime.now()
+        self.now = now
+        self.timestamp = "%d:%d:%d-%d:%d" %(now.year,now.month,now.day, now.hour, now.minute)
+        #get host name from the disk path
+        status,output = commands.getstatusoutput("ls %s/" %pathname)
+        if status != 0:
+            self.logger.log(" Cannot find any hostnames in path %s" %pathname)
+            return 
+
+        hosts = output.split()
+        for hostname in hosts:
+            #hostname = "empire-mb-object4-b-002"
+            location = "%s/%s/%s/%s" %(consts.STORAGE_SERVER_ROOT, self.game_id, hostname, self.config.cloud)
+            #get a list of daily backup fils that need to be purged
+            daily_location = "%s/daily" %location
+            status,output = commands.getstatusoutput("ls %s/" %daily_location)
+            if status != 0:
+                self.logger.log (" No daily directories found %s" %daily_location)
+                return
+
+            daily_dirs = output.split()
+            merge_list = ""
+            dir_list = ""
+            for dirs in daily_dirs:
+                #if a done file is present in this location. skip it
+                daily_done = "%s/%s/done" %(daily_location,dirs)
+                dirs = "%s/%s" %(daily_location,dirs)
+                if os.path.isfile(daily_done) == 0:
+                    #now get the mbb files in this location and add it to the list of files to be merged
+                    status,output = commands.getstatusoutput("ls %s/*.mbb" %dirs)
+                    if status != 0:
+                        self.logger.log(" Warning :No backupfiles found in this directory %s" %dirs)
+                    else:
+                        dir_list += dirs
+                        dir_list += "\n"
+                        files = output.split()
+                        for file in files: 
+                            merge_list += file
+                            merge_list += " "
+            
+            # now locate the master backup file that needs merging
+            master_location = "%s/master" %location
+            status,output = commands.getstatusoutput("ls %s/" %master_location)
+            if status != 0:
+                self.logger.log (" No master directories found in %s" %master_location)
+                # create the master directory
+                os.system("mkdir -p %s" %master_location)
+
+            else :
+                daily_dirs = output.split()
+                merge_list = ""
+                dir_list = ""
+                for dirs in daily_dirs:
+                    #if a done file is present in this location. skip it
+                    daily_done = "%s/%s/done" %(master_location,dirs)
+                    dirs = "%s/%s" %(master_location,dirs)
+                    if os.path.isfile(daily_done) == 0:
+                        #now get the mbb files in this location and add it to the list of files to be merged
+                        status,output = commands.getstatusoutput("ls %s/*.mbb" %dirs)
+                        if status != 0:
+                            self.logger.log(" Warning :No backupfiles found in this directory %s" %dirs)
+                        else:
+                            dir_list += dirs
+                            dir_list += "\n"
+                            files = output.split()
+                            for file in files: 
+                                merge_list += file
+                                merge_list += " "
+
+
+            if merge_list == [] or dir_list == []:
+                self.logger.log(" Failed: empty merge list or dir list")
+                return False
+
+            status = self.start_merge(master_location, merge_list, dir_list)
+            status = True
+            if status == False:
+                self.logger.log(" Failed to create daily merged backup for hostname %s" %hostname)
+
+        return 
+
+    def start_merge(self, master_location, merge_list, dir_list):
+
+        master_directory = "%s/%d-%d-%d" %(master_location, self.now.year, self.now.month, self.now.day)
+        os.system("mkdir -p %s" %master_directory)
+
+        output_file = "%s/master-%s.mbb" %(master_directory, self.timestamp)
+
+        merge_cmd = " %s -o %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, merge_list)
+        self.logger.log(" executing command %s" %merge_cmd)
+        t_start = time.time()
+        status, output = commands.getstatusoutput(merge_cmd)
+        t_end = time.time()
+        if status != 0:
+            self.logger.log ("Failed to merge for location %s, output %s" %(master_location, output))
+            os.system("rm -f %s*" %output_file)
+            return False
+
+        # merge was successfull
+        self.logger.log ("Info. Merge complete. Took %d sec " %(t_end - t_start))
+
+        #create a done file in all the directories that have been processed
+        dirs = dir_list.split("\n")
+        for dir in dirs:
+            done_file = "%s/done" %dir
+            status = os.system("touch %s" %done_file)
+            if status == 0:
+                self.logger.log("Failed: to create done file %s" %done_file)
+
+        return True
+
+
+if __name__ == '__main__':
+
+    if os.path.exists(PID_FILE):
+        pid = int(open(PID_FILE, 'r').read())
+        try:
+            os.kill(pid, 0)
+            self.logger.log("Merge process is already running with PID %d" %pid)
+            os._exit(1)
+        except:
+            pass
+    fd = open(PID_FILE,'w')
+    fd.write(str(os.getpid()))
+    fd.close()
+
+    if len(sys.argv) != 1:
+        print
+        print "Usage: %s <hostame list location>" %sys.argv[0]
+        sys.exit(1)
+
+
+    for i in range(7):
+        pathname = "/data_%d" %(i+1)
+        #pathname = "/data_3"
+        merge = MasterMerge(pathname)
+        merge.start()

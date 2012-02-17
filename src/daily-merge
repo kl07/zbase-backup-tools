@@ -1,0 +1,225 @@
+#!/usr/bin/python26
+#Description: Wrapper script that downloads, merges and uploads
+
+import time
+import os
+import consts
+import commands
+from logger import Logger
+from config import Config
+import Queue
+from threading import Thread
+from util import natural_sortkey
+import sys
+import re
+import getopt
+import datetime
+import fnmatch
+import multiprocessing
+import re
+import time
+
+DAY_EPOCH = 60*60*24
+PID_FILE = '/var/run/merge_wrap.pid'
+
+def epoch2date(epoch):
+    lt = time.localtime(epoch)
+    return time.strftime('%Y-%m-%d',lt)
+
+class DailyMerge(multiprocessing.Process):
+
+    def __init__(self, pathname=None):
+        multiprocessing.Process.__init__(self)
+
+    def run(self):
+
+        try:
+            self.config = Config(consts.CONFIG_FILE)
+            self.config.read()
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+        except Exception, e:
+            self.config.syslog_tag = consts.SYSLOG_TAG
+            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
+            self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
+
+        self.game_id = self.config.game_id
+        now=datetime.datetime.now()
+        self.now = now
+        self.timestamp = "%d:%d:%d-%d:%d" %(now.year,now.month,now.day, now.hour, now.minute)
+        #get host name from the disk path
+        status,output = commands.getstatusoutput("ls %s/" %pathname)
+        if status != 0:
+            self.logger.log(" Cannot find any hostnames in path %s" %pathname)
+            return 
+
+        hosts = output.split()
+        for hostname in hosts:
+            #hostname = "empire-mb-object4-b-002"
+            location = "%s/%s/%s/%s" %(consts.STORAGE_SERVER_ROOT, self.game_id, hostname, self.config.cloud)
+            status = self.start_merge(location)
+            if status == False:
+                self.logger.log(" Failed to create daily merged backup for hostname %s" %hostname)
+
+        return 
+
+    def start_merge(self, location=None):
+
+        incr_location = "%s/%s" %(location, consts.INCR_DIRNAME)
+        self.logger.log(" Location %s " %incr_location)
+        status, output = commands.getstatusoutput("ls %s/*.mbb" %incr_location)
+        if status != 0:
+            self.logger.log(" Warning: Invalid location %s or no backup files found" %incr_location)
+            return False
+
+        listfiles = output
+        lines = output.split("\n")
+        #check for existence of done file
+        done_file = "%s/done-%s:%s" %(incr_location, self.now.month, self.now.day)
+        if os.path.isfile(done_file) :
+            self.logger.log("Warning: Daily merge has already been run today for location %s" %location)
+            return True
+
+        #delete all older done files
+        old_done_files = "%s/done-*" %(incr_location)
+        os.system(" rm -f %s" %old_done_files)
+
+        #process manifest
+        manifest_file = "%s/manifest.del" %incr_location 
+        status = self.process_manifest(incr_location, manifest_file)
+
+        if status == False:
+            self.logger.log ("Failed to process manifest %s" %incr_location)
+            return False
+
+        if os.path.isfile(manifest_file):
+            #means that .lock exists
+            fd = open(manifest_file, "r")
+            buffer = fd.read()
+            fd.close()
+            buffer = buffer.split("\n")
+            lines = list(set(lines) - set(buffer))
+
+        if lines == []:
+            self.logger.log("Failed: No new files to process ")
+            return False
+
+        listmbb = "  "
+        for line in lines:
+            listmbb = "%s %s" %(listmbb, line)
+        output_location = "%s/daily/%d-%d-%d" %(location, self.now.year, self.now.month, self.now.day)
+        self.logger.log("Executing command: mkdir -p  %s" %output_location)
+        os.system("mkdir -p %s" %output_location)
+        output_file = "%s/daily-%s.mbb" %(output_location, self.timestamp)
+
+        merge_cmd = " %s -o %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, listmbb)
+        #self.logger.log(" executing command %s" %merge_cmd)
+        self.logger.log(" Info. starting merge for location %s" %location)
+        t_start = time.time()
+        status, output = commands.getstatusoutput(merge_cmd)
+        t_end = time.time()
+        if status != 0:
+            self.logger.log ("Failed to merge for location %s, output %s" %(location, output))
+            os.system("rm -f %s*" %output_file)
+            return False
+
+
+        # merge was successfull
+        self.logger.log ("Info. Merge complete. Took %d sec " %(t_end - t_start))
+        # delete all the incremental files we just merged if no lock is present
+        manifest_file = "%s/manifest.del" %incr_location
+        status = self.check_lock(incr_location, True, listfiles, manifest_file)
+        if status == 0:
+            output = os.system("rm -f %s" %listmbb)
+            if output != 0:
+                self.logger.log(" Failed to delete after merge %s" %listmbb)
+                # add these files to the manifest file TODO
+                return False
+        if status == -1:
+            self.logger.log("Failed to check lock for location %s" %location)
+            os.system("rm -f %s*" %output_file)
+            return False
+
+        #add a done file to the directory and we are done for this location
+        output = os.system("touch %s" %done_file)
+        if output != 0:
+            self.logger.log (" Failed to add done file %s" %done_file)
+            return False
+
+        return True
+
+    def process_manifest(self, location, manifest_file):
+
+        if os.path.isfile(manifest_file) :
+            #manifest file exists
+            status = self.check_lock(location)
+            if status == 1:
+                return True
+            
+            #no lock file exists. cleanup files in manifest
+            try:
+                fd = open(manifest_file)
+            except:
+                self.logger.log("Failed to open manifest %s" %manifest_file)
+                return False
+
+            line = fd.readline()
+            while line:
+                os.system ("rm -f %s" %line)
+                line = fd.readline()
+
+            fd.close()
+            self.logger.log("Info : cleaning up manifest and merged files ")
+            os.system("rm -f %s" %manifest_file)
+
+        return True
+
+    def check_lock(self, location, create_manifest=False, listmbb=None, manifest_file=None):
+        lock_file = location + "/.lock"
+        status = os.path.isfile(lock_file)
+        if status == True:
+            self.logger.log("WARNING: .lock file present. Skipping delete")
+            #create a manifest file at this location
+            if create_manifest == True and listmbb != None:
+                if os.path.isfile(manifest_file) :
+                    #manifest file already exists, delete and create a new one
+                    os.system("rm -f %s" %manifest_file)
+
+                fd = open(manifest_file, "w")
+                for line in listmbb:
+                    try: 
+                        fd.write(line)
+                    except:
+                        self.logger.log(" Failed: I/O Error %s " %manifest_file)
+                        return -1
+
+                fd.close()
+                return 1  # lock exists, skip delete
+            return 1
+        return 0              # no lock exists, clear to delete
+
+
+if __name__ == '__main__':
+
+    if os.path.exists(PID_FILE):
+        pid = int(open(PID_FILE, 'r').read())
+        try:
+            os.kill(pid, 0)
+            self.logger.log("Merge process is already running with PID %d" %pid)
+            os._exit(1)
+        except:
+            pass
+    fd = open(PID_FILE,'w')
+    fd.write(str(os.getpid()))
+    fd.close()
+
+    if len(sys.argv) != 1:
+        print
+        print "Usage: %s <hostame list location>" %sys.argv[0]
+        sys.exit(1)
+
+
+    for i in range(7):
+        pathname = "/data_%d" %(i+1)
+        #pathname = "/data_3"
+        merge = DailyMerge(pathname)
+        merge.start()
