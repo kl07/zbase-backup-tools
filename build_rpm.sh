@@ -14,5 +14,5 @@ sed -i "s/_SOURCE/$SOURCE/" tmp/membase-backup-tools.spec
 sed -i "s/_RELEASE/$RELEASE/" tmp/membase-backup-tools.spec
 sed -i "s/_COMMIT/$COMMIT/" tmp/membase-backup-tools.spec
 git archive --format=tar --prefix="membase-backup-tools-$VERSION/" HEAD | gzip > $RPM_SOURCE_DIR/$SOURCE
-rpmbuild -bb tmp/membase-backup-tools.spec
+rpmbuild -ba tmp/membase-backup-tools.spec
 rm -rf tmp
