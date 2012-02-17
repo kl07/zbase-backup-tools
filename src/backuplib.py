@@ -11,7 +11,7 @@ import consts
 
 MBB_VERSION = "1"
 TIMEOUT = 0
-TXN_SIZE = 200000
+TXN_SIZE = 100
 
 cmdInfo = {
     memcacheConstants.CMD_TAP_MUTATION: ('mutation', 'm'),
