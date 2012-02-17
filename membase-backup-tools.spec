@@ -6,6 +6,7 @@ Group: General
 License: Proprietary
 Source0: _SOURCE 
 Packager: Sarath Lakshman <slakshman@zynga.com>
+AutoReqProv: no
 
 %description 
 Membase 1.7.3 backup and restore tools
@@ -35,3 +36,4 @@ chmod 700 $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobresto
 
 %post
 ln -f -s /opt/membase/membase-backup/zstore_cmd   /usr/bin/zstore_cmd
+ln -f -s /usr/bin/python2.6 /usr/bin/python26
