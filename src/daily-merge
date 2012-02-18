@@ -55,7 +55,9 @@ class DailyMerge(multiprocessing.Process):
 
         hosts = output.split()
         for hostname in hosts:
-            #hostname = "empire-mb-object4-b-002"
+            hostname = "empire-mb-object4-b-013"
+            self.scratch_dir = "/dev/shm/%s-daily" %hostname
+            os.system("mkdir -p %s" %self.scratch_dir)
             location = "%s/%s/%s/%s" %(consts.STORAGE_SERVER_ROOT, self.game_id, hostname, self.config.cloud)
             status = self.start_merge(location)
             if status == False:
@@ -114,20 +116,60 @@ class DailyMerge(multiprocessing.Process):
         os.system("rm -f %s/*.mbb" %output_location)
         output_file = "%s/daily-%s.mbb" %(output_location, self.timestamp)
 
-        merge_cmd = " %s -o %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, listmbb)
-        #self.logger.log(" executing command %s" %merge_cmd)
+        #process two files at a time. copy them to the scratch folder and merge to the output
+        incr_backup1 = "%s/backup-001.mbb" %self.scratch_dir
+        incr_backup2 = "%s/backup-002.mbb" %self.scratch_dir
+
         self.logger.log(" Info. starting merge for location %s" %location)
         t_start = time.time()
-        status, output = commands.getstatusoutput(merge_cmd)
-        t_end = time.time()
-        if status != 0:
-            self.logger.log ("Failed to merge for location %s, output %s" %(location, output))
-            os.system("rm -f %s*" %output_file)
-            return False
 
+        i = 0
+        while i < (len(lines) - 1):
+            cp_cmd1 = "cp -f %s %s" %(lines[i], incr_backup1)
+            cp_cmd2 = "cp -f %s %s" %(lines[i+1], incr_backup2)
+            i+=2
+            try:
+                os.system(cp_cmd1)
+                os.system(cp_cmd2)
+            except:
+                self.logger.log("Failed. Unable to copy to scratch space")
+                return False
+
+
+            merge_cmd = " %s -o %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2)
+            #self.logger.log(" executing command %s" %merge_cmd)
+            status, output = commands.getstatusoutput(merge_cmd)
+
+            if status != 0:
+                self.logger.log ("Failed to merge for location %s, output %s" %(location, output))
+                os.system("rm -f %s*" %output_file)
+                return False
+
+        t_end = time.time()
 
         # merge was successfull
         self.logger.log ("Info. Merge complete. Took %d sec " %(t_end - t_start))
+        #split the backup file into 1GB chunks
+        file_size = os.path.getsize(output_file) / (1024 * 1024)
+
+        if file_size > consts.SPLIT_SIZE:
+            split_file_name = "%s/daily-%s" %(output_location, self.timestamp) + '-%.mbb'
+            split_cmd = "%s -o %s -m %s %s" %(consts.SPLIT_UPLOAD_CMD, split_file_name, consts.SPLIT_SIZE, output_file)
+            self.logger.log("Info: Executing split command %s "%split_cmd) 
+            ts_start = time.time()
+            status, output = commands.getstatusoutput(split_cmd)
+            if status != 0:
+                self.logger.log("Failed to split merged file. %s" %output)
+                os.system("rm -f %s/*.mbb" %output_location)
+                return False
+
+            ts_end = time.time()
+
+            self.logger.log("Info. Split complete. Took %d sec. Total %d sec" %((ts_end - ts_start),(ts_end - t_start)))
+
+            #delete the original merged file 
+            os.system("rm -f %s" %output_file)
+
         # delete all the incremental files we just merged if no lock is present
         manifest_file = "%s/manifest.del" %incr_location
         status = self.check_lock(incr_location, True, listfiles, manifest_file)
@@ -225,14 +267,14 @@ if __name__ == '__main__':
 
     jobs = []
 
-    for i in range(7):
-        pathname = "/data_%d" %(i+1)
-        #pathname = "/data_3"
+    for i in range(1):
+        #pathname = "/data_%d" %(i+1)
+        pathname = "/data_7"
         merge = DailyMerge(pathname)
         jobs.append(merge)
         merge.start()
 
-    jobs[-1].terminate()
+    #jobs[-1].terminate()
     for j in jobs:
         j.join()
 
