@@ -51,11 +51,11 @@ class DailyMerge(multiprocessing.Process):
         status,output = commands.getstatusoutput("ls %s/" %pathname)
         if status != 0:
             self.logger.log(" Cannot find any hostnames in path %s" %pathname)
-            return 
+            return
 
         hosts = output.split()
         for hostname in hosts:
-            hostname = "empire-mb-object4-b-013"
+            #hostname = "empire-mb-object4-b-013"
             self.scratch_dir = "/dev/shm/%s-daily" %hostname
             os.system("mkdir -p %s" %self.scratch_dir)
             location = "%s/%s/%s/%s" %(consts.STORAGE_SERVER_ROOT, self.game_id, hostname, self.config.cloud)
@@ -63,7 +63,7 @@ class DailyMerge(multiprocessing.Process):
             if status == False:
                 self.logger.log(" Failed to create daily merged backup for hostname %s" %hostname)
 
-        return 
+        return
 
     def start_merge(self, location=None):
 
@@ -87,7 +87,7 @@ class DailyMerge(multiprocessing.Process):
         os.system(" rm -f %s" %old_done_files)
 
         #process manifest
-        manifest_file = "%s/manifest.del" %incr_location 
+        manifest_file = "%s/manifest.del" %incr_location
         status = self.process_manifest(incr_location, manifest_file)
 
         if status == False:
@@ -155,7 +155,7 @@ class DailyMerge(multiprocessing.Process):
         if file_size > consts.SPLIT_SIZE:
             split_file_name = "%s/daily-%s" %(output_location, self.timestamp) + '-%.mbb'
             split_cmd = "%s -o %s -m %s %s" %(consts.SPLIT_UPLOAD_CMD, split_file_name, consts.SPLIT_SIZE, output_file)
-            self.logger.log("Info: Executing split command %s "%split_cmd) 
+            self.logger.log("Info: Executing split command %s "%split_cmd)
             ts_start = time.time()
             status, output = commands.getstatusoutput(split_cmd)
             if status != 0:
@@ -167,7 +167,7 @@ class DailyMerge(multiprocessing.Process):
 
             self.logger.log("Info. Split complete. Took %d sec. Total %d sec" %((ts_end - ts_start),(ts_end - t_start)))
 
-            #delete the original merged file 
+            #delete the original merged file
             os.system("rm -f %s" %output_file)
 
         # delete all the incremental files we just merged if no lock is present
@@ -201,7 +201,7 @@ class DailyMerge(multiprocessing.Process):
             status = self.check_lock(location)
             if status == 1:
                 return True
-            
+
             #no lock file exists. cleanup files in manifest
             try:
                 fd = open(manifest_file)
@@ -233,7 +233,7 @@ class DailyMerge(multiprocessing.Process):
 
                 fd = open(manifest_file, "w")
                 for line in listmbb:
-                    try: 
+                    try:
                         fd.write(line)
                     except:
                         self.logger.log(" Failed: I/O Error %s " %manifest_file)
@@ -267,9 +267,9 @@ if __name__ == '__main__':
 
     jobs = []
 
-    for i in range(1):
-        #pathname = "/data_%d" %(i+1)
-        pathname = "/data_7"
+    for i in range(7):
+        pathname = "/data_%d" %(i+1)
+        #pathname = "/data_7"
         merge = DailyMerge(pathname)
         jobs.append(merge)
         merge.start()
