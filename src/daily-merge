@@ -76,6 +76,7 @@ class DailyMerge(multiprocessing.Process):
 
         listfiles = output
         lines = output.split("\n")
+        lines.reverse()
         #check for existence of done file
         done_file = "%s/done-%02d:%02d" %(incr_location, self.now.month, self.now.day)
         if os.path.isfile(done_file) :
