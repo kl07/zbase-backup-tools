@@ -32,6 +32,8 @@ chmod 700 $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobresto
 
 %files
 /etc/membase-backup/*
+/etc/init.d/membase-backupd
+/etc/init.d/blobrestored
 /opt/membase/membase-backup/*
 
 %post
