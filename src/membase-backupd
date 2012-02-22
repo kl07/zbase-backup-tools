@@ -91,19 +91,31 @@ class BackupProcess:
 
     def resume_process(self):
         self.logger.log("Looking for backup files to resume upload process")
-        dirpath_suffix = '%s/%s/%s/%s' %(self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
+        dirpath_suffix_incr = '%s/%s/%s/%s' %(self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
+        dirpath_suffix_master = '%s/%s/%s/%s' %(self.config.game_id,
+                self.hostname, self.config.cloud, consts.MASTER_DIRNAME)
 
         for b in list(self.free_buffer_list.queue):
             try:
                 flist = list(set(map(lambda x: x[:-10]+'-%.mbb',
                     glob.glob("%s/*.mbb"
-                    %os.path.join(b, dirpath_suffix)))))
+                    %os.path.join(b, dirpath_suffix_incr)))))
+
+                flist_master = list(set(map(lambda x: x[:-10]+'-%.mbb',
+                    glob.glob("%s/*.mbb"
+                    %os.path.join(b, dirpath_suffix_master)))))
+                flist.extend(flist_master)
+
             except:
                 return
 
             for f in flist:
                 self.resume_process_mode = True
-                filepath = os.path.join(b,dirpath_suffix,f)
+                if consts.INCR_DIRNAME in f:
+                    filepath = os.path.join(b,dirpath_suffix_incr,f)
+                else:
+                    filepath = os.path.join(b,dirpath_suffix_master,f)
+
                 valid = True
                 files = glob.glob(f.replace('%','*'))
                 for bf in files:
