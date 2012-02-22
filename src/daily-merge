@@ -130,19 +130,33 @@ class DailyMerge(multiprocessing.Process):
             self.logger.log("Info: Too few files to merge. ")
             return True
 
-        while i < (total_lines - 1):
+        while i < total_lines:
             cp_cmd1 = "cp -f %s %s" %(lines[i], incr_backup1)
             cp_cmd2 = "cp -f %s %s" %(lines[i+1], incr_backup2)
+            cp_cmd3 = ""
             i+=2
+            #odd number of files
+            if total_lines%2 and (i+1) == total_lines:
+                incr_backup3 =  incr_backup2 = "%s/backup-003.mbb" %self.scratch_dir
+                cp_cmd3 = "cp -f %s %s" %(lines[i], incr_backup3)
+                i+=1
+
             try:
                 os.system(cp_cmd1)
                 os.system(cp_cmd2)
+                if cp_cmd3:
+                    os.system(cp_cmd3)
+
             except:
                 self.logger.log("Failed. Unable to copy to scratch space")
                 return False
 
 
-            merge_cmd = " %s -o %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2)
+            if cp_cmd3:
+                merge_cmd =  " %s -o %s %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2, incr_backup3)
+            else:
+                merge_cmd = " %s -o %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2)
+
             #self.logger.log(" executing command %s" %merge_cmd)
             status, output = commands.getstatusoutput(merge_cmd)
 
@@ -160,7 +174,7 @@ class DailyMerge(multiprocessing.Process):
 
         if file_size > consts.SPLIT_SIZE:
             split_file_name = "%s/daily-%s" %(output_location, self.timestamp) + '-%.mbb'
-            split_cmd = "%s -o %s -m %s %s" %(consts.SPLIT_UPLOAD_CMD, split_file_name, consts.SPLIT_SIZE, output_file)
+            split_cmd = "%s -o %s -s %s %s" %(consts.PATH_MBMERGE_EXEC, split_file_name, consts.SPLIT_SIZE, output_file)
             self.logger.log("Info: Executing split command %s "%split_cmd)
             ts_start = time.time()
             status, output = commands.getstatusoutput(split_cmd)
