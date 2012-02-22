@@ -135,6 +135,8 @@ class BackupFactory:
         self.update_count = 0
         self.source = tapname
         self.complete = False
+        self.host = host
+        self.port = port
 
         if txn_size:
             self.txn_size = txn_size
@@ -245,7 +247,9 @@ class BackupFactory:
                 if self.full_backup and self.backfill_chk_start == False and len(self.vbmap) == 0:
                     self.vbmap[vbucketId] = [1, 0]
                     t = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-                    max_cpoint_id = int(self.mc.stats('checkpoint')['vb_0:open_checkpoint_id'])
+                    sclient = mc_bin_client.MemcachedClient(self.host, self.port)
+                    max_cpoint_id = int(sclient.stats('checkpoint')['vb_0:open_checkpoint_id'])
+                    sclient.close()
                     for i in range(1, max_cpoint_id):
                         result = add_record(c, chkpoint_stmt,
                                         (vbucketId, i, -1, self.source, t))
