@@ -143,7 +143,13 @@ class MasterMerge(multiprocessing.Process):
 
         t_start = time.time()
         i = 0
-        while i < (len(merge_list) - 1):
+
+        total_lines = len(merge_list)
+        if total_lines < 2:
+            self.logger.log("Info: Too few files to merge. ")
+            return True
+
+        while i < (total_lines - 1):
             cp_cmd1 = "cp -f %s %s" %(merge_list[i], incr_backup1)
             cp_cmd2 = "cp -f %s %s" %(merge_list[i+1], incr_backup2)
             i+=2
