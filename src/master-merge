@@ -51,7 +51,7 @@ class MasterMerge(multiprocessing.Process):
         status,output = commands.getstatusoutput("ls %s/" %pathname)
         if status != 0:
             self.logger.log(" Cannot find any hostnames in path %s" %pathname)
-            return 
+            return
 
         hosts = output.split()
         for hostname in hosts:
@@ -90,9 +90,9 @@ class MasterMerge(multiprocessing.Process):
                     else:
                         dir_list.append(dirs)
                         files = output.split()
-                        for file in files: 
+                        for file in files:
                             merge_list.append(file)
-            
+
             # now locate the master backup file that needs merging
             status,output = commands.getstatusoutput("ls %s/" %master_location)
             if status != 0:
@@ -114,7 +114,7 @@ class MasterMerge(multiprocessing.Process):
                         else:
                             dir_list.append(dirs)
                             files = output.split()
-                            for file in files: 
+                            for file in files:
                                 merge_list.append(file)
 
 
@@ -123,12 +123,13 @@ class MasterMerge(multiprocessing.Process):
                 return False
 
             merge_list.sort()
+            merge_list.reverse()
             status = self.start_merge(master_location, master_directory, merge_list, dir_list)
             status = True
             if status == False:
                 self.logger.log(" Failed to create daily merged backup for hostname %s" %hostname)
 
-        return 
+        return
 
     def start_merge(self, master_location, master_directory, merge_list, dir_list):
 
@@ -137,13 +138,13 @@ class MasterMerge(multiprocessing.Process):
         output_file = "%s/master-%s.mbb" %(master_directory, self.timestamp)
         self.logger.log(" Info. starting merge for location %s" %master_location)
 
-        incr_backup1 = "%s/backup-001.mbb" %self.scratch_dir 
+        incr_backup1 = "%s/backup-001.mbb" %self.scratch_dir
         incr_backup2 = "%s/backup-002.mbb" %self.scratch_dir
 
-        t_start = time.time() 
+        t_start = time.time()
         i = 0
         while i < (len(merge_list) - 1):
-            cp_cmd1 = "cp -f %s %s" %(merge_list[i], incr_backup1) 
+            cp_cmd1 = "cp -f %s %s" %(merge_list[i], incr_backup1)
             cp_cmd2 = "cp -f %s %s" %(merge_list[i+1], incr_backup2)
             i+=2
 
@@ -161,7 +162,7 @@ class MasterMerge(multiprocessing.Process):
                 os.system("rm -f %s*" %output_file)
                 return False
 
-        t_end = time.time() 
+        t_end = time.time()
 
         # merge was successfull
         self.logger.log ("Info. Merge complete. Took %d sec " %(t_end - t_start))
@@ -171,7 +172,7 @@ class MasterMerge(multiprocessing.Process):
         if file_size > consts.SPLIT_SIZE:
             split_file_name = "%s/master-%s" %(master_directory, self.timestamp) + '-%.mbb'
             split_cmd = "%s -o %s -m %s %s" %(consts.SPLIT_UPLOAD_CMD, split_file_name, consts.SPLIT_SIZE, output_file)
-            self.logger.log("Info: Executing split command %s "%split_cmd) 
+            self.logger.log("Info: Executing split command %s "%split_cmd)
             ts_start = time.time()
             status, output = commands.getstatusoutput(split_cmd)
             if status != 0:
@@ -183,7 +184,7 @@ class MasterMerge(multiprocessing.Process):
 
             self.logger.log("Info. Split complete. Took %d sec. Total %d sec" %((ts_end - ts_start),(ts_end - t_start)))
 
-            #delete the original merged file 
+            #delete the original merged file
             os.system("rm -f %s" %output_file)
 
 
