@@ -89,22 +89,21 @@ class DailyMerge(multiprocessing.Process):
 
         #process manifest
         manifest_file = "%s/manifest.del" %incr_location
-        status = self.process_manifest(incr_location, manifest_file)
-
-        if status == False:
-            self.logger.log ("Failed to process manifest %s" %incr_location)
-            return False
 
         if os.path.isfile(manifest_file):
-            #means that .lock exists
             fd = open(manifest_file, "r")
             buffer = fd.read()
             fd.close()
             buffer = buffer.split("\n")
             lines = list(set(lines) - set(buffer))
 
+        status = self.process_manifest(incr_location, manifest_file)
+        if status == False:
+            self.logger.log ("Failed to process manifest %s" %incr_location)
+            return False
+
         if lines == []:
-            self.logger.log("Failed: No new files to process ")
+            self.logger.log("Warning: No new files to process ")
             return False
 
         listmbb = "  "
@@ -206,6 +205,10 @@ class DailyMerge(multiprocessing.Process):
 
         #add a done file to the directory and we are done for this location
         output = os.system("touch %s" %done_file)
+
+        #clean up the scratch directory
+        os.system("rm -rf %s" %self.scratch_dir)
+
         if output != 0:
             self.logger.log (" Failed to add done file %s" %done_file)
             return False

@@ -219,6 +219,7 @@ class MasterMerge(multiprocessing.Process):
                     self.logger.log("Failed: to create done file %s" %done_file)
 
         os.system("touch %s" %self.merged_file)
+        os.system("rm -rf %s" %self.scratch_dir)
 
         self.logger.log("Success: Master merge completed. %s" %output_file)
 
