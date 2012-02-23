@@ -129,6 +129,8 @@ class MasterMerge(multiprocessing.Process):
             if status == False:
                 self.logger.log(" Failed to create daily merged backup for hostname %s" %hostname)
 
+            os.system("rm -rf %s" %self.scratch_dir)
+
         return
 
     def start_merge(self, master_location, master_directory, merge_list, dir_list):
@@ -219,8 +221,6 @@ class MasterMerge(multiprocessing.Process):
                     self.logger.log("Failed: to create done file %s" %done_file)
 
         os.system("touch %s" %self.merged_file)
-        os.system("rm -rf %s" %self.scratch_dir)
-
         self.logger.log("Success: Master merge completed. %s" %output_file)
 
         return True

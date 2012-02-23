@@ -63,6 +63,9 @@ class DailyMerge(multiprocessing.Process):
             if status == False:
                 self.logger.log(" Failed to create daily merged backup for hostname %s" %hostname)
 
+            #clean up the scratch directory
+            os.system("rm -rf %s" %self.scratch_dir)
+
         return
 
     def start_merge(self, location=None):
@@ -206,8 +209,6 @@ class DailyMerge(multiprocessing.Process):
         #add a done file to the directory and we are done for this location
         output = os.system("touch %s" %done_file)
 
-        #clean up the scratch directory
-        os.system("rm -rf %s" %self.scratch_dir)
 
         if output != 0:
             self.logger.log (" Failed to add done file %s" %done_file)
