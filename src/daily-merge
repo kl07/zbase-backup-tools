@@ -137,7 +137,7 @@ class DailyMerge(multiprocessing.Process):
             i+=2
             #odd number of files
             if total_lines%2 and (i+1) == total_lines:
-                incr_backup3 =  incr_backup2 = "%s/backup-003.mbb" %self.scratch_dir
+                incr_backup3 = "%s/backup-003.mbb" %self.scratch_dir
                 cp_cmd3 = "cp -f %s %s" %(lines[i], incr_backup3)
                 i+=1
 
