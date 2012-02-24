@@ -42,4 +42,4 @@ chmod 700 $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobresto
 %post
 ln -f -s /opt/membase/membase-backup/zstore_cmd   /usr/bin/zstore_cmd
 ln -f -s /usr/bin/python2.6 /usr/bin/python26
-ln -f -s /opt/membase/membase-backup/misc/mbbackup-merge-incremental /opt/membase/lib/python/mbbackup-merge-incremental
+ln -f /opt/membase/membase-backup/misc/mbbackup-merge-incremental /opt/membase/lib/python/mbbackup-merge-incremental
