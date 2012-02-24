@@ -55,16 +55,12 @@ class DailyMerge(multiprocessing.Process):
 
         hosts = output.split()
         for hostname in hosts:
-            #hostname = "empire-mb-object4-b-013"
             self.scratch_dir = "/dev/shm/%s-daily" %hostname
             os.system("mkdir -p %s" %self.scratch_dir)
             location = "%s/%s/%s/%s" %(consts.STORAGE_SERVER_ROOT, self.game_id, hostname, self.config.cloud)
             status = self.start_merge(location)
             if status == False:
                 self.logger.log(" Failed to create daily merged backup for hostname %s" %hostname)
-
-            #clean up the scratch directory
-            os.system("rm -rf %s" %self.scratch_dir)
 
         return
 
@@ -89,24 +85,27 @@ class DailyMerge(multiprocessing.Process):
         #delete all older done files
         old_done_files = "%s/done-*" %(incr_location)
         os.system(" rm -f %s" %old_done_files)
-
-        #process manifest
-        manifest_file = "%s/manifest.del" %incr_location
+	
+	manifest_file = "%s/manifest.del" %incr_location
 
         if os.path.isfile(manifest_file):
+            #means that .lock exists
             fd = open(manifest_file, "r")
             buffer = fd.read()
             fd.close()
             buffer = buffer.split("\n")
             lines = list(set(lines) - set(buffer))
 
+        #process manifest
         status = self.process_manifest(incr_location, manifest_file)
+
         if status == False:
             self.logger.log ("Failed to process manifest %s" %incr_location)
             return False
 
+
         if lines == []:
-            self.logger.log("Warning: No new files to process ")
+            self.logger.log("Failed: No new files to process ")
             return False
 
         listmbb = "  "
@@ -134,12 +133,14 @@ class DailyMerge(multiprocessing.Process):
 
         while i < total_lines:
             cp_cmd1 = "cp -f %s %s" %(lines[i], incr_backup1)
+	    self.logger.log("Executing command: cp -f %s %s" %(lines[i], incr_backup1))
             cp_cmd2 = "cp -f %s %s" %(lines[i+1], incr_backup2)
+	    self.logger.log("Executing command: cp -f %s %s" %(lines[i+1], incr_backup2))
             cp_cmd3 = ""
             i+=2
             #odd number of files
             if total_lines%2 and (i+1) == total_lines:
-                incr_backup3 = "%s/backup-003.mbb" %self.scratch_dir
+                incr_backup3 =  "%s/backup-003.mbb" %self.scratch_dir
                 cp_cmd3 = "cp -f %s %s" %(lines[i], incr_backup3)
                 i+=1
 
@@ -155,11 +156,11 @@ class DailyMerge(multiprocessing.Process):
 
 
             if cp_cmd3:
-                merge_cmd =  " %s -o %s %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2, incr_backup3)
+                merge_cmd =  " %s -vv -o %s %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2, incr_backup3)
             else:
-                merge_cmd = " %s -o %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2)
+                merge_cmd = " %s -vv -o %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2)
 
-            #self.logger.log(" executing command %s" %merge_cmd)
+            self.logger.log(" executing command %s" %merge_cmd)
             status, output = commands.getstatusoutput(merge_cmd)
 
             if status != 0:
@@ -208,8 +209,6 @@ class DailyMerge(multiprocessing.Process):
 
         #add a done file to the directory and we are done for this location
         output = os.system("touch %s" %done_file)
-
-
         if output != 0:
             self.logger.log (" Failed to add done file %s" %done_file)
             return False
