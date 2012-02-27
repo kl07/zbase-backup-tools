@@ -46,7 +46,8 @@ class DailyMerge(multiprocessing.Process):
         self.game_id = self.config.game_id
         now=datetime.datetime.now()
         self.now = now
-        self.timestamp = "%d:%d:%d-%d:%d" %(now.year,now.month,now.day, now.hour, now.minute)
+        self.timestamp = "%d-%d-%d_%d:%d:%d" %(now.year,now.month,now.day, now.hour, now.minute. now.second)
+
         #get host name from the disk path
         status,output = commands.getstatusoutput("ls %s/" %pathname)
         if status != 0:
@@ -85,7 +86,7 @@ class DailyMerge(multiprocessing.Process):
         #delete all older done files
         old_done_files = "%s/done-*" %(incr_location)
         os.system(" rm -f %s" %old_done_files)
-	
+
 	manifest_file = "%s/manifest.del" %incr_location
 
         if os.path.isfile(manifest_file):
