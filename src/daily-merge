@@ -46,7 +46,7 @@ class DailyMerge(multiprocessing.Process):
         self.game_id = self.config.game_id
         now=datetime.datetime.now()
         self.now = now
-        self.timestamp = "%d-%d-%d_%d:%d:%d" %(now.year,now.month,now.day, now.hour, now.minute. now.second)
+        self.timestamp = "%d-%d-%d_%d:%d:%d" %(now.year,now.month,now.day,now.hour,now.minute,now.second)
 
         #get host name from the disk path
         status,output = commands.getstatusoutput("ls %s/" %pathname)
@@ -213,6 +213,12 @@ class DailyMerge(multiprocessing.Process):
         if output != 0:
             self.logger.log (" Failed to add done file %s" %done_file)
             return False
+
+        #add a .done file to the output directory
+        try:
+            os.system("touch %s/.done" %output_location)
+        except:
+            self.logger.log("Failed to add .done file to %s" %output_location)
 
         self.logger.log(" Sucess: Merged file created successfully %s" %output_file)
 
