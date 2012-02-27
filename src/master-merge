@@ -55,7 +55,7 @@ class MasterMerge(multiprocessing.Process):
 
         hosts = output.split()
         for hostname in hosts:
-            #hostname = "empire-mb-object4-b-013"
+            #hostname = "pritish-inc-backup-test-002"
             self.scratch_dir = "/dev/shm/master-%s" %hostname
             os.system("mkdir -p %s" %self.scratch_dir)
             location = "%s/%s/%s/%s" %(consts.STORAGE_SERVER_ROOT, self.game_id, hostname, self.config.cloud)
@@ -68,7 +68,7 @@ class MasterMerge(multiprocessing.Process):
 
             os.system("rm -f %s/*.mbb" %master_directory)
 
-            #get a list of daily backup fils that need to be purged
+            #get a list of daily backup fils that need to be merged
             daily_location = "%s/daily" %location
             status,output = commands.getstatusoutput("ls %s/" %daily_location)
             if status != 0:
@@ -93,6 +93,7 @@ class MasterMerge(multiprocessing.Process):
                         for file in files:
                             merge_list.append(file)
 
+            master_merge_list = []
             # now locate the master backup file that needs merging
             status,output = commands.getstatusoutput("ls %s/" %master_location)
             if status != 0:
@@ -115,15 +116,29 @@ class MasterMerge(multiprocessing.Process):
                             dir_list.append(dirs)
                             files = output.split()
                             for file in files:
-                                merge_list.append(file)
+                                master_merge_list.append(file)
 
+            if master_merge_list == []:
+                self.logger.log(" No master backupfile found for host %s" %hostname)
+                return False
+
+            merge_list.sort()
+            merge_list.reverse()
+            master_merge_list.sort()
+            master_merge_list.reverse()
+
+
+            for line in master_merge_list:
+                merge_list.append(line)
+
+            #merge_list = master_merge_list
 
             if merge_list == [] or dir_list == []:
                 self.logger.log(" Failed: empty merge list or dir list")
                 return False
 
-            merge_list.sort()
-            merge_list.reverse()
+            print str(merge_list)
+            print str(dir_list)
             status = self.start_merge(master_location, master_directory, merge_list, dir_list)
             status = True
             if status == False:
@@ -152,16 +167,18 @@ class MasterMerge(multiprocessing.Process):
             return True
 
         while i < total_lines:
-            cp_cmd1 = "cp -f %s %s" %(lines[i], incr_backup1)
-            cp_cmd2 = "cp -f %s %s" %(lines[i+1], incr_backup2)
+            cp_cmd1 = "cp -f %s %s" %(merge_list[i], incr_backup1)
+            cp_cmd2 = "cp -f %s %s" %(merge_list[i+1], incr_backup2)
             cp_cmd3 = ""
             i+=2
             #odd number of files
             if total_lines%2 and (i+1) == total_lines:
                 incr_backup3 = "%s/backup-003.mbb" %self.scratch_dir
-                cp_cmd3 = "cp -f %s %s" %(lines[i], incr_backup3)
+                cp_cmd3 = "cp -f %s %s" %(merge_list[i], incr_backup3)
                 i+=1
 
+            print cp_cmd1
+            print cp_cmd2
             try:
                 os.system(cp_cmd1)
                 os.system(cp_cmd2)
@@ -177,6 +194,8 @@ class MasterMerge(multiprocessing.Process):
                 merge_cmd =  " %s -o %s %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2, incr_backup3)
             else:
                 merge_cmd = " %s -o %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2)
+
+            print merge_cmd
 
             #self.logger.log(" executing command %s" %merge_cmd)
             status, output = commands.getstatusoutput(merge_cmd)
@@ -249,7 +268,7 @@ if __name__ == '__main__':
 
     for i in range(7):
         pathname = "/data_%d" %(i+1)
-        #pathname = "/data_7"
+        #pathname = "/data_3"
         merge = MasterMerge(pathname)
         jobs.append(merge)
         merge.start()
