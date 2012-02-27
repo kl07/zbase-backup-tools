@@ -91,47 +91,30 @@ class BackupProcess:
 
     def resume_process(self):
         self.logger.log("Looking for backup files to resume upload process")
-        dirpath_suffix_incr = '%s/%s/%s/%s' %(self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
-        dirpath_suffix_master = '%s/%s/%s/%s' %(self.config.game_id,
-                self.hostname, self.config.cloud, consts.MASTER_DIRNAME)
+        dirpath_suffix = '%s/%s/%s' %(self.config.game_id, self.hostname, self.config.cloud)
+
 
         for b in list(self.free_buffer_list.queue):
-            try:
-                flist = list(set(map(lambda x: x[:-10]+'-%.mbb',
-                    glob.glob("%s/*.mbb"
-                    %os.path.join(b, dirpath_suffix_incr)))))
+            backup_file = []
+            for path, dirname, filename in os.walk(os.path.join(b, dirpath_suffix)):
+                if dirname == [] and filename != []:
+                    backup_file =  [os.path.join(path, filename[0])]
 
-                flist_master = list(set(map(lambda x: x[:-10]+'-%.mbb',
-                    glob.glob("%s/*.mbb"
-                    %os.path.join(b, dirpath_suffix_master)))))
-                flist.extend(flist_master)
+            if backup_file == []:
+                continue
 
-            except:
-                return
+            if not self._is_backup_valid(backup_file[0]):
+                self._remove_file(backup_file[0])
+                self.logger.log("FAILED: Backup file %s not valid" %backup_file[0])
+                self.exit(1)
 
-            for f in flist:
-                self.resume_process_mode = True
-                if consts.INCR_DIRNAME in f:
-                    filepath = os.path.join(b,dirpath_suffix_incr,f)
-                else:
-                    filepath = os.path.join(b,dirpath_suffix_master,f)
+            self.logger.log("Found backup file %s. Pusing to uploader queue" %backup_file[0])
+            self.resume_process_mode = True
+            item = (backup_file[0], b)
+            self.backup_queue.put(item)
 
-                valid = True
-                files = glob.glob(f.replace('%','*'))
-                for bf in files:
-                    if not self._is_backup_valid(bf):
-                        valid = False
-
-                if valid:
-                    self.logger.log("Found backup file %s. Pusing to uploader queue" %flist[0])
-                    item = (filepath, b)
-                    self.backup_queue.put(item)
-                else:
-                    for bf in files:
-                        self._remove_file(bf)
-
-                if b in self.free_buffer_list.queue:
-                    self.free_buffer_list.queue.remove(b)
+            if b in self.free_buffer_list.queue:
+                 self.free_buffer_list.queue.remove(b)
 
     def _upload_file(self, filepath, buffer_path):
         retries = self.config.upload_retries
@@ -226,7 +209,7 @@ class BackupProcess:
 
             if self.resume_process_mode:
                 if len(self.backup_queue.queue) == 0:
-                    self.resume_process_mode = True
+                    self.resume_process_mode = False
                 else:
                     continue
 
@@ -445,7 +428,6 @@ class BackupProcess:
                     self._ss_remove_file(buffer_path, f)
                     self.exit(1)
 
-
         checkpoints.sort()
         if os.path.exists(consts.LAST_CHECKPOINT_FILE) and not full_backup:
             f = open(consts.LAST_CHECKPOINT_FILE)
@@ -457,7 +439,6 @@ class BackupProcess:
 
         if len(checkpoints):
             if last_backup_checkpoint > 0:
-
                 if last_backup_checkpoint + 1 != checkpoints[0]:
                     self.logger.log("FAILED: Invalid backup. Last backup checkpoint = %d, New backup checkpoint = %s" %(last_backup_checkpoint, checkpoints[0]))
                     self.exit(1)
