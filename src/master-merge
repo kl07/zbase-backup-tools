@@ -64,7 +64,7 @@ class MasterMerge(multiprocessing.Process):
             self.merged_file = "%s/merged-%d-%02d-%02d" %(master_directory, self.now.year, self.now.month, self.now.day)
             if os.path.isfile(self.merged_file) :
                 self.logger.log("Info: Merged for this location %s already done today" %master_location)
-                return
+                continue
 
             os.system("rm -f %s/*.mbb" %master_directory)
 
@@ -72,8 +72,8 @@ class MasterMerge(multiprocessing.Process):
             daily_location = "%s/daily" %location
             status,output = commands.getstatusoutput("ls %s/" %daily_location)
             if status != 0:
-                self.logger.log (" No daily directories found %s" %daily_location)
-                return
+                self.logger.log (" Failed: No daily directories found %s" %daily_location)
+                continue
 
             daily_dirs = output.split()
             merge_list = []
@@ -120,7 +120,7 @@ class MasterMerge(multiprocessing.Process):
 
             if master_merge_list == []:
                 self.logger.log(" No master backupfile found for host %s" %hostname)
-                return False
+                continue
 
             merge_list.sort()
             merge_list.reverse()
@@ -134,11 +134,9 @@ class MasterMerge(multiprocessing.Process):
             #merge_list = master_merge_list
 
             if merge_list == [] or dir_list == []:
-                self.logger.log(" Failed: empty merge list or dir list")
-                return False
+                self.logger.log(" Failed: empty merge list or dir list for host %s" %hostname)
+                continue
 
-            print str(merge_list)
-            print str(dir_list)
             status = self.start_merge(master_location, master_directory, merge_list, dir_list)
             status = True
             if status == False:
