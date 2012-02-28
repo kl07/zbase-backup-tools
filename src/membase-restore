@@ -48,8 +48,7 @@ class Restore:
         else:
             self.hostname = hostname
 
-        #TODO: Phase-2 Separate tmpfs 
-        buffer_list = map(lambda x: '/dev/shm'+ x, self.config.buffer_list.split(','))
+        buffer_list = self.config.buffer_list.split(',')
         self.thread_count = len(buffer_list)
         self.free_buffer_list = Queue.Queue()
         self.download_queue = Queue.Queue()
@@ -259,15 +258,11 @@ class Restore:
             else:
                 self.logger.log("Locked incremental backup directory in s3")
 
-        '''
-        TODO: Master backups are disabled
         master_backup_epoch = epoch
         self.logger.log("Searching for master backup")
         for attempt in xrange(consts.MAX_BACKUP_SEARCH_TRIES):
             date = epoch2date(master_backup_epoch)
             master_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.MASTER_DIRNAME, date), False)
-            #if not master_backup_list:
-            #    continue
             if len(master_backup_list):
                 self.logger.log("Found master backup for date, %s" %epoch2date(master_backup_epoch))
                 break
@@ -276,13 +271,8 @@ class Restore:
                 if attempt == consts.MAX_BACKUP_SEARCH_TRIES - 1:
                     self.logger.log("Could not find master backup. Maximum tries exceeded")
                     master_backup_list = []
-        '''
 
-        master_backup_list = []
         self.logger.log("Fetching list of periodic backups")
-
-        '''
-        TODO: Limited search for periodic backups are disabled
         periodic_backup_list = []
         for date_epoch in xrange(int(master_backup_epoch), int(epoch) + DAY_EPOCH, DAY_EPOCH):
             date = epoch2date(date_epoch)
@@ -290,10 +280,7 @@ class Restore:
             if not periodic_file_list:
                 self.logger.log("Could not find periodic backup for %s" %date)
             periodic_backup_list.extend(periodic_file_list)
-        '''
 
-        periodic_backup_list = []
-        periodic_file_list = self._list_s3_files('s3://%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.PERIODIC_DIRNAME), False)
         if not periodic_file_list:
             self.logger.log("Could not find periodic backups")
         else:
