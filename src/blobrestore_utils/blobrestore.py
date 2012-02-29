@@ -49,8 +49,8 @@ def usage(e=0):
     """
 
     print "\nUsage: %s addjob -k keylist_file -n shard_count -d restore_date" \
-            "-g game_id -p hostname_prefix [ -f force_find_days ]" \
-            "[ -c ] [ -m ]\n" %(sys.argv[0])
+            " -g game_id -p hostname_prefix [ -f force_find_days ]" \
+            " [ -c ] [ -m ]\n" %(sys.argv[0])
     print "%s status restore_ID.job\n" %(sys.argv[0])
     print "%s fetchlog restore_ID.job\n" %(sys.argv[0])
     print "%s restore-server restore_ID.job -l target_server_list [ -r ]\n" %(sys.argv[0])
@@ -137,6 +137,9 @@ def parse_args(args):
 
     options = {}
     options['command'] = args[1]
+
+    if options['command'] not in ['addjob' ,'status', 'fetchlog', 'restore-server']:
+        usage("ERROR: wrong command or command not specified")
 
     if options['command'] == 'addjob':
         if len(args) < 6:

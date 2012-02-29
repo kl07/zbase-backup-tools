@@ -11,6 +11,12 @@ status(){
 start(){
 
     /usr/bin/python26 /opt/membase/membase-backup/blobrestore_utils/blobrestored start > /dev/null 2>&1 &
+    if [ $? -eq 0 ];
+    then
+        echo "Started blobrestore daemon successfully"
+    else
+        echo "Failed to start blobrestore daemon"
+    fi
 }
 
 

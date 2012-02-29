@@ -518,8 +518,11 @@ if __name__ == '__main__':
             if pid == 0:
                 print "Blobrestore daemon is not running"
             else:
-                os.kill(pid, signal.SIGTERM)
-                print "Stopped Blobrestore Daemon"
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                    print "Stopped Blobrestore Daemon"
+                except:
+                    print "Blobrestore daemon is not running"
         elif command == 'status':
             try:
                 os.kill(pid, 0)
