@@ -38,10 +38,16 @@ def log(msg):
 def download_file(s3path, localpath):
     dl_cmd = "%s get %s %s" %(consts.PATH_S3CMD_ZYNGA_EXEC, s3path, localpath) 
     status, output = getcommandoutput(dl_cmd)
-    if not status:
-        return True
+    if status == 0:
+        try:
+            if 'Error' in open(localpath).read():
+                status = 1
+        except:
+            status = 2
     else:
-        return False
+        status = 2
+
+    return status
 
 def usage(e=0):
     """
@@ -75,7 +81,11 @@ def group_keys(key_file, shard_count):
     for i in xrange(shard_count):
         groups[i] = []
 
-    handle = open(key_file)
+    try:
+        handle = open(key_file, 'r')
+    except:
+        sys.exit("Invalid key list file")
+
     for key in handle:
         key = key.strip()
         if key =='':
@@ -114,7 +124,8 @@ def get_array_iplist(game_id):
     except:
         pass
 
-    if download_file("%s/%s" %(consts.BACKUP_ARRAY_IPLIST, game_id), tmpfile):
+    status = download_file("%s/%s" %(consts.BACKUP_ARRAY_IPLIST, game_id), tmpfile)
+    if status == 0:
         ips = []
         for ip in open(tmpfile):
             ip = ip.strip()
@@ -122,8 +133,11 @@ def get_array_iplist(game_id):
                 ips.append(ip)
             else:
                 continue
+    elif status == 1:
+        log("Unable to locate storage server config file for game-id %s" %game_id)
+        sys.exit(1)
     else:
-        log("Downloading Backup Array iplist failed")
+        log("Downloading Backup array iplist failed")
         sys.exit(1)
     return ips
 
@@ -142,7 +156,7 @@ def parse_args(args):
         usage("ERROR: wrong command or command not specified")
 
     if options['command'] == 'addjob':
-        if len(args) < 6:
+        if len(args) < 11:
             usage("ERROR: Not enough arguments")
 
         options['validate_blob'] = False
@@ -152,28 +166,31 @@ def parse_args(args):
         except getopt.GetoptError, e:
             usage(e.msg)
 
-        for (o,a) in opts:
-            if o == '-k':
-                options['key_file'] = a
-            elif o == '-n':
-                options['shard_count'] = int(a)
-            elif o == '-d':
-                options['restore_date'] = a
-            elif o == '-g':
-                options['game_id'] = a
-                if len(a.split('-')) != 2:
-                    usage("ERROR: game_id should be in the format zc1-empire")
+        try:
+            for (o,a) in opts:
+                if o == '-k':
+                    options['key_file'] = a
+                elif o == '-n':
+                    options['shard_count'] = int(a)
+                elif o == '-d':
+                    options['restore_date'] = a
+                elif o == '-g':
+                    options['game_id'] = a
+                    if len(a.split('-')) != 2:
+                        usage("ERROR: game_id should be in the format zc1-empire")
 
-            elif o == '-p':
-                options['hostname_prefix'] = a
-            elif o == '-f':
-                options['force_find_days'] = int(a)
-            elif o == '-c':
-                options['validate_blob'] = True
-            elif o == '-m':
-                options['check_master_backup'] = True
-            elif o == '-h':
-                usage()
+                elif o == '-p':
+                    options['hostname_prefix'] = a
+                elif o == '-f':
+                    options['force_find_days'] = int(a)
+                elif o == '-c':
+                    options['validate_blob'] = True
+                elif o == '-m':
+                    options['check_master_backup'] = True
+                elif o == '-h':
+                    usage()
+        except:
+            usage("Invalid arguments")
 
     elif options['command'] == 'restore-server':
         if len(args) < 4:
@@ -502,7 +519,13 @@ class BlobrestoreDispatcher:
             node_job_item.download_restored_keys(tmpdir)
 
         membasepool = MembasePool()
-        for s in open(self.options['target_server_list'], 'r'):
+        try:
+            server_list = open(self.options['target_server_list'], 'r')
+        except:
+            log("Invalid target server list")
+            sys.exit(1)
+
+        for s in server_list:
             server = s.strip()
             if server == '':
                 continue
