@@ -458,7 +458,7 @@ class BackupProcess:
                 for b,f in bf_instance.list_splits():
                     self._remove_file(f)
                     self._ss_remove_file(buffer_path, f)
-                    self.exit(1)
+                self.exit(1)
 
         checkpoints.sort()
         if os.path.exists(consts.LAST_CHECKPOINT_FILE) and not full_backup:
