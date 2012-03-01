@@ -6,6 +6,7 @@ import os
 import consts
 import sys
 import signal
+import socket
 import Queue
 from threading import Thread
 from mc_bin_client import MemcachedClient
@@ -246,11 +247,11 @@ class Restore:
             self.logger.log("Could not find any incremental backups")
             incremental_backup_list = []
         else:
-            f = open('/tmp/.lock-%s' %self.hostname,'w')
+            f = open('/tmp/.lock-%s' %socket.gethostname(),'w')
             f.close()
             self.s3_lock_file = "%s.lock-%s" %(incremental_backup_s3path, self.hostname)
             lock_cmd = "%s put /tmp/.lock-%s %s" %(consts.PATH_S3CMD_EXEC,
-                    self.hostname, incremental_backup_s3path)
+                    socket.gethostname(), incremental_backup_s3path)
             status, output = self.getstatusoutput(lock_cmd)
             if status > 0:
                 self.logger.log("FAILED: Unable to put incremental backup directory lock in s3")
