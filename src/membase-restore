@@ -281,11 +281,6 @@ class Restore:
                 self.logger.log("Could not find periodic backup for %s" %date)
             periodic_backup_list.extend(periodic_file_list)
 
-        if not periodic_file_list:
-            self.logger.log("Could not find periodic backups")
-        else:
-            periodic_backup_list = periodic_file_list
-
         incremental_backup_list.sort(key=natural_sortkey)
         incremental_backup_list.reverse()
         master_backup_list.sort(key=natural_sortkey)
