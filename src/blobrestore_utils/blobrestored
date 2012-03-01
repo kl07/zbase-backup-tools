@@ -420,8 +420,7 @@ class BlobrestoreManager:
         Spawn work processes to process the blobrestore jobs
         """
 
-        #for i in range(self.config.parallel_jobs):
-        for i in range(2):
+        for i in range(self.config.parallel_jobs):
             bw = BlobrestoreWorker(self.job_queue)
             bw.start()
 
@@ -457,6 +456,7 @@ class BlobrestoreManager:
 
     def clear_env(self):
         os.system("rm -rf %s/*" %consts.BLOBRESTORE_PROCESSED_JOBS_DIR)
+        os.system("rm -rf %s/pending/*" %consts.BLOBRESTORE_JOBS_DIR)
 
     def start(self):
         """
