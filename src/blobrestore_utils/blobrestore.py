@@ -78,9 +78,6 @@ def group_keys(key_file, shard_count):
     Group keys into shard no groups
     """
     groups = {}
-    for i in xrange(shard_count):
-        groups[i] = []
-
     try:
         handle = open(key_file, 'r')
     except:
@@ -90,7 +87,10 @@ def group_keys(key_file, shard_count):
         key = key.strip()
         if key =='':
             continue
-        groups[keyhash(key) % shard_count].append(key)
+        index = keyhash(key) % shard_count
+        if not groups.has_key(index):
+            groups[index] = []
+        groups[index].append(key)
 
     return groups
 

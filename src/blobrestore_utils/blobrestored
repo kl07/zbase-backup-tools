@@ -183,9 +183,16 @@ class Backup:
         self.db.close()
 
     def get_key(self, key):
-        query = 'select cpoint_id,key,flg,exp,cas,val,"%s" from cpoint_op where key="%s" and op="m"' %(self.date, key)
+        query = 'select cpoint_id,key,flg,exp,cas,val,"%s",op from cpoint_op where key="%s"' %(self.date, key)
         cursor = self.db.execute(query)
-        return cursor.fetchone()
+        rv = cursor.fetchone()
+        if rv:
+            if rv[-1] == 'd':
+                rv = None
+            else:
+                rv = rv[:-1]
+
+        return rv
 
     def validate_blob(self, key_item):
         return True
@@ -246,7 +253,6 @@ class Job:
         self.dirpath = os.path.join(consts.BLOBRESTORE_PROCESSED_JOBS_DIR,
         '%s_ID%d' %(self.game_id, self.node_jobid))
         try:
-            os.system("rm -rf %s/*" %self.dirpath)
             os.makedirs(os.path.join(self.dirpath, 'output'))
         except:
             pass
