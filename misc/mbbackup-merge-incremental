@@ -114,7 +114,9 @@ def merge_incremental_backup_files(backup_files, single_output_file):
                               "source, updated_at FROM cpoint_state " \
                               "WHERE state = \"closed\"")
             checkpoint_states = bd_cursor.fetchall()
+            checkpoint_states.sort()
             copy_checkpoint_state_records(checkpoint_states, output_db)
+            checkpoint_states = [checkpoint_states[-1]]
 
             op_records = []
             ## Insert checkpoint_operation records into the output db file.
