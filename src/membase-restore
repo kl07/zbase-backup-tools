@@ -135,7 +135,7 @@ class Restore:
                         self.exit(1)
                 time.sleep(1)
 
-        register_tap_cmd = "python26 %s -h 0:11211 -r %s" \
+        register_tap_cmd = "python26 %s -h 0:11211 -r %s -c" \
                 %(consts.PATH_MBTAP_REGISTER_EXEC, consts.BACKUP_TAPNAME)
         self.logger.log("Registering Backup TAP Cursor")
         status, output = self.getstatusoutput(register_tap_cmd)
