@@ -12,7 +12,7 @@ import signal
 import logging
 import random
 import sys
-from threading import Thread, Semaphore
+from threading import Thread, Lock
 
 PYTHON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../')
 sys.path.insert(0, PYTHON_PATH)
@@ -95,6 +95,7 @@ class NodeJobTracker:
     instances = []
 
     def __init__(self, nj):
+        self.lock = Lock()
         self.nodejob_ref = nj
         self.job_id = nj.job_id 
         self.activated = False
@@ -107,6 +108,7 @@ class NodeJobTracker:
             del j
 
     def activate(self):
+        self.lock.acquire()
         if not self.activated:
             logfile = os.path.join(self.jobs[0].dirpath, 'restore.log')
             self.dirpath = self.jobs[0].dirpath
@@ -125,6 +127,7 @@ class NodeJobTracker:
             except:
                 pass
             self.nodejob_ref = None
+        self.lock.release()
 
     def log(self, msg):
         self.logger.info(msg)
