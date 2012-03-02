@@ -513,7 +513,7 @@ if __name__ == '__main__':
                 try:
                     os.kill(pid, 0)
                     print "Blobrestore daemon is already running with pid %d" %pid
-                    sys.exit(0)
+                    os._exit(0)
                 except:
                     os.unlink(pidfile)
 
@@ -534,6 +534,8 @@ if __name__ == '__main__':
                     print "Blobrestore daemon is not running"
         elif command == 'status':
             try:
+                if pid == 0:
+                    raise Exception
                 os.kill(pid, 0)
                 print "Blobrestore daemon is running with pid %d" %pid
             except:
