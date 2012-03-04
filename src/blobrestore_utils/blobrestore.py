@@ -420,9 +420,12 @@ class BlobrestoreDispatcher:
 
         filename = "%s_restore_ID%d.job" %(self.options['game_id'],
                 self.options['job_id'])
-        f = open(filename, 'wb')
-        pickle.dump(self.node_job, f)
-        f.close()
+        try:
+            f = open(filename, 'wb')
+            pickle.dump(self.node_job, f)
+            f.close()
+        except:
+            sys.exit("Unable to write file %s" %filename)
         return filename
 
     def _load_job_file(self):
@@ -430,9 +433,13 @@ class BlobrestoreDispatcher:
         Load job information from config file
         """
         filename = self.options['job_config']
-        f = open(filename, 'rb')
-        self.node_job = pickle.load(f)
-        f.close()
+        try:
+            f = open(filename, 'rb')
+            self.node_job = pickle.load(f)
+            f.close()
+        except:
+            sys.exit("Invalid job file %s" %filename)
+
         self.job_id = self.node_job[0].job_id
         self.options['game_id'] = self.node_job[0].game_id
         self.options['job_id'] = self.node_job[0].job_id
