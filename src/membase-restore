@@ -150,7 +150,7 @@ class Restore:
         self.logger.log("Executing command %s" %ls_cmd)
         status, output = self.getstatusoutput(ls_cmd)
 	if status !=0:
-            self.logger.log("FAILED: %s" %output)
+            self.logger.log("FAILED: Listing files failed for %s (%s)" %(s3path, output))
             return False
 	else:
             lines = output.split('\n')
@@ -197,7 +197,7 @@ class Restore:
                 break
 
 	if status > 0:
-            self.logger.log("FAILED: %s" %output)
+            self.logger.log("FAILED: Downloading file %s failed (%s)" %(s3path, output))
             return False
         else:
             self.logger.log("SUCCESS: Completed downloading file %s to %s (retries=%d)" %(s3path, filepath, i))
