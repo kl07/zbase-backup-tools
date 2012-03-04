@@ -281,7 +281,7 @@ class Job:
                 else:
                     self.log("No backups found")
             else:
-                self.log("Downloading backup list failed")
+                self.log("No backups found")
 
             rt = Thread(target=self.restore_process)
             rt.daemon = True
