@@ -414,6 +414,7 @@ class BlobrestoreManager:
                         j.job_file_path = jobpath
                 except Exception, e:
                     log("Error occured: %s" %str(e))
+                    os.unlink(jobpath)
                     continue
 
             time.sleep(5)
