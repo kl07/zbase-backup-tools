@@ -346,6 +346,14 @@ class Restore:
                         if not (last_checkpoint == checkpoints[-1] or last_checkpoint - 1 == checkpoints[-1]):
                             self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
                             self.exit(1)
+                    else:
+                        try:
+                            f = open(consts.LAST_CHECKPOINT_FILE, 'w')
+                            f.write(str(checkpoints[-1]))
+                            f.close()
+                        except Exception, e:
+                            self.logger.log("FAILED: Unable to write last_checkpoint file (%s)" %str(e))
+                            self.exit(1)
 
                     last_checkpoint = checkpoints[0]
                     self.logger.log("Checkpoints in the current backup-file %s : %s" %(backup_file, str(checkpoints)))
