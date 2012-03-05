@@ -489,7 +489,7 @@ class BlobrestoreDispatcher:
                     status_dict['restored'] += status['restored']
                     status_dict['remaining'] += status['remaining']
                     if status['status'] != 'complete':
-                        status_dict['status'] = 'onprogress'
+                        status_dict['status'] = 'in-progress'
                 else:
                     status_dict['status'] = 'Not all nodejobs scheduled'
             else:

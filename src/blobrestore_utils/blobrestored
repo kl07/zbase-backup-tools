@@ -452,7 +452,7 @@ class BlobrestoreManager:
                         nodejobs.remove(njt)
                         del njt
                     else:
-                        f.write('%d %d %d onprogress' %nj_status)
+                        f.write('%d %d %d in-progress' %nj_status)
 
                     f.close()
 
