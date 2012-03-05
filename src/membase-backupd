@@ -501,6 +501,13 @@ class BackupProcess:
         return True
 
     def mainloop(self):
+        if self.first_master_backup:
+            for b in self.free_buffer_list.queue:
+                try:
+                    os.system("rm -rf %s/*" %b)
+                except Exception, e:
+                    self.logger.log("FAILED: Unable to clear buffers (%s)" %str(e))
+
         self.resume_process()
         backup_thread = Thread(target=self.backup_process_thread)
         upload_thread = Thread(target=self.upload_process_thread)
