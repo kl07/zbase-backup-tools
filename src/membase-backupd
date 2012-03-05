@@ -364,6 +364,7 @@ class BackupProcess:
                     files = filter(lambda x: x.strip()!='', o.split('\n'))
                     if files != []:
                         self.logger.log("FAILED: Master s3 directory s3://%s not empty" %backup_dir)
+                        self.logger.log("FAILED: Please clear the directory and retry full backup")
                         self.exit(1)
 
                 else:

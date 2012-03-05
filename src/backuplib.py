@@ -114,6 +114,7 @@ def create_backup_db(backup_file_name, max_backup_size, split_backup, deduplicat
         db_page_size = db.execute("pragma page_size").fetchone()[0]
         db_max_page_count = max_backup_size / db_page_size
         db.execute("pragma max_page_count=%d" % (db_max_page_count))
+        db.execute("pragma journal_mode=MEMORY")
     return db
 
 
