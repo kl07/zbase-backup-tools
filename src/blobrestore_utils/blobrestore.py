@@ -11,6 +11,7 @@ import commands
 import logging
 import tempfile
 import sqlite3
+import datetime
 
 PYTHON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../')
 SSH_KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'blobrestore_sshkey')
@@ -42,7 +43,7 @@ def download_file(s3path, localpath):
         try:
             if 'Error' in open(localpath).read():
                 status = 1
-        except:
+        except Exception, e:
             status = 2
     else:
         status = 2
@@ -174,6 +175,15 @@ def parse_args(args):
                     options['shard_count'] = int(a)
                 elif o == '-d':
                     options['restore_date'] = a
+                    try:
+                        year, month, day = map(lambda x: int(x), a.split('-'))
+                        restore_date = datetime.date(year, month, day)
+                        today = datetime.date.today()
+                        if restore_date > today:
+                            usage("ERROR: Trying to restore from future date")
+                    except Exception, e:
+                        usage("ERROR: Invalid date specified")
+
                 elif o == '-g':
                     options['game_id'] = a
                     if len(a.split('-')) != 2:
@@ -189,8 +199,8 @@ def parse_args(args):
                     options['check_master_backup'] = True
                 elif o == '-h':
                     usage()
-        except:
-            usage("Invalid arguments")
+        except Exception, e:
+            usage("Invalid arguments (%s)" %str(e))
 
     elif options['command'] == 'restore-server':
         if len(args) < 4:
