@@ -16,20 +16,16 @@ import getopt
 import datetime
 import fnmatch
 import multiprocessing
+from multiprocessing import Process, Value, Array
 import re
 import time
 import pdb
 
-DAY_EPOCH = 60*60*24
-PID_FILE = '/var/run/master_merge.pid'
-
-def epoch2date(epoch):
-    lt = time.localtime(epoch)
-    return time.strftime('%Y-%m-%d',lt)
+PID_FILE = '/var/run/merge.pid'
 
 class MasterMerge(multiprocessing.Process):
 
-    def __init__(self, pathname=None):
+    def __init__(self, pathname=None, token=None):
         multiprocessing.Process.__init__(self)
 
     def run(self):
@@ -46,7 +42,7 @@ class MasterMerge(multiprocessing.Process):
         self.game_id = self.config.game_id
         now=datetime.datetime.now()
         self.now = now
-        self.timestamp = "%d-%d-%d_%d:%d:%d" %(now.year,now.month,now.day,now.hour,now.minute,now.second)
+        self.timestamp = "%d-%02d-%02d_%02d:%02d:%02d" %(now.year,now.month,now.day,now.hour,now.minute,now.second)
         #get host name from the disk path
         status,output = commands.getstatusoutput("ls %s/" %pathname)
         if status != 0:
@@ -54,6 +50,10 @@ class MasterMerge(multiprocessing.Process):
             return
 
         hosts = output.split()
+        if len(hosts) == 0:
+            self.logger.log(" No directories to process in path %s" %pathname)
+            return
+
         for hostname in hosts:
             #hostname = "pritish-inc-backup-test-002"
             self.scratch_dir = "/dev/shm/master-%s" %hostname
@@ -144,6 +144,8 @@ class MasterMerge(multiprocessing.Process):
 
             os.system("rm -rf %s" %self.scratch_dir)
 
+        #increment token to allow another process to continue
+        token.value += 1
         return
 
     def start_merge(self, master_location, master_directory, merge_list, dir_list):
@@ -165,18 +167,16 @@ class MasterMerge(multiprocessing.Process):
             return True
 
         while i < total_lines:
-            cp_cmd1 = "cp -f %s %s" %(merge_list[i], incr_backup1)
-            cp_cmd2 = "cp -f %s %s" %(merge_list[i+1], incr_backup2)
+            cp_cmd1 = "dd if=%s of=%s iflag=direct bs=4096K" %(merge_list[i], incr_backup1)
+            cp_cmd2 = "dd if=%s of=%s iflag=direct bs=4096K" %(merge_list[i+1], incr_backup2)
             cp_cmd3 = ""
             i+=2
             #odd number of files
             if total_lines%2 and (i+1) == total_lines:
                 incr_backup3 = "%s/backup-003.mbb" %self.scratch_dir
-                cp_cmd3 = "cp -f %s %s" %(merge_list[i], incr_backup3)
+                cp_cmd3 = "dd if=%s of=%s iflag=direct bs=4096K" %(merge_list[i], incr_backup3)
                 i+=1
 
-            print cp_cmd1
-            print cp_cmd2
             try:
                 os.system(cp_cmd1)
                 os.system(cp_cmd2)
@@ -184,7 +184,7 @@ class MasterMerge(multiprocessing.Process):
                     os.system(cp_cmd3)
 
             except:
-                self.logger.log("Failed. Unable to copy to scratch space")
+                self.logger.log("Failed. Unable to copy to scratch spacei %s" %self.scratch_dir)
                 return False
 
 
@@ -193,8 +193,6 @@ class MasterMerge(multiprocessing.Process):
             else:
                 merge_cmd = " %s -o %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2)
 
-            print merge_cmd
-
             #self.logger.log(" executing command %s" %merge_cmd)
             status, output = commands.getstatusoutput(merge_cmd)
             if status != 0:
@@ -202,10 +200,12 @@ class MasterMerge(multiprocessing.Process):
                 os.system("rm -f %s*" %output_file)
                 return False
 
+            self.logger.log("Info. Progress %d/%d for %s" %(i, total_lines, output_file))
+
         t_end = time.time()
 
         # merge was successfull
-        self.logger.log ("Info. Merge complete. Took %d sec " %(t_end - t_start))
+        self.logger.log ("Info. Merge complete for %s. Took %d sec " %(output_file, (t_end - t_start)))
 
         file_size = os.path.getsize(output_file) / (1024 * 1024)
 
@@ -222,7 +222,7 @@ class MasterMerge(multiprocessing.Process):
 
             ts_end = time.time()
 
-            self.logger.log("Info. Split complete. Took %d sec. Total %d sec" %((ts_end - ts_start),(ts_end - t_start)))
+            self.logger.log("Info. Split complete for %s. Took %d sec. Total %d sec" %(output_file, (ts_end - ts_start),(ts_end - t_start)))
 
             #delete the original merged file
             os.system("rm -f %s" %output_file)
@@ -269,11 +269,17 @@ if __name__ == '__main__':
         sys.exit(1)
 
     jobs = []
+    token = Value('i', 3)
 
     for i in range(7):
         pathname = "/data_%d" %(i+1)
         #pathname = "/data_3"
-        merge = MasterMerge(pathname)
+        while token.value == 0:
+            #wait until a token is available
+            time.sleep(60)
+
+        merge = MasterMerge(pathname, token)
+        token.value -= 1
         jobs.append(merge)
         merge.start()
 
