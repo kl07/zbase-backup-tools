@@ -8,6 +8,7 @@ import random
 import pickle
 import os
 import commands
+import signal
 import logging
 import tempfile
 import sqlite3
@@ -20,6 +21,10 @@ sys.path.insert(0, PYTHON_PATH)
 import consts
 from mc_bin_client import MemcachedClient
 from util import getcommandoutput
+
+def exit(*x):
+    print "Exiting the blobrestore driver"
+    sys.exit(1)
 
 def init_logger():
     global logger
@@ -561,6 +566,7 @@ class BlobrestoreDispatcher:
                 restored_key = ks.read()
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, exit)
     if os.getuid() != 0:
         print "Please run as root"
         sys.exit(1)
