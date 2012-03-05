@@ -463,7 +463,7 @@ class BlobrestoreDispatcher:
             j.write_to_file()
             rv = j.push_to_node()
             if not rv:
-                self.exit("FAILED: Pushing job to node:%s failed" %j.ipaddr)
+                log("FAILED: Pushing job to node:%s failed" %j.ipaddr)
         batch_jobfile = self._create_batchjob_file()
         log("Created Blobrestore job - Job reference file is %s" %batch_jobfile)
 
