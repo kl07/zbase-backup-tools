@@ -355,6 +355,17 @@ class BackupProcess:
                     self.first_master_backup = False
                     full_backup = True
                     dot_done = True
+                    ls_cmd = "%s ls s3://%s/" %(consts.PATH_S3CMD_EXEC, backup_dir)
+                    s,o = self.getstatusoutput(ls_cmd)
+                    if s > 0:
+                        self.logger.log("FAILED: Execution %s" %ls_cmd)
+                        self.exit(1)
+
+                    files = filter(lambda x: x.strip()!='', o.split('\n'))
+                    if files != []:
+                        self.logger.log("FAILED: Master s3 directory s3://%s not empty" %backup_dir)
+                        self.exit(1)
+
                 else:
                     last_checkpoint = 0
                     if os.path.exists(consts.LAST_CHECKPOINT_FILE):
