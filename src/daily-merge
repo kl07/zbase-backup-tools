@@ -20,12 +20,7 @@ import re
 import time
 import pdb
 
-DAY_EPOCH = 60*60*24
-PID_FILE = '/var/run/merge_wrap.pid'
-
-def epoch2date(epoch):
-    lt = time.localtime(epoch)
-    return time.strftime('%Y-%m-%d',lt)
+PID_FILE = '/var/run/merge.pid'
 
 class DailyMerge(multiprocessing.Process):
 
@@ -46,7 +41,7 @@ class DailyMerge(multiprocessing.Process):
         self.game_id = self.config.game_id
         now=datetime.datetime.now()
         self.now = now
-        self.timestamp = "%d-%d-%d_%d:%d:%d" %(now.year,now.month,now.day,now.hour,now.minute,now.second)
+        self.timestamp = "%d-%02d-%02d_%02d:%02d:%02d" %(now.year,now.month,now.day,now.hour,now.minute,now.second)
 
         #get host name from the disk path
         status,output = commands.getstatusoutput("ls %s/" %pathname)
@@ -86,7 +81,7 @@ class DailyMerge(multiprocessing.Process):
         old_done_files = "%s/done-*" %(incr_location)
         os.system(" rm -f %s" %old_done_files)
 
-	manifest_file = "%s/manifest.del" %incr_location
+        manifest_file = "%s/manifest.del" %incr_location
 
         if os.path.isfile(manifest_file):
             #means that .lock exists
@@ -116,7 +111,7 @@ class DailyMerge(multiprocessing.Process):
         for line in lines:
             listmbb = "%s %s" %(listmbb, line)
         output_location = "%s/daily/%d-%02d-%02d" %(location, self.now.year, self.now.month, self.now.day)
-        self.logger.log("Executing command: mkdir -p  %s" %output_location)
+        #self.logger.log("Executing command: mkdir -p  %s" %output_location)
         os.system("mkdir -p %s" %output_location)
         # remove any existing merged files in this location
         os.system("rm -f %s/*.mbb" %output_location)
@@ -137,9 +132,9 @@ class DailyMerge(multiprocessing.Process):
 
         while i < total_lines:
             cp_cmd1 = "cp -f %s %s" %(lines[i], incr_backup1)
-	    self.logger.log("Executing command: cp -f %s %s" %(lines[i], incr_backup1))
+            #self.logger.log("Executing command: cp -f %s %s" %(lines[i], incr_backup1))
             cp_cmd2 = "cp -f %s %s" %(lines[i+1], incr_backup2)
-	    self.logger.log("Executing command: cp -f %s %s" %(lines[i+1], incr_backup2))
+            #self.logger.log("Executing command: cp -f %s %s" %(lines[i+1], incr_backup2))
             cp_cmd3 = ""
             i+=2
             #odd number of files
@@ -164,7 +159,7 @@ class DailyMerge(multiprocessing.Process):
             else:
                 merge_cmd = " %s -vv -o %s %s %s" %(consts.PATH_MBMERGE_EXEC, output_file, incr_backup1, incr_backup2)
 
-            self.logger.log(" executing command %s" %merge_cmd)
+            #self.logger.log(" executing command %s" %merge_cmd)
             status, output = commands.getstatusoutput(merge_cmd)
 
             if status != 0:
@@ -175,14 +170,14 @@ class DailyMerge(multiprocessing.Process):
         t_end = time.time()
 
         # merge was successfull
-        self.logger.log ("Info. Merge complete. Took %d sec " %(t_end - t_start))
+        self.logger.log ("Info. Merge complete for %s. Took %d sec " %(output_file, (t_end - t_start)))
         #split the backup file into 1GB chunks
         file_size = os.path.getsize(output_file) / (1024 * 1024)
 
         if file_size > consts.SPLIT_SIZE:
             split_file_name = "%s/daily-%s" %(output_location, self.timestamp) + '-%.mbb'
             split_cmd = "%s -o %s -s %s %s" %(consts.PATH_MBMERGE_EXEC, split_file_name, consts.SPLIT_SIZE, output_file)
-            self.logger.log("Info: Executing split command %s "%split_cmd)
+            #self.logger.log("Info: Executing split command %s "%split_cmd)
             ts_start = time.time()
             status, output = commands.getstatusoutput(split_cmd)
             if status != 0:
@@ -192,7 +187,7 @@ class DailyMerge(multiprocessing.Process):
 
             ts_end = time.time()
 
-            self.logger.log("Info. Split complete. Took %d sec. Total %d sec" %((ts_end - ts_start),(ts_end - t_start)))
+            self.logger.log("Info. Split complete for %s. Took %d sec. Total %d sec" %(output_file, (ts_end - ts_start),(ts_end - t_start)))
 
             #delete the original merged file
             os.system("rm -f %s" %output_file)
@@ -224,6 +219,9 @@ class DailyMerge(multiprocessing.Process):
             self.logger.log("Failed to add .done file to %s" %output_location)
 
         self.logger.log(" Sucess: Merged file created successfully %s" %output_file)
+
+        # cleanup scratch directory
+        os.system("rm -rf %s" %self.scratch_dir)
 
         return True
 
