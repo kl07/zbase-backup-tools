@@ -114,9 +114,7 @@ def merge_incremental_backup_files(backup_files, single_output_file):
                               "source, updated_at FROM cpoint_state " \
                               "WHERE state = \"closed\"")
             checkpoint_states = bd_cursor.fetchall()
-            checkpoint_states.sort()
             copy_checkpoint_state_records(checkpoint_states, output_db)
-            checkpoint_states = [checkpoint_states[-1]]
 
             op_records = []
             ## Insert checkpoint_operation records into the output db file.
@@ -219,7 +217,9 @@ def split_single_merged_db_file(single_output_file, split_output_file, max_db_si
         md_cursor.execute("select vbucket_id, cpoint_id, prev_cpoint_id, state, source, updated_at " \
                           "from cpoint_state")
         checkpoint_states = md_cursor.fetchall()
+        checkpoint_states.sort()
         copy_checkpoint_state_records(checkpoint_states, split_db)
+        checkpoint_states = [checkpoint_states[-1]]
 
         op_records = []
         ## Copy checkpoint_operation records into the multiple split database files.
