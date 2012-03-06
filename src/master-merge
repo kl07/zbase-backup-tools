@@ -20,6 +20,7 @@ from multiprocessing import Process, Value, Array
 import re
 import time
 import pdb
+import glob
 
 PID_FILE = '/var/run/merge.pid'
 
@@ -67,77 +68,42 @@ class MasterMerge(multiprocessing.Process):
                 continue
 
             os.system("rm -f %s/*.mbb" %master_directory)
-
-            #get a list of daily backup fils that need to be merged
-            daily_location = "%s/daily" %location
-            status,output = commands.getstatusoutput("ls %s/" %daily_location)
-            if status != 0:
-                self.logger.log (" Failed: No daily directories found %s" %daily_location)
-                continue
-
-            daily_dirs = output.split()
+            found_master = False
             merge_list = []
-            dir_list = []
-            for dirs in daily_dirs:
-                #if a done file is present in this location. skip it
-                daily_done = "%s/%s/done" %(daily_location,dirs)
-                dirs = "%s/%s" %(daily_location,dirs)
-                if os.path.isfile(daily_done) == 0:
-                    #now get the mbb files in this location and add it to the list of files to be merged
-                    status,output = commands.getstatusoutput("ls %s/*.mbb" %dirs)
-                    if status != 0:
-                        self.logger.log(" Warning :No backupfiles found in this directory %s" %dirs)
-                    else:
-                        dir_list.append(dirs)
-                        files = output.split()
-                        for file in files:
-                            merge_list.append(file)
+            datetime_object = datetime.date.today()
+            for i in range(consts.MAX_BACKUP_LOOKUP_DAYS+1):
+                difference = datetime.timedelta(days=-(i))
+                datestamp = (datetime_object + difference).strftime('%Y-%m-%d')
+                path = os.path.join(location, consts.MASTER_DIRNAME, datestamp)
+                if os.path.exists(os.path.join(path, ".done")):
+                    master_list = glob.glob("%s/*.mbb" %path)
+                    if len(master_list) > 0:
+                        found_master = True
 
-            master_merge_list = []
-            # now locate the master backup file that needs merging
-            status,output = commands.getstatusoutput("ls %s/" %master_location)
-            if status != 0:
-                self.logger.log (" Warning: No master directories found in %s" %master_location)
-                # create the master directory
-                os.system("mkdir -p %s" %master_location)
+                path = os.path.join(location, consts.PERIODIC_DIRNAME, datestamp)
+                if os.path.exists(os.path.join(path, ".done")):
+                    periodic_list = glob.glob("%s/*.mbb" %path)
+                    periodic_list.sort()
+                    periodic_list.reverse()
+                    merge_list.extend(periodic_list)
 
-            else :
-                daily_dirs = output.split()
-                for dirs in daily_dirs:
-                    #if a done file is present in this location. skip it
-                    daily_done = "%s/%s/done" %(master_location,dirs)
-                    dirs = "%s/%s" %(master_location,dirs)
-                    if os.path.isfile(daily_done) == 0:
-                        #now get the mbb files in this location and add it to the list of files to be merged
-                        status,output = commands.getstatusoutput("ls %s/*.mbb" %dirs)
-                        if status != 0:
-                            self.logger.log(" Warning :No backupfiles found in this directory %s" %dirs)
-                        else:
-                            dir_list.append(dirs)
-                            files = output.split()
-                            for file in files:
-                                master_merge_list.append(file)
+                if found_master:
+                    break
 
-            if master_merge_list == []:
-                self.logger.log(" No master backupfile found for host %s" %hostname)
+            if found_master:
+                master_list.sort()
+                master_list.reverse()
+                merge_list.extend(master_list)
+            else:
+                self.logger.log("No master backupfile found for host %s" %hostname)
                 continue
 
-            merge_list.sort()
-            merge_list.reverse()
-            master_merge_list.sort()
-            master_merge_list.reverse()
+            #self.logger.log("Going to merge files:")
+            #for f in merge_list:
+            #    self.logger.log("File: %s" %f)
 
 
-            for line in master_merge_list:
-                merge_list.append(line)
-
-            #merge_list = master_merge_list
-
-            if merge_list == [] or dir_list == []:
-                self.logger.log(" Failed: empty merge list or dir list for host %s" %hostname)
-                continue
-
-            status = self.start_merge(master_location, master_directory, merge_list, dir_list)
+            status = self.start_merge(master_location, master_directory, merge_list)
             status = True
             if status == False:
                 self.logger.log(" Failed to create daily merged backup for hostname %s" %hostname)
@@ -148,8 +114,7 @@ class MasterMerge(multiprocessing.Process):
         token.value += 1
         return
 
-    def start_merge(self, master_location, master_directory, merge_list, dir_list):
-
+    def start_merge(self, master_location, master_directory, merge_list):
 
         os.system("mkdir -p %s" %master_directory)
         output_file = "%s/master-%s.mbb" %(master_directory, self.timestamp)
@@ -226,16 +191,6 @@ class MasterMerge(multiprocessing.Process):
 
             #delete the original merged file
             os.system("rm -f %s" %output_file)
-
-
-        #create a done file in all the directories that have been processed
-        #ensure that the dir list doesn't contain the current master backup directory
-        for dir in dir_list:
-            if dir != master_directory:
-                done_file = "%s/done" %dir
-                status = os.system("touch %s" %done_file)
-                if status != 0:
-                    self.logger.log("Failed: to create done file %s" %done_file)
 
         #add a .done file to the output directory
         try:

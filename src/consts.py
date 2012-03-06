@@ -35,6 +35,6 @@ SYSLOG_TAG_BLOBRESTORE = 'blobrestore'
 BLOBRESTORE_DAEMON_LOG = '/var/log/blobrestore_daemon.log'
 BACKUP_ARRAY_IPLIST = 'zynga-membase:sysv/1.7.3/blobrestore_config'
 STORAGE_SERVER_ROOT = '/var/www/html/membase_backup'
-MAX_BACKUP_LOOKUP_DAYS = 10
+MAX_BACKUP_LOOKUP_DAYS = 21
 LAST_MASTER_BACKUP_TIME = '/db/last_master_backup'
 NAGIOS_BACKUP_TIME = '/tmp/nagios_state/mb_backup_time'
