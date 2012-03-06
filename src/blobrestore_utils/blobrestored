@@ -127,6 +127,11 @@ class NodeJobTracker:
             except:
                 pass
             self.nodejob_ref = None
+	    nj_status = self.get_status()
+	    nj_status = nj_status[:-1]
+	    f = open(os.path.join(self.dirpath, 'status'), 'w')
+	    f.write('%d %d %d in-progress' %nj_status)
+	    f.close()
         self.lock.release()
 
     def log(self, msg):
@@ -345,6 +350,7 @@ class BlobrestoreWorker(Thread):
         log("Starting BlobrestoreWorker #%d" %self.worker_id)
         self.global_job_queue = global_job_queue
         self.current_job = None
+        self.daemon = True
 
     def run(self):
         while True:
