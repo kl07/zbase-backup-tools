@@ -55,11 +55,16 @@ class Restore:
         self.download_queue = Queue.Queue()
         self.file_count = 0
 
+        backup_process = self
         class stderrlog(object):
-            def __init__(self, logger):
-                self.logger = logger
+            def __init__(self, backup_process):
+                self.parent = backup_process
+
             def write(self, err):
-                self.logger.log("FAILED: %s" %err)
+                self.parent.logger.log("FAILED: %s" %err)
+                self.parent.exit(1)
+
+        sys.stderr = stderrlog(backup_process)
 
         sys.stderr = stderrlog(self.logger) 
         for b in buffer_list:

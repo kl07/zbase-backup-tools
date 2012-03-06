@@ -45,13 +45,16 @@ class BackupProcess:
             self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
             self.exit(1)
 
+        backup_process = self
         class stderrlog(object):
-            def __init__(self, logger):
-                self.logger = logger
-            def write(self, err):
-                self.logger.log("FAILED: %s" %err)
+            def __init__(self, backup_process):
+                self.parent = backup_process
 
-        sys.stderr = stderrlog(self.logger)
+            def write(self, err):
+                self.parent.logger.log("FAILED: %s" %err)
+                self.parent.exit(1)
+
+        sys.stderr = stderrlog(backup_process)
         try:
             self.hostname = socket.gethostname()
             raw_buffer_list = self.config.buffer_list.split(',')
@@ -467,9 +470,9 @@ class BackupProcess:
             except Exception, e:
                 self.logger.log(str(e))
                 self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
-                for b,f in bf_instance.list_splits():
-                    self._remove_file(f)
-                    self._ss_remove_file(buffer_path, f)
+                split_file = bf_instance.get_current_split()
+                if split_file:
+                    self._remove_file(split_file)
                 self.exit(1)
 
         checkpoints.sort()

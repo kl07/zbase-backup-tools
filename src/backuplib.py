@@ -129,6 +129,7 @@ class BackupFactory:
         self.backup_type = backup_type
         self.logger = logger
         self.split_no = 0
+        self.current_split = None
         self.split_backup_files = []
         self.full_backup = False
         self.backfill_chk_start = False
@@ -186,6 +187,9 @@ class BackupFactory:
 
     def list_splits(self):
         return self.split_backup_files
+
+    def get_current_split(self):
+        return self.current_split
        
     def create_next_split(self, buffer_path):
         if self.complete:
@@ -194,6 +198,7 @@ class BackupFactory:
         commits_count = 0
 
         filepath = self._get_next_file(buffer_path)
+        self.current_split = filepath
         if os.path.exists(filepath):
             raise Exception("File already exists")
         else:
