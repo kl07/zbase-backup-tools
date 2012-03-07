@@ -175,7 +175,7 @@ class DailyMerge(multiprocessing.Process):
         file_size = os.path.getsize(output_file) / (1024 * 1024)
 
         if file_size > consts.SPLIT_SIZE:
-            split_file_name = "%s/daily-%s" %(output_location, self.timestamp) + '-%.mbb'
+            split_file_name = "%s/backup-%s" %(output_location, self.timestamp) + '-%.mbb'
             split_cmd = "%s -o %s -s %s %s" %(consts.PATH_MBMERGE_EXEC, split_file_name, consts.SPLIT_SIZE, output_file)
             #self.logger.log("Info: Executing split command %s "%split_cmd)
             ts_start = time.time()
