@@ -18,6 +18,7 @@ import fnmatch
 import multiprocessing
 import re
 import time
+import glob
 import pdb
 
 PID_FILE = '/var/run/merge.pid'
@@ -261,9 +262,8 @@ class DailyMerge(multiprocessing.Process):
         return True
 
     def check_lock(self, location, create_manifest=False, listmbb=None, manifest_file=None):
-        lock_file = location + "/.lock"
-        status = os.path.isfile(lock_file)
-        if status == True:
+        locks = glob.glob("%s/.lock-*" %location)
+        if len(locks):
             self.logger.log("WARNING: .lock file present. Skipping delete")
             #create a manifest file at this location
             if create_manifest == True and listmbb != None:
