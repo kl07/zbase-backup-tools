@@ -192,6 +192,15 @@ class DailyMerge(multiprocessing.Process):
             #delete the original merged file
             os.system("rm -f %s" %output_file)
 
+        else:
+            split_file_name = "%s/backup-%s" %(output_location, self.timestamp)+ '-00000.mbb'
+            try:
+                s = os.system("mv %s %s" %(output_file, split_file_name))
+                if s > 0:
+                    raise Exception
+            except:
+                self.logger.log("Failed to move file %s to %s" %(output_file, split_file_name))
+
         # delete all the incremental files we just merged if no lock is present
         manifest_file = "%s/manifest.del" %incr_location
         status = self.check_lock(incr_location, True, listfiles, manifest_file)

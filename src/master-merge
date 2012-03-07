@@ -192,6 +192,16 @@ class MasterMerge(multiprocessing.Process):
             #delete the original merged file
             os.system("rm -f %s" %output_file)
 
+        else:
+            split_file_name = "%s/backup-%s" %(master_directory, self.timestamp)+ '-00000.mbb'
+            try:
+                s = os.system("mv %s %s" %(output_file, split_file_name))
+                if s > 0:
+                    raise Exception
+            except:
+                self.logger.log("Failed to move file %s to %s" %(output_file, split_file_name))
+
+
         #add a .done file to the output directory
         try:
             os.system("touch %s/.done" %master_directory)
