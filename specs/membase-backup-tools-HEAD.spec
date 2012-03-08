@@ -1,3 +1,5 @@
+#Membase backup tools 1.0 - commit ID: d317bce19848838ba21e5600dde12102e5f9adba
+
 Summary: Membase 1.7.3 backup and restore tools 
 Name: membase-backup-tools
 Version: 1.0
