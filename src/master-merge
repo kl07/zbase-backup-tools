@@ -118,7 +118,6 @@ class MasterMerge(multiprocessing.Process):
 
         os.system("mkdir -p %s" %master_directory)
         output_file = "%s/master-%s.mbb" %(master_directory, self.timestamp)
-        self.logger.log(" Info. starting merge for location %s" %master_location)
 
         incr_backup1 = "%s/backup-001.mbb" %self.scratch_dir
         incr_backup2 = "%s/backup-002.mbb" %self.scratch_dir
@@ -127,19 +126,20 @@ class MasterMerge(multiprocessing.Process):
         i = 0
 
         total_lines = len(merge_list)
+        self.logger.log(" Info. starting merge for location %s. Files to merge %d" %(master_location, total_lines))
         if total_lines < 2:
             self.logger.log("Info: Too few files to merge. ")
             return True
 
         while i < total_lines:
-            cp_cmd1 = "dd if=%s of=%s iflag=direct bs=4096K" %(merge_list[i], incr_backup1)
-            cp_cmd2 = "dd if=%s of=%s iflag=direct bs=4096K" %(merge_list[i+1], incr_backup2)
+            cp_cmd1 = "dd if=%s of=%s iflag=direct bs=4096K >& /dev/null" %(merge_list[i], incr_backup1)
+            cp_cmd2 = "dd if=%s of=%s iflag=direct bs=4096K >& /dev/null" %(merge_list[i+1], incr_backup2)
             cp_cmd3 = ""
             i+=2
             #odd number of files
             if total_lines%2 and (i+1) == total_lines:
                 incr_backup3 = "%s/backup-003.mbb" %self.scratch_dir
-                cp_cmd3 = "dd if=%s of=%s iflag=direct bs=4096K" %(merge_list[i], incr_backup3)
+                cp_cmd3 = "dd if=%s of=%s iflag=direct bs=4096K >& /dev/null" %(merge_list[i], incr_backup3)
                 i+=1
 
             try:
@@ -236,12 +236,19 @@ if __name__ == '__main__':
     jobs = []
     token = Value('i', 3)
 
-    for i in range(7):
-        pathname = "/data_%d" %(i+1)
+    today=datetime.datetime.date(datetime.datetime.now())
+    parition = today.strftime("%w")
+
+    pathname = "/data_%s" %parition
+    print "Operating on parition %s" %pathname
+
+
+    for i in range(1):
+        #pathname = "/data_%d" %(i+1)
         #pathname = "/data_3"
-        while token.value == 0:
+        #while token.value == 0:
             #wait until a token is available
-            time.sleep(60)
+            #time.sleep(60)
 
         merge = MasterMerge(pathname, token)
         token.value -= 1
