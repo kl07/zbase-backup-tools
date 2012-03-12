@@ -237,9 +237,11 @@ if __name__ == '__main__':
     token = Value('i', 3)
 
     today=datetime.datetime.date(datetime.datetime.now())
-    parition = today.strftime("%w")
+    partition = today.strftime("%w")
 
-    pathname = "/data_%s" %parition
+    part_no = int(partition) + 1
+
+    pathname = "/data_%s" %part_no
     print "Operating on parition %s" %pathname
 
 
