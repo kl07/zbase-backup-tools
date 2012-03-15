@@ -271,6 +271,7 @@ class Restore:
             master_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.MASTER_DIRNAME, date), False)
             if len(master_backup_list):
                 self.logger.log("Found master backup for date, %s" %epoch2date(master_backup_epoch))
+                master_backup_epoch += DAY_EPOCH
                 break
             else:
                 master_backup_epoch -= DAY_EPOCH
