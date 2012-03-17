@@ -37,7 +37,6 @@ class Operation {
     size_t blob_size;
     size_t key_size;
     size_t op_size;
-    size_t size;
 
 public:
 

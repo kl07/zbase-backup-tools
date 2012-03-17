@@ -28,6 +28,7 @@ static const int val_idx = 6;
 static const int cpoint_idx = 7;
 static const int seq_idx = 8;
 
+// Queries
 const char *backup_schema = 
         "BEGIN; "
         "CREATE TABLE IF NOT EXISTS cpoint_op" 
@@ -67,9 +68,6 @@ Operation::Operation(uint32_t exp_val, char *key_val, int key_size_val, char *op
     memcpy(key, key_val, key_size);
     memcpy(op, op_val, op_size);
     memcpy(blob, blob_val, blob_size);
-
-    size = key_size + op_size + blob_size + sizeof(uint16_t) + sizeof(uint32_t)*3
-        + sizeof(uint64_t)*2 + sizeof(size_t)*4;
 }
 
 Operation::Operation(const Operation& operation):
@@ -83,7 +81,6 @@ Operation::Operation(const Operation& operation):
     memcpy(key, operation.key, key_size);
     memcpy(op, operation.op, op_size);
     memcpy(blob, operation.blob, blob_size);
-    size = operation.size;
 }
 
 Operation:: ~Operation() {
@@ -95,7 +92,6 @@ Operation:: ~Operation() {
 
 bool OutputStore::create_db_name(string &filename) {
     string tmp = output_file;
-    cout<<"##"<<tmp<<endl;
     size_t tpos = tmp.find("%");
     if (tpos > tmp.length()) {
         filename = tmp;
@@ -113,11 +109,11 @@ bool OutputStore::create_db_name(string &filename) {
 
 bool OutputStore::initialize_db(string name) {
     if (sqlite3_open(name.c_str(), &db) != SQLITE_OK) {
-        cout<<"Unable to open db "<<name<<endl;
+        cout<<"ERROR: Unable to open backup "<<name<<endl;
         exit(1);
     }
     else {
-        cout<<"Creating db - "<<name<<endl;
+        cout<<"Creating backup file - "<<name<<endl;
     }
 
     assert(sqlite3_exec(db, backup_schema, 0, 0, 0) == SQLITE_OK);
@@ -132,12 +128,11 @@ bool OutputStore::initialize_db(string name) {
 
 bool OutputStore::close_db() {
     sqlite3_stmt *stmt;
-    uint64_t cpoint_id;
+    uint64_t cpoint_id(0);
 
     if (db != NULL) {
         set <int>::iterator it;
         for (it=checkpoints.begin(); it!=checkpoints.end(); it++) {
-
             assert(sqlite3_prepare(db, insert_cstate, -1, &stmt, NULL) == SQLITE_OK);
             sqlite3_bind_int(stmt, 1, 0);
             sqlite3_bind_int(stmt, 2, (*it));
@@ -234,7 +229,7 @@ bool InputStore::read() {
     if (sqlite3_prepare_v2(db, read_query, strlen(read_query), &stmt, NULL) != SQLITE_OK) {
         (void) sqlite3_finalize(stmt);
         (void) sqlite3_close(db);
-        cout<<"Statement prepare failed"<<endl;
+        cout<<"ERROR: Reading from backup failed (sqlite prepare)"<<endl;
         return false;
     }
 
@@ -257,7 +252,7 @@ bool InputStore::read() {
             operations.push_back(op);
         }
         else if (rc != SQLITE_BUSY) {
-            cout<<"Sqlite error"<<endl;
+            cout<<"ERROR: Unable to read from backup (sqlite error)"<<endl;
             return false;
         }
     }
@@ -293,7 +288,9 @@ void Merge::process() {
     unsigned int s,e;
 
     while (f != source_files.end()) {
+#ifdef SHOW_TIME
         s = time(NULL);
+#endif
         cout<<"Processing file - "<<*f<<endl;
         InputStore is(*f);
         is.read();
@@ -311,8 +308,10 @@ void Merge::process() {
 
         f++;
 
+#ifdef SHOW_TIME
         e = time(NULL);
         cout<<"time = "<<e-s<<endl;
+#endif
     }
 
 
@@ -329,7 +328,7 @@ bool Merge::walk_files(list <string> &files, bool validate) {
     for (it=files.begin(); it!=files.end(); it++) {
         assert(sqlite3_open((*it).c_str(), &tmp_db) == SQLITE_OK);
         if (sqlite3_prepare_v2(tmp_db, cpoint_read, strlen(cpoint_read), &stmt, NULL) != SQLITE_OK) {
-            cout<<"Statement prepare failed"<<endl;
+            cout<<"ERROR: Unable to open file "<<(*it)<<endl;
             return false;
         }
 
@@ -341,7 +340,7 @@ bool Merge::walk_files(list <string> &files, bool validate) {
                 checkpoints.insert(t);
             }
             else if (rc != SQLITE_BUSY) {
-                cout<<"Sqlite error"<<endl;
+                cout<<"ERROR: Unable to read backup "<<(*it)<<endl;
                 return false;
             }
 
@@ -356,7 +355,7 @@ bool Merge::walk_files(list <string> &files, bool validate) {
             t = *(cpoint_list.begin());
             for (citr=cpoint_list.begin(); citr!=cpoint_list.end(); citr++) {
                 if (!(t == *(citr) || t == *(citr)+1)) {
-                    cout<<"File:"<<(*it)<<" missing checkpoint "<<t-1<<endl;
+                    cout<<"ERROR: Missing checkpoint "<<t-1<<" in "<<(*it)<<endl;
                     return false;
                 }
                 else {
@@ -371,7 +370,7 @@ bool Merge::walk_files(list <string> &files, bool validate) {
             }
             else {
                 if (!(cpoint_id == *(cpoint_list.begin()) || cpoint_id == *(cpoint_list.begin())+1)) {
-                    cout<<"File:"<<(*it)<<" last_file_cpoint_id:"<<cpoint_id<<" current_file_cpoint_id:"<<*(cpoint_list.begin())<<endl;
+                    cout<<"ERROR: Checkpoint mismatch in file "<<(*it)<<" last_file_cpoint_id:"<<cpoint_id<<" current_file_cpoint_id:"<<*(cpoint_list.begin())<<endl;
                     return false;
                 }
                 else {
@@ -424,7 +423,7 @@ int main(int argc, char **argv) {
     }
     
     if (required != 2) {
-        cout<<"Usage: "<<argv[0]<<" -i files.txt -o file.mbb [-s 512] [-v]"<<endl;
+        cout<<"Usage: "<<argv[0]<<" -i files.txt -o file-%.mbb [-s 512] [-v]"<<endl;
         exit(1);
     }
 
@@ -433,21 +432,21 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    cout<<"Input backup list:"<<endl;
+    cout<<"Merging backup files:"<<endl;
     ifs.open(inputfile.c_str(), fstream::in);
     while (ifs>>buffer) {   
         if (access(buffer.c_str(), R_OK)) {
-            cout<<"File "<<buffer<<" cannot be accessed"<<endl;
+            cout<<"ERROR: File "<<buffer<<" cannot be accessed"<<endl;
             exit(1);
         }
 
         files.push_back(buffer);
-        cout<<"File: "<<buffer<<endl;
+        cout<<buffer<<endl;
     }   
     cout<<endl;
 
-    Merge mobj(files, outputfile, split_size, validation);
-    mobj.process();
+    Merge merge(files, outputfile, split_size, validation);
+    merge.process();
 
     return 0;
 }
