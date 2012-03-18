@@ -98,6 +98,9 @@ def group_keys(key_file, shard_count):
             groups[index] = []
         groups[index].append(key)
 
+    if not len(groups.keys()):
+        sys.exit("No keys found in the keylist file")
+
     return groups
 
 def remote_filecopy(src_file, dest_file):
@@ -455,9 +458,13 @@ class BlobrestoreDispatcher:
         except:
             sys.exit("Invalid job file %s" %filename)
 
-        self.job_id = self.node_job[0].job_id
-        self.options['game_id'] = self.node_job[0].game_id
-        self.options['job_id'] = self.node_job[0].job_id
+        entries = self.node_job.keys()
+        if not len(entries):
+            sys.exit("Nodejobs not found in job file")
+
+        self.job_id = self.node_job[entries[0]].job_id
+        self.options['game_id'] = self.node_job[entries[0]].game_id
+        self.options['job_id'] = self.node_job[entries[0]].job_id
 
     def do_addjob(self):
         """
