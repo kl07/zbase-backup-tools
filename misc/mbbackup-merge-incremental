@@ -210,7 +210,7 @@ def split_single_merged_db_file(single_output_file, split_output_file, max_db_si
         merged_db = sqlite3.connect(single_output_file)
         merged_db.text_factory = str
         md_cursor = merged_db.cursor()
-        md_cursor.arraysize = 50000
+        md_cursor.arraysize = 10000
 
         ## Copy checkpoint_state records into the first split db.
         ## Note that the number of checkpoint_state records is usually small even in the merged db.
@@ -219,7 +219,6 @@ def split_single_merged_db_file(single_output_file, split_output_file, max_db_si
         checkpoint_states = md_cursor.fetchall()
         checkpoint_states.sort()
         copy_checkpoint_state_records(checkpoint_states, split_db)
-        checkpoint_states = [checkpoint_states[-1]]
 
         op_records = []
         ## Copy checkpoint_operation records into the multiple split database files.
