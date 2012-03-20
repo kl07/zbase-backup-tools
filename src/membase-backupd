@@ -227,8 +227,34 @@ class BackupProcess:
                 f = open(donepath, 'w')
                 f.write(' ')
                 f.close()
+
+                split_index = os.path.basename(backup_filepath)[:-10]+'.split'
+                root_path = buffer_path
+                if root_path[-1] == '/':
+                    root_path = root_path[:-1]
+                regex = re.compile('^%s/(.*)' %root_path)
+                s3_master_dir_suffix = regex.findall(basepath)[0]
+                s3master_dir = "s3://%s/" %s3_master_dir_suffix
+                status, output = self.getstatusoutput("%s ls %s" %(consts.PATH_S3CMD_EXEC, s3master_dir))
+                if status > 0:
+                    self.logger.log("FAILED: Listing files for creating split index")
+                    self.exit(1)
+
+                s3files = output.split()
+                split_index_path = os.path.join(basepath, split_index)
+                f = open(split_index_path, 'w')
+                for sf in s3files:
+                    fname = os.path.basename(sf)
+                    f.write('%s\n' %fname)
+                f.close()
+
                 status = self._upload_file(donepath, buffer_path, True)
                 self._remove_file(donepath)
+                if not status:
+                    self.exit(1)
+
+                status = self._upload_file(split_index_path, buffer_path, True)
+                self._remove_file(split_index_path)
                 if not status:
                     self.exit(1)
 
