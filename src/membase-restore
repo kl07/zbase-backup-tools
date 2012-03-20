@@ -7,6 +7,7 @@ import consts
 import sys
 import signal
 import socket
+import tempfile
 import Queue
 from threading import Thread
 from mc_bin_client import MemcachedClient
@@ -148,7 +149,7 @@ class Restore:
             self.logger.log("FAILED: Backup tap registration (%s)" %output)
             self.exit(1)
 
-    def _list_s3_files(self, s3path, complete=True):
+    def _list_s3_files(self, s3path, complete=True, only_index=False):
         exclude_list = []
         found_dot_done = False
         ls_cmd = "%s ls %s" %(consts.PATH_S3CMD_EXEC, s3path)
@@ -176,13 +177,20 @@ class Restore:
                     else:
                         exclude_lines = open('/tmp/manifest.del').readlines()
                         for l in exclude_lines:
-                            exclude_list.append(l.strip())
+                            exclude_list.append("%s%s" %(s3path, l.strip()))
 
             if complete == False:
                 complete = found_dot_done
 
-            mbb_files = filter(lambda x: x.endswith('.mbb'), files)
-            mbb_files = list(set(mbb_files) - set(exclude_list))
+            if only_index:
+                mbb_files = filter(lambda x: x.endswith('.split'), files)
+                #Remove the -00001.mbb from exclude list files and create uniq .split filenames 
+                exclude_list = set(map(lambda x: "%s.split" %x[:-10], exclude_list))
+                mbb_files = list(set(mbb_files) - set(exclude_list))
+            else:
+                mbb_files = filter(lambda x: x.endswith('.mbb'), files)
+                mbb_files = list(set(mbb_files) - set(exclude_list))
+
             if complete == False:
                 return []
 
@@ -239,6 +247,28 @@ class Restore:
             self.logger.log("FAILED: Unable to remove s3 incremental directory lock")
             self.exit(1)
 
+    def verify_split_index(self, base_s3_path, files):
+        backup_index_list = self._list_s3_files(base_s3_path, True, True)
+        tmp = files[:]
+        for index_file in backup_index_list:
+            tmpfile = tempfile.mktemp()
+            if not self._download_file(index_file, tmpfile):
+                self.logger.log("FAILED: Unable to download split_index file, %s" %index_file)
+                self.exit(1)
+            files_in_index = map(lambda x: "%s%s" %(base_s3_path, x.strip()), open(tmpfile).readlines())
+            os.unlink(tmpfile)
+
+            for f in files_in_index:
+                if f in tmp:
+                    tmp.remove(f)
+                else:
+                    self.logger.log("FAILED: Split verification - %s not found" %f)
+                    self.exit(1)
+
+        if len(tmp) != 0:
+            self.logger.log("FAILED: Split verification - found invalid files %s" %str(tmp))
+            self.exit(1)
+
     def fetch_backuplist(self):
         """
         Get the list of backup files which are to be downloaded
@@ -268,9 +298,11 @@ class Restore:
         self.logger.log("Searching for master backup")
         for attempt in xrange(consts.MAX_BACKUP_SEARCH_TRIES):
             date = epoch2date(master_backup_epoch)
-            master_backup_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.MASTER_DIRNAME, date), False)
+            master_s3_path = 's3://%s/%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.MASTER_DIRNAME, date)
+            master_backup_list = self._list_s3_files(master_s3_path, False)
             if len(master_backup_list):
                 self.logger.log("Found master backup for date, %s" %epoch2date(master_backup_epoch))
+                self.verify_split_index(master_s3_path, master_backup_list)
                 master_backup_epoch += DAY_EPOCH
                 break
             else:
@@ -283,7 +315,9 @@ class Restore:
         periodic_backup_list = []
         for date_epoch in xrange(int(master_backup_epoch), int(epoch) + DAY_EPOCH, DAY_EPOCH):
             date = epoch2date(date_epoch)
-            periodic_file_list = self._list_s3_files('s3://%s/%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.PERIODIC_DIRNAME, date), False)
+            periodic_s3_path = 's3://%s/%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.PERIODIC_DIRNAME, date)
+            periodic_file_list = self._list_s3_files(periodic_s3_path, False)
+            self.verify_split_index(periodic_s3_path, periodic_file_list)
             if not periodic_file_list:
                 self.logger.log("Could not find periodic backup for %s" %date)
             periodic_backup_list.extend(periodic_file_list)
@@ -332,6 +366,7 @@ class Restore:
         try:
             shard = 0
             last_checkpoint = None
+            last_file_checkpoints = None
             while shard < self.file_count:
                 self.logger.log("RESTORE: Waiting for backup file %d/%d" %(shard+1, self.file_count))
                 restore_list = list(self.restore_queue.queue)
@@ -349,9 +384,11 @@ class Restore:
                         self.exit(1)
 
                     if shard > 0:
-                        if not (last_checkpoint == checkpoints[-1] or last_checkpoint - 1 == checkpoints[-1]):
-                            self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
-                            self.exit(1)
+                        #Ignore ordering verification we last file has got same checkpoints (splits of same backup)
+                        if not last_file_checkpoints == checkpoints:
+                            if not (last_checkpoint == checkpoints[-1] or last_checkpoint - 1 == checkpoints[-1]):
+                                self.logger.log("FAILED: Checkpoint order mismatch. Last file checkpoint: %d Current file checkpoint: %d" %(last_checkpoint, checkpoints[-1]))
+                                self.exit(1)
                     else:
                         try:
                             f = open(consts.LAST_CHECKPOINT_FILE, 'w')
@@ -362,6 +399,7 @@ class Restore:
                             self.exit(1)
 
                     last_checkpoint = checkpoints[0]
+                    last_file_checkpoints = checkpoints
                     self.logger.log("Checkpoints in the current backup-file %s : %s" %(backup_file, str(checkpoints)))
 
                     if shard == self.file_count - 1:
