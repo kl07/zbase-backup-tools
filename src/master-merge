@@ -47,7 +47,7 @@ class MasterMerge(multiprocessing.Process):
         #get host name from the disk path
         status,output = commands.getstatusoutput("ls %s/" %pathname)
         if status != 0:
-            self.logger.log(" Cannot find any hostnames in path %s" %pathname)
+            self.logger.log("Cannot find any hostnames in path %s" %pathname)
             return
 
         hosts = output.split()
@@ -253,9 +253,13 @@ if __name__ == '__main__':
     fd.write(str(os.getpid()))
     fd.close()
 
-    if len(sys.argv) != 1:
+    part_no = 0
+    if len(sys.argv) == 2:
+        part_no = int(sys.argv[1])
+
+    elif len(sys.argv) > 2:
         print
-        print "Usage: %s <hostame list location>" %sys.argv[0]
+        print "Usage: %s <partition number>" %sys.argv[0]
         sys.exit(1)
 
     jobs = []
@@ -264,7 +268,8 @@ if __name__ == '__main__':
     today=datetime.datetime.date(datetime.datetime.now())
     partition = today.strftime("%w")
 
-    part_no = int(partition) + 1
+    if part_no == 0:
+        part_no = int(partition) + 1
 
     pathname = "/data_%s" %part_no
     print "Operating on parition %s" %pathname
