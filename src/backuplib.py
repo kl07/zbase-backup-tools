@@ -215,7 +215,12 @@ class BackupFactory:
         c = db.cursor()
         if self.current_checkpoint_id > 0:
             t = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-            add_record(c, chkpoint_stmt, (0, self.current_checkpoint_id, -1, self.source, t))
+            if self.full_backup:
+                for i in range(1, self.max_cpoint_id):
+                    result = add_record(c, chkpoint_stmt, (0, i, -1, self.source, t))
+            else:
+                add_record(c, chkpoint_stmt, (0, self.current_checkpoint_id, -1, self.source, t))
+
             db.commit()
 
         ## Insert all the records that belong to the rollbacked transaction.
@@ -254,9 +259,9 @@ class BackupFactory:
                     self.vbmap[vbucketId] = [1, 0]
                     t = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
                     sclient = mc_bin_client.MemcachedClient(self.host, self.port)
-                    max_cpoint_id = int(sclient.stats('checkpoint')['vb_0:open_checkpoint_id'])
+                    self.max_cpoint_id = int(sclient.stats('checkpoint')['vb_0:open_checkpoint_id'])
                     sclient.close()
-                    for i in range(1, max_cpoint_id):
+                    for i in range(1, self.max_cpoint_id):
                         result = add_record(c, chkpoint_stmt,
                                         (vbucketId, i, -1, self.source, t))
                         if result == False:
