@@ -116,6 +116,7 @@ class DailyMerge(multiprocessing.Process):
         os.system("mkdir -p %s" %output_location)
         # remove any existing merged files in this location
         os.system("rm -f %s/*.mbb" %output_location)
+        os.system("rm -f %s/*.split" %output_location)
         output_file = "%s/daily-%s.mbb" %(output_location, self.timestamp)
 
         #process two files at a time. copy them to the scratch folder and merge to the output
@@ -227,6 +228,31 @@ class DailyMerge(multiprocessing.Process):
             os.system("touch %s/.done" %output_location)
         except:
             self.logger.log("Failed to add .done file to %s" %output_location)
+
+        # create a manifest.split file in the output directory. this contains the list
+        # of split files that the restore script needs to verify
+        manifest_split = "%s/backup-%s.split" %(output_location, self.timestamp)
+
+        status,output = commands.getstatusoutput("ls %s/*.mbb" %output_location)
+        if status != 0:
+            self.logger.log(" Failed: Cannot find any files in path %s" %output_location)
+            return False
+
+        lines = output.split()
+        try:
+            fd = open(manifest_split, "w")
+        except:
+            self.logger.log(" Failed: Cannot create manifest split %s" %manifest_split)
+            return False
+
+        for line in lines:
+            try:
+                fd.write(line + '\n')
+            except:
+                self.logger.log(" Failed: Cannot write manifest.split %s" %manifest_split)
+                os.system("rm -f %s" %manifest_split)
+                return False
+        fd.close()
 
         self.logger.log(" Sucess: Merged file created successfully %s" %output_file)
 
