@@ -247,7 +247,7 @@ class DailyMerge(multiprocessing.Process):
 
         for line in lines:
             try:
-                fd.write(line + '\n')
+                fd.write(os.path.basename(line) + '\n')
             except:
                 self.logger.log(" Failed: Cannot write manifest.split %s" %manifest_split)
                 os.system("rm -f %s" %manifest_split)
