@@ -12,12 +12,12 @@ do
     daily_dir="$server_root/$game_id/$host/$cloud_id/daily/$date"
     master_dir="$server_root/$game_id/$host/$cloud_id/master/$date"
 
-    if [ -d $daily_dir ];
-    then
-        echo "Found daily $daily_dir. Syncing to s3"
-        s3cmd sync $daily_dir/ $s3bucket/$HOSTNAME/$game_id/$host/$cloud_id/daily/$date/
-        [ $? -ne 0 ] && echo "Failed to upload $daily_dir"
-    fi
+#    if [ -d $daily_dir ];
+#    then
+#        echo "Found daily $daily_dir. Syncing to s3"
+#        s3cmd sync $daily_dir/ $s3bucket/$HOSTNAME/$game_id/$host/$cloud_id/daily/$date/
+#        [ $? -ne 0 ] && echo "Failed to upload $daily_dir"
+#    fi
 
     if [ -d $master_dir ];
     then
