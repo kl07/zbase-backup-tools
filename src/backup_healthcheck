@@ -86,7 +86,9 @@ class Verifier:
     def verify_split_index(self, split_index_file, files, hostname):
         """
         Verify backups with split index file
+        NOTE: Code borrowed from membase-restore
         """
+
         status = True
         dir = os.path.dirname(split_index_file)
         files_in_index = map(lambda x: os.path.join(dir, x.strip()), open(split_index_file).readlines())
@@ -109,6 +111,7 @@ class Verifier:
     def checkpoint_walk(self, backups, hostname):
         """
         Walk through the checkpoints from backups and check continuity
+        NOTE: Code borrowed from membase-restore
         """
         last_file_checkpoints = None
         last_file = None
@@ -150,6 +153,7 @@ class Verifier:
         """
         Walk through the backups - incremental, daily and nearest master
         and build the backup list 
+        NOTE: Code borrowed from master-merge
         """
         backup_list = []
         master_list = []
