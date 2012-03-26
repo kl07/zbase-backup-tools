@@ -153,7 +153,8 @@ class Restore:
         exclude_list = []
         found_dot_done = False
         ls_cmd = "%s ls %s" %(consts.PATH_S3CMD_EXEC, s3path)
-        self.logger.log("Executing command %s" %ls_cmd)
+        if not only_index:
+            self.logger.log("Executing command %s" %ls_cmd)
         status, output = self.getstatusoutput(ls_cmd)
 	if status !=0:
             self.logger.log("FAILED: Listing files failed for %s (%s)" %(s3path, output))
@@ -177,7 +178,7 @@ class Restore:
                     else:
                         exclude_lines = open('/tmp/manifest.del').readlines()
                         for l in exclude_lines:
-                            exclude_list.append("%s%s" %(s3path, l.strip()))
+                            exclude_list.append("%s%s" %(s3path, os.path.basename(l.strip())))
 
             if complete == False:
                 complete = found_dot_done
