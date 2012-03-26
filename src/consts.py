@@ -22,6 +22,7 @@ MAX_BACKUP_SEARCH_TRIES = 15
 PATH_MBRESTORE_EXEC = '/opt/membase/lib/python/mbadm-online-restore'
 PATH_MBTAP_REGISTER_EXEC = '/opt/membase/lib/python/mbadm-tap-registration'
 PATH_MBMERGE_EXEC = '/opt/membase/lib/python/mbbackup-merge-incremental'
+PATH_COUNTKEYS_EXEC = '/opt/membase/membase-backup/count_backup_keys.sh'
 DEFAULT_LOGLEVEL = 'INFO'
 MERGE_CMD = "/opt/membase/membase-backup/merge.py"
 BACKUP_ROOT = "/dev/shm"
