@@ -59,6 +59,10 @@ class BackupProcess:
             self.hostname = socket.gethostname()
             raw_buffer_list = self.config.buffer_list.split(',')
             buffer_list = set(raw_buffer_list)
+            if not len(buffer_list):
+                self.logger.log("FAILED: There should be atleast 1 tmpfs buffer")
+                self.exit(1)
+
             if len(buffer_list) != len(raw_buffer_list):
                 self.logger.log("FAILED: Duplicate buffer list found in the config")
                 self.exit(1)
@@ -99,6 +103,7 @@ class BackupProcess:
         self.logger.log("Looking for backup files to resume upload process")
         dirpath_suffix = '%s/%s/%s' %(self.config.game_id, self.hostname, self.config.cloud)
         backup_files = {}
+        split_index_group = {}
         dot_done_backup = None
 
         for b in list(self.free_buffer_list.queue):
@@ -106,13 +111,72 @@ class BackupProcess:
                 if dirname == [] and filename != []:
                     backup_files[os.path.join(path, filename[0])] = b
 
-        master_files  = filter(lambda x: consts.MASTER_DIRNAME in x,
+        master_files = filter(lambda x: consts.MASTER_DIRNAME in x,
                                                 backup_files.keys())
         master_files.sort(key=natural_sortkey)
         if master_files:
+            m = master_files[0]
+            date = m.split('/')[-2]
+            s3_master_path = "s3://%s/%s/%s/" %(dirpath_suffix, consts.MASTER_DIRNAME, date)
+            status, output = self.getstatusoutput("%s ls %s" %(consts.PATH_S3CMD_EXEC, s3_master_path))
+            if status > 0:
+                self.logger.log("FAILED: Listing master backup files from storage server")
+                self.exit(1)
+            found_split_index = False
+            for f in output.split():
+                if f.endswith('.split'):
+                    found_split_index = True
+
+            if not found_split_index:
+                self.logger.log("FAILED: Split index file for master backup " \
+                "(%s) not found. Hence, unable to proceed resume uploading" \
+                %s3_master_path)
+                self.exit(1)
+
             dot_done_backup = master_files[-1]
 
+        incr_files = filter(lambda x: consts.INCR_DIRNAME in x,
+                                                backup_files.keys())
+        for f in incr_files:
+            prefix = "-".join(os.path.basename(f).split('-')[:-1])
+            if not split_index_group.has_key(prefix):
+                split_index_group[prefix] = []
+
+            split_index_group[prefix].append(os.path.basename(f))
+            sample_buffer = backup_files[f]
+            split_index_dir = os.path.dirname(f)
+
+        s3_incr_path = "s3://%s/%s/" %(dirpath_suffix, consts.INCR_DIRNAME)
+        status, output = self.getstatusoutput("%s ls %s" %(consts.PATH_S3CMD_EXEC, s3_incr_path))
+        if status > 0:
+            self.logger.log("FAILED: Listing incremental files from storage server")
+            self.exit(1)
+
+        s3_incr_files = filter(lambda x: x.endswith('.mbb'), output.split())
+        for p in split_index_group:
+            for f in s3_incr_files:
+                if p in f:
+                    split_index_group[p].append(os.path.basename(f))
+
+        for sprefix in split_index_group:
+            split_index_file = os.path.join(split_index_dir, "%s.split" %sprefix)
+            fd = open(split_index_file, 'w')
+            for filename in sorted(split_index_group[sprefix]):
+                fd.write('%s\n' %filename)
+            fd.close()
+
+            status = self._upload_file(split_index_file, sample_buffer, True)
+            if not status:
+                self.logger.log("FAILED: Uploading split index file, %s" %split_index_file)
+                self.exit(1)
+
+            self._remove_file(split_index_file)
+
         for backup_file in backup_files:
+            if backup_file.endswith('.done') or backup_file.endswith('.split'):
+                self._remove_file(backup_file)
+                continue
+
             if not self._is_backup_valid(backup_file):
                 self._remove_file(backup_file)
                 self.logger.log("FAILED: Backup file %s not valid" %backup_file)
@@ -230,33 +294,8 @@ class BackupProcess:
                 f.write(' ')
                 f.close()
 
-                split_index = os.path.basename(backup_filepath)[:-10]+'.split'
-                root_path = buffer_path
-                if root_path[-1] == '/':
-                    root_path = root_path[:-1]
-                regex = re.compile('^%s/(.*)' %root_path)
-                s3_master_dir_suffix = regex.findall(basepath)[0]
-                s3master_dir = "s3://%s/" %s3_master_dir_suffix
-                status, output = self.getstatusoutput("%s ls %s" %(consts.PATH_S3CMD_EXEC, s3master_dir))
-                if status > 0:
-                    self.logger.log("FAILED: Listing files for creating split index")
-                    self.exit(1)
-
-                s3files = output.split()
-                split_index_path = os.path.join(basepath, split_index)
-                f = open(split_index_path, 'w')
-                for sf in s3files:
-                    fname = os.path.basename(sf)
-                    f.write('%s\n' %fname)
-                f.close()
-
                 status = self._upload_file(donepath, buffer_path, True)
                 self._remove_file(donepath)
-                if not status:
-                    self.exit(1)
-
-                status = self._upload_file(split_index_path, buffer_path, True)
-                self._remove_file(split_index_path)
                 if not status:
                     self.exit(1)
 
@@ -511,7 +550,6 @@ class BackupProcess:
         else:
             last_backup_checkpoint = 0
 
-
         if len(checkpoints):
             if last_backup_checkpoint > 0:
                 if last_backup_checkpoint + 1 != checkpoints[0]:
@@ -523,6 +561,21 @@ class BackupProcess:
             f = open(consts.LAST_CHECKPOINT_FILE, 'w')
             f.write(str(checkpoints[-1]))
             f.close()
+            split_files = map(lambda x: os.path.basename(x), map(lambda y: y[-1], bf_instance.list_splits()))
+            split_index_path = "%s.split" %"-".join(filepath.split('-')[:-1])
+            fd = open(split_index_path, 'w')
+            for split_file in split_files:
+                fd.write("%s\n" %split_file)
+            fd.close()
+            status = self._upload_file(split_index_path, buffer_path, True)
+            if status:
+                self._remove_file(split_index_path)
+            else:
+                self.logger.log("FAILED: Uploading split index file %s" %split_index_path)
+                self.exit(1)
+        else:
+            self.logger.log("FAILED: Current backup contains zero checkpoints")
+            self.exit(1)
 
         end_time = time.time()
         time_taken = end_time - start_time
