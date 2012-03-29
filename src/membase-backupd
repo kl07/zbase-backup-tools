@@ -81,7 +81,9 @@ class BackupProcess:
             self.exit(1)
 
         try:
-            os.makedirs(os.path.dirname(consts.NAGIOS_BACKUP_TIME))
+            nagios_dir = os.path.dirname(consts.NAGIOS_BACKUP_TIME)
+            os.makedirs(nagios_dir)
+            os.system("chown nagios %s" %nagios_dir)
         except:
             pass
 
