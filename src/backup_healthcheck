@@ -82,6 +82,7 @@ class Verifier:
             end_time = time.time()
             self.log("##### Completed health scan for HOSTNAME: %s in %d" \
             " seconds #####" %(host, end_time-st_time))
+            self.log(" ")
 
     def verify_split_index(self, split_index_file, files, hostname):
         """

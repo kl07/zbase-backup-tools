@@ -3,7 +3,7 @@
 
 game_id=`grep 'game_id =' /etc/membase-backup/default.ini | awk '{ print $NF }'`
 cloud_id=`grep 'cloud =' /etc/membase-backup/default.ini | awk '{ print $NF }'`
-rep_dir='/var/www/html/health_reports/'
+rep_dir='/var/www/html/membase_backup/health_reports/'
 count=""
 
 if [ $# -ne 1 -a $# -ne 2 ];
