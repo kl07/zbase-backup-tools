@@ -242,7 +242,7 @@ class BackupProcess:
             return False
 
     def _remove_file(self, filepath):
-        self.logger.log("Removing backup file, %s " %filepath)
+        self.logger.log("Removing file, %s " %filepath)
         try:
             os.unlink(filepath)
             return True
