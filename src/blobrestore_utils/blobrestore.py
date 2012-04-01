@@ -13,6 +13,7 @@ import logging
 import tempfile
 import sqlite3
 import datetime
+import socket
 
 PYTHON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../')
 SSH_KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'blobrestore_sshkey')
@@ -569,7 +570,7 @@ class BlobrestoreDispatcher:
                 key, flg, exp, val, date, cpoint_id = restored_key
                 if self.options['repair_mode']:
                     key += '_r'
-                membasepool.set_key(str(key), flg, exp, str(val), date)
+                membasepool.set_key(str(key), socket.ntohl(flg), exp, str(val), date)
                 restored_key = ks.read()
 
 if __name__ == '__main__':
