@@ -404,10 +404,13 @@ class Restore:
                     last_file_checkpoints = checkpoints
                     self.logger.log("Checkpoints in the current backup-file %s : %s" %(backup_file, str(checkpoints)))
 
-                    if shard == self.file_count - 1:
-                        complete = True
-                    else:
-                        complete = False
+                    complete = False
+                    #NOTE: Do not switch back to normal mode from restore mode
+                    #Master server will take care of restore mode switch
+                    #if shard == self.file_count - 1:
+                    #    complete = True
+                    #else:
+                    #    complete = False
 
                     status = self._do_online_restore(backup_file, complete)
                     if status:
