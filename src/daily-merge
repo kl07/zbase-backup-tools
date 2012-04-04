@@ -65,13 +65,57 @@ class DailyMerge(multiprocessing.Process):
 
         incr_location = "%s/%s" %(location, consts.INCR_DIRNAME)
         self.logger.log(" Location %s " %incr_location)
+
+    	# Get all *.splits.
+        status, output = commands.getstatusoutput("ls %s/*.split" %incr_location)
+        if status != 0:
+            self.logger.log(" Warning: Invalid location %s or no .split files found" %incr_location)
+            return False
+
+        split_list = output.split("\n")
+
+    	# Get list of incremental backups to check if files mentioned in .split exists.
+
         status, output = commands.getstatusoutput("ls %s/*.mbb" %incr_location)
         if status != 0:
             self.logger.log(" Warning: Invalid location %s or no backup files found" %incr_location)
             return False
+        
+        backup_list = output.split("\n")
 
-        listfiles = output
-        lines = output.split("\n")
+    	# Generate list of backups that exists in .split file and in incremental folder.
+        verified_split = "  "
+        listfiles = "  "
+        j = 0
+        for split in split_list:
+            fd = open(split, "r")
+            buffer = fd.read()
+            fd.close()
+            buffer = buffer.split("\n")
+            buffer.pop()
+
+            files_in_split = ""
+            i = 0
+            for f in buffer :
+                file_name =  "%s/%s" %(incr_location,f)
+                if i < 1 :
+                    files_in_split = "%s" %(file_name)
+                    i = i + 1
+                else :
+                    files_in_split = "%s\n%s" %(files_in_split, file_name)
+
+            if (set(files_in_split.split("\n")) <= set(backup_list)) :
+                if j < 1 :
+                    verified_split = "%s" %(split)
+                    listfiles = "%s" %(files_in_split)
+                    j = j + 1
+                else :
+                    verified_split = "%s  %s" %(verified_split, split)
+                    listfiles = "%s\n%s" %(listfiles, files_in_split)
+
+        lines = listfiles.split("\n")
+
+        
         #check for existence of done file
         done_file = "%s/done-%02d:%02d" %(incr_location, self.now.month, self.now.day)
         if os.path.isfile(done_file) :
@@ -217,6 +261,12 @@ class DailyMerge(multiprocessing.Process):
             os.system("rm -f %s*" %output_file)
             return False
 
+        # Remove .split for incrementals that are merged.
+        output = os.system("rm -f %s" %verified_split)
+        if output != 0:
+            self.logger.log(" Failed to delete .split in incremental folder after merge %s" %verified_split.split("\n"))
+
+
         #add a done file to the directory and we are done for this location
         output = os.system("touch %s" %done_file)
         if output != 0:
@@ -335,7 +385,6 @@ if __name__ == '__main__':
 
     for i in range(7):
         pathname = "/data_%d" %(i+1)
-        #pathname = "/data_7"
         merge = DailyMerge(pathname)
         jobs.append(merge)
         merge.start()
