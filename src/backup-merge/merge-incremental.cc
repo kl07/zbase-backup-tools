@@ -128,7 +128,6 @@ bool OutputStore::initialize_db(string name) {
 
 bool OutputStore::close_db() {
     sqlite3_stmt *stmt;
-    uint64_t cpoint_id(0);
 
     if (db != NULL) {
         set <int>::iterator it;
@@ -142,11 +141,7 @@ bool OutputStore::close_db() {
             sqlite3_bind_text(stmt, 6, "MERGE", 5, SQLITE_STATIC);
             assert(sqlite3_step(stmt) == SQLITE_DONE);
             assert(sqlite3_finalize(stmt)==SQLITE_OK);
-            cpoint_id = *(it);
         }
-
-        checkpoints.clear();
-        checkpoints.insert(cpoint_id);
 
         if (enable_split) {
             assert(sqlite3_exec(db, "COMMIT", 0, 0, 0) == SQLITE_OK);
@@ -321,7 +316,7 @@ bool Merge::walk_files(list <string> &files, bool validate) {
     sqlite3 *tmp_db;
     sqlite3_stmt *stmt = NULL;
     uint64_t cpoint_id(0), t(0);
-    list <uint64_t> cpoint_list;
+    list <uint64_t> cpoint_list, last_cpoint_list;
     list <string>::iterator it;
     list <uint64_t>::iterator citr;
 
@@ -352,6 +347,7 @@ bool Merge::walk_files(list <string> &files, bool validate) {
         if (validate) {
             cpoint_list.sort();
             cpoint_list.reverse();
+
             t = *(cpoint_list.begin());
             for (citr=cpoint_list.begin(); citr!=cpoint_list.end(); citr++) {
                 if (!(t == *(citr) || t == *(citr)+1)) {
@@ -369,9 +365,16 @@ bool Merge::walk_files(list <string> &files, bool validate) {
                 cpoint_id = *(cpoint_list.begin());
             }
             else {
-                if (!(cpoint_id == *(cpoint_list.begin()) || cpoint_id == *(cpoint_list.begin())+1)) {
-                    cout<<"ERROR: Checkpoint mismatch in file "<<(*it)<<" last_file_cpoint_id:"<<cpoint_id<<" current_file_cpoint_id:"<<*(cpoint_list.begin())<<endl;
-                    return false;
+                if (last_cpoint_list != cpoint_list) {
+                    if (!(cpoint_id == *(cpoint_list.begin()) || cpoint_id == *(cpoint_list.begin())+1)) {
+                        cout<<"ERROR: Checkpoint mismatch in file "<<(*it)<<" last_file_cpoint_id:"<<cpoint_id<<" current_file_cpoint_id:"<<*(cpoint_list.begin())<<endl;
+                        return false;
+                    }
+                    else {
+                        citr = cpoint_list.end();
+                        citr--;
+                        cpoint_id = *(citr);
+                    }
                 }
                 else {
                     citr = cpoint_list.end();
@@ -380,6 +383,7 @@ bool Merge::walk_files(list <string> &files, bool validate) {
                 }
             }
         }
+        last_cpoint_list = cpoint_list;
         cpoint_list.clear();
 
     }
