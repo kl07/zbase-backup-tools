@@ -108,6 +108,9 @@ bool OutputStore::create_db_name(string &filename) {
 }
 
 bool OutputStore::initialize_db(string name) {
+    set <int>::iterator it;
+    sqlite3_stmt *stmt;
+
     if (sqlite3_open(name.c_str(), &db) != SQLITE_OK) {
         cout<<"ERROR: Unable to open backup "<<name<<endl;
         exit(1);
@@ -123,29 +126,28 @@ bool OutputStore::initialize_db(string name) {
     assert(sqlite3_exec(db, "pragma cache_size=1048576", 0, 0, 0) == SQLITE_OK);
     assert(sqlite3_exec(db, "pragma synchronous=OFF", 0, 0, 0) == SQLITE_OK);
     assert(sqlite3_exec(db, "pragma journal_mode=MEMORY", 0, 0, 0) == SQLITE_OK);
+
+    for (it=checkpoints.begin(); it!=checkpoints.end(); it++) {
+        assert(sqlite3_prepare(db, insert_cstate, -1, &stmt, NULL) == SQLITE_OK);
+        sqlite3_bind_int(stmt, 1, 0);
+        sqlite3_bind_int(stmt, 2, (*it));
+        sqlite3_bind_int(stmt, 3, -1);
+        sqlite3_bind_text(stmt, 4, "closed", 6, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 5, "backup", 6, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 6, "MERGE", 5, SQLITE_STATIC);
+        assert(sqlite3_step(stmt) == SQLITE_DONE);
+        assert(sqlite3_finalize(stmt)==SQLITE_OK);
+    }
+
     return true;
 }
 
 bool OutputStore::close_db() {
-    sqlite3_stmt *stmt;
-
     if (db != NULL) {
-        set <int>::iterator it;
-        for (it=checkpoints.begin(); it!=checkpoints.end(); it++) {
-            assert(sqlite3_prepare(db, insert_cstate, -1, &stmt, NULL) == SQLITE_OK);
-            sqlite3_bind_int(stmt, 1, 0);
-            sqlite3_bind_int(stmt, 2, (*it));
-            sqlite3_bind_int(stmt, 3, -1);
-            sqlite3_bind_text(stmt, 4, "closed", 6, SQLITE_STATIC);
-            sqlite3_bind_text(stmt, 5, "backup", 6, SQLITE_STATIC);
-            sqlite3_bind_text(stmt, 6, "MERGE", 5, SQLITE_STATIC);
-            assert(sqlite3_step(stmt) == SQLITE_DONE);
-            assert(sqlite3_finalize(stmt)==SQLITE_OK);
-        }
-
         if (enable_split) {
             assert(sqlite3_exec(db, "COMMIT", 0, 0, 0) == SQLITE_OK);
         }
+
         assert(sqlite3_close(db) == SQLITE_OK);
         db = NULL;
     }
