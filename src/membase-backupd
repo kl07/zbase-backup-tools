@@ -156,7 +156,8 @@ class BackupProcess:
         for p in split_index_group:
             for f in s3_incr_files:
                 if p in f:
-                    split_index_group[p].append(os.path.basename(f))
+                    if os.path.basename(f) not in split_index_group[p]:
+                        split_index_group[p].append(os.path.basename(f))
 
         for sprefix in split_index_group:
             split_index_file = os.path.join(split_index_dir, "%s.split" %sprefix)
