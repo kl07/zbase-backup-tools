@@ -415,7 +415,7 @@ class BackupProcess:
 
             master_backup_attempt = self.is_master_backup()
             if self.is_closed_checkpoint_moved() or master_backup_attempt or self.first_master_backup:
-                now = time.localtime(time.time())
+                now = time.gmtime(time.time())
 
                 datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
                 backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S-%.mbb',now)

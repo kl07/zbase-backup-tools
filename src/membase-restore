@@ -21,7 +21,7 @@ DAY_EPOCH = 60*60*24
 setup_sqlite_lib()
 
 def epoch2date(epoch):
-    lt = time.localtime(epoch)
+    lt = time.gmtime(epoch)
     return time.strftime('%Y-%m-%d',lt)
 
 class Restore:
