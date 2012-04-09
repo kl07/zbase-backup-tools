@@ -84,17 +84,37 @@ class DailyMerge(multiprocessing.Process):
         backup_list = output.split("\n")
 
     	# Generate list of backups that exists in .split file and in incremental folder.
-        verified_split = []
-        lines = []
+        verified_split = "  "
+        listfiles = "  "
+        j = 0
         for split in split_list:
-            fd = open(split)
-            file_list = map(lamda x : os.path.join(incr_location, x.strip()), fd.readlines())
+            fd = open(split, "r")
+            buffer = fd.read()
+            fd.close()
+            buffer = buffer.split("\n")
+            buffer.pop()
 
-            if (set(file_list) <= set(backup_list)) :
-                    verified_split.append(split)
-		    lines.extend(file_list)
+            files_in_split = ""
+            i = 0
+            for f in buffer :
+                file_name =  "%s/%s" %(incr_location,f)
+                if i < 1 :
+                    files_in_split = "%s" %(file_name)
+                    i = i + 1
+                else :
+                    files_in_split = "%s\n%s" %(files_in_split, file_name)
 
-	listfiles = "\n".join(listfiles)
+            if (set(files_in_split.split("\n")) <= set(backup_list)) :
+                if j < 1 :
+                    verified_split = "%s" %(split)
+                    listfiles = "%s" %(files_in_split)
+                    j = j + 1
+                else :
+                    verified_split = "%s  %s" %(verified_split, split)
+                    listfiles = "%s\n%s" %(listfiles, files_in_split)
+
+        lines = listfiles.split("\n")
+
         
         #check for existence of done file
         done_file = "%s/done-%02d:%02d" %(incr_location, self.now.month, self.now.day)
@@ -242,9 +262,9 @@ class DailyMerge(multiprocessing.Process):
             return False
 
         # Remove .split for incrementals that are merged.
-        output = os.system("rm -f %s" %"\n".join(verified_split))
+        output = os.system("rm -f %s" %verified_split)
         if output != 0:
-            self.logger.log(" Failed to delete .split in incremental folder after merge %s" %str(verified_split))
+            self.logger.log(" Failed to delete .split in incremental folder after merge %s" %verified_split.split("\n"))
 
 
         #add a done file to the directory and we are done for this location
