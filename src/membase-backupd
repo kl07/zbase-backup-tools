@@ -8,11 +8,9 @@ import time
 import signal
 import socket
 import Queue
-import glob
 import datetime
 import random
-from threading import Thread
-from pwd import getpwnam
+from threading import Thread, Lock
 import consts
 from config import Config
 from logger import Logger
@@ -35,6 +33,7 @@ class BackupProcess:
         self.first_master_backup = False
         self.resume_process_mode = False
         self.processlist = Queue.Queue()
+        self.backup_lock = Lock()
         try:
             self.config = Config(consts.CONFIG_FILE)
             self.config.read()
@@ -318,11 +317,13 @@ class BackupProcess:
                 time.sleep(sleep_time)
 
     def graceful_exit(self, signum=None, frame=None):
+        self.backup_lock.acquire()
         for process in self.processlist.queue:
             try:
                 process.terminate()
             except:
                 pass
+        self.backup_lock.release()
 
         self.logger.log("Backup process terminated")
         if os.path.exists(consts.MBBACKUP_PID_FILE):
@@ -457,8 +458,12 @@ class BackupProcess:
                 f = open(consts.NAGIOS_BACKUP_TIME, 'w')
                 f.write(str(now))
                 f.close()
+
+                self.backup_lock.acquire()
                 status = self._take_backup(backup_filepath, datetimestamp,
                                                         full_backup, dot_done)
+                self.backup_lock.release()
+
                 os.unlink(consts.NAGIOS_BACKUP_TIME)
                 if status:
                     if self.first_master_backup:
@@ -655,8 +660,15 @@ if __name__ == '__main__':
                 sys.exit(0)
 
             os.kill(pid, signal.SIGTERM)
+            while True:
+                try:
+                    os.kill(pid, 0)
+                except:
+                    print "Backup daemon stopped successfully"
+                    sys.exit(0)
+                time.sleep(5)
         else:
-           print "Uploader Daemon is not running"
+           print "Backup Daemon is not running"
            os._exit(1)
 
     elif command == 'upload-only':
