@@ -1,9 +1,9 @@
-#Membase backup tools 1.0 - commit ID: e0478c0e8ea184c0cdf35074005967f7430f0f1b
+#Membase backup tools 1.0 - commit ID: 66f12f071b9b0845ea935b10f3db12658cafa44d
 
 Summary: Membase 1.7.3 backup and restore tools 
 Name: membase-backup-tools
 Version: 1.0
-Release: 5
+Release: 6
 Group: General
 License: Proprietary
 Source0: _SOURCE 
