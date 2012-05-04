@@ -331,6 +331,7 @@ class BackupProcess:
         os._exit(self.exit_status)
 
     def exit(self, status):
+        self.backup_lock.release()
         self.exit_status = status
         self.graceful_exit()
 
