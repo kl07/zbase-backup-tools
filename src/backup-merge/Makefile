@@ -9,3 +9,6 @@ default:
 
 debug:
 	$(CC) $(SOURCE) $(FLAGS) -o $(TARGET) -DSHOW_TIME
+
+clean:
+	rm $(TARGET)

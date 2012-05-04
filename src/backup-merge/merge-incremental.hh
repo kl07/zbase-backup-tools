@@ -62,7 +62,7 @@ public:
 
 
 /**
- * Storage abstraction for writing mutations
+ * Storage abstraction for writing mutations to output split db
  */
 class OutputStore {
     std::string output_file;
@@ -72,13 +72,33 @@ class OutputStore {
     set <int> checkpoints;
     sqlite3 *db;
 
+    /**
+     * Generate next available split database name
+     * Eg. backup-%.mbb -> backup-00000.mbb
+     */
     bool create_db_name(std::string &filename);
+
+    /**
+     * Create sqlite db with given path
+     */
     bool initialize_db(std::string name);
+
     bool close_db();
 
 public:
+    /**
+     * Initialize object
+     */
     OutputStore(std::string output_file_pattern, set <int> cpoints, int split_size_val);
+
+    /**
+     * Method to insert a mutation into output store
+     */
     bool insert(const Operation *operation);
+
+    /**
+     * Destructor
+     */
     ~OutputStore();
 
 };
@@ -91,10 +111,35 @@ class InputStore {
     list<Operation> operations;
 
 public:
-
+    /**
+     * Initialize input db
+     */
     InputStore(std::string file);
-    ~InputStore();
+
+    /**
+     * Read entire data from db into operations list
+     */
     bool read();
+
+    /**
+     * Iterator begin for operations list
+     */
+    list<Operation>::iterator begin() {
+        return operations.begin();
+    }
+
+    /**
+     * Iterator end for operations list
+     */
+    list<Operation>::iterator end() {
+        return operations.end();
+    }
+
+    /**
+     * Destructor
+     */
+    ~InputStore();
+
     friend class Merge;
 };
 
@@ -111,12 +156,28 @@ class Merge {
     list <std::string> source_files;
     set <int> checkpoints;
 
+    /**
+     * Walk through the source db files and set populate checkpoints set
+     * If validate=true, validate checkpoint ordering in the files
+     */
     bool walk_files(list <string> &files, bool validate);
 
 public:
+    /**
+     * Initialize
+     */
     Merge(list <string> files, string output_file, int split, bool validate);
-    ~Merge();
+
+    /**
+     * Start merge processing of files and create output merged split files
+     */
     void process();
+
+    /**
+     * Destructor
+     */
+    ~Merge();
+
 };
 
 #endif

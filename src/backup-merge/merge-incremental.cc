@@ -57,7 +57,7 @@ const char *insert_cstate =
 const char *cpoint_read = "SELECT cpoint_id FROM cpoint_state";
 
 Operation::Operation(uint32_t exp_val, char *key_val, int key_size_val, char *op_val,
-            int op_size_val, char *blob_val, int blob_size_val, uint16_t vbid_val, 
+            int op_size_val, char *blob_val, int blob_size_val, uint16_t vbid_val,
             uint64_t cpoint_id_val, uint32_t flags_val, uint64_t cas_val, uint64_t seq_val):
         exp(exp_val), key_size(key_size_val), op_size(op_size_val), blob_size(blob_size_val),
         vbid(vbid_val), cpoint_id(cpoint_id_val), flags(flags_val), cas(cas_val), seq(seq_val) {
@@ -153,7 +153,11 @@ bool OutputStore::close_db() {
     }
 }
 
-OutputStore::OutputStore(string output_file_pattern, set <int> cpoints, int split_size_val): split_number(0), db(NULL), output_file(output_file_pattern), split_size(split_size_val), checkpoints(cpoints) {
+OutputStore::OutputStore(string output_file_pattern,
+            set <int> cpoints, int split_size_val): split_number(0), db(NULL),
+            output_file(output_file_pattern), split_size(split_size_val),
+            checkpoints(cpoints) {
+
     string filename;
     enable_split = create_db_name(filename);
 
@@ -292,7 +296,7 @@ void Merge::process() {
         InputStore is(*f);
         is.read();
         list <Operation>::iterator it;
-        for (it = is.operations.begin(); it != is.operations.end(); it++) {
+        for (it = is.begin(); it != is.end(); it++) {
             Operation *op = &(*it);
             
             string key(op->key, 0, op->key_size);
@@ -310,7 +314,6 @@ void Merge::process() {
         cout<<"time = "<<e-s<<endl;
 #endif
     }
-
 
 }
 
