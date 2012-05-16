@@ -20,12 +20,22 @@ mkdir -p $RPM_BUILD_ROOT/opt/membase/membase-backup/t/
 mkdir -p $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/
 mkdir -p $RPM_BUILD_ROOT/etc/init.d/
 mkdir -p $RPM_BUILD_ROOT/etc/membase-backup/
-mkdir -p $RPM_BUILD_ROOT/opt/membase/membase-backup/misc/
 
-cp -r misc/mbbackup-merge-incremental $RPM_BUILD_ROOT/opt/membase/membase-backup/misc/
-cp -r src/* $RPM_BUILD_ROOT/opt/membase/membase-backup/
-cp -r conf/clean_blobrestore_jobs.cron $RPM_BUILD_ROOT/opt/membase/membase-backup/
-cp -r src/t/* $RPM_BUILD_ROOT/opt/membase/membase-backup/t/
+cp src/backup-merge/merge-incremental $RPM_BUILD_ROOT/opt/membase/membase-backup/
+cp src/backuplib.py \
+src/config.py \
+src/consts.py \
+src/daily-merge \
+src/logger.py \
+src/master-merge \
+src/mc_bin_client.py \
+src/membase-backupd \
+src/membase-restore \
+src/memcacheConstants.py \
+src/util.py \
+src/zstore_cmd $RPM_BUILD_ROOT/opt/membase/membase-backup/
+cp src/blobrestore_utils/* $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/
+cp conf/clean_blobrestore_jobs.cron $RPM_BUILD_ROOT/opt/membase/membase-backup/
 cp conf/init.d/membase-backupd $RPM_BUILD_ROOT/etc/init.d/
 cp conf/init.d/blobrestored $RPM_BUILD_ROOT/etc/init.d/
 cp conf/default.ini $RPM_BUILD_ROOT/etc/membase-backup/
@@ -38,8 +48,6 @@ chmod 700 $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobresto
 /etc/init.d/blobrestored
 /opt/membase/membase-backup/*
 
-
 %post
 ln -f -s /opt/membase/membase-backup/zstore_cmd   /usr/bin/zstore_cmd
 ln -f -s /usr/bin/python2.6 /usr/bin/python26
-ln -f /opt/membase/membase-backup/misc/mbbackup-merge-incremental /opt/membase/lib/python/mbbackup-merge-incremental
