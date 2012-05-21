@@ -13,6 +13,8 @@ import logging
 import tempfile
 import sqlite3
 import datetime
+import calendar
+import time
 import socket
 
 PYTHON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../')
@@ -61,7 +63,7 @@ def usage(e=0):
     Print usage
     """
 
-    print "\nUsage: %s addjob -k keylist_file -n shard_count -d restore_date" \
+    print "\nUsage: %s addjob -k keylist_file -n shard_count -t '2012-01-02 07:00:03'" \
             " -g game_id -p hostname_prefix [ -f force_find_days ]" \
             " [ -c ] [ -m ]\n" %(sys.argv[0])
     print "%s status restore_ID.job\n" %(sys.argv[0])
@@ -172,7 +174,7 @@ def parse_args(args):
         options['validate_blob'] = False
         options['check_master_backup'] = False
         try:
-            opts, args = getopt.getopt(args[2:], 'k:n:d:g:p:f:cmh')
+            opts, args = getopt.getopt(args[2:], 'k:n:t:g:p:f:cmh')
         except getopt.GetoptError, e:
             usage(e.msg)
 
@@ -182,13 +184,22 @@ def parse_args(args):
                     options['key_file'] = a
                 elif o == '-n':
                     options['shard_count'] = int(a)
-                elif o == '-d':
+                elif o == '-t':
                     options['restore_date'] = a
                     try:
-                        year, month, day = map(lambda x: int(x), a.split('-'))
-                        restore_date = datetime.date(year, month, day)
-                        today = datetime.date.today()
-                        if restore_date > today:
+                        now = time.time()
+                        if " " in a:
+                            d,t = a.split(' ')
+                            year, month, day = map(lambda x: int(x), d.split('-'))
+                            hr, mins, secs = map(lambda x: int(x), t.split(':'))
+                            restore_datetime = calendar.timegm((year,month,day,hr,mins,secs))
+                            if restore_datetime < (now - 24*60*60):
+                                log("Warning: The time (%s) is ignored since date is older than 1 day" %t)
+                        else:
+                            year, month, day = map(lambda x: int(x), a.split('-'))
+                            restore_datetime = calendar.timegm((year,month,day,0,0,0))
+
+                        if restore_datetime > now:
                             usage("ERROR: Trying to restore from future date")
                     except Exception, e:
                         usage("ERROR: Invalid date specified")

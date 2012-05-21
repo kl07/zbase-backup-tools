@@ -39,13 +39,42 @@ def log(msg):
     print msg 
     logger.info(msg)
 
+def backup_filename_to_epoch(filename):
+    """
+    Return epoch from filename-timestamp
+    """
+
+    dt = "-".join(os.path.basename(filename).split('-')[1:-1])
+    return time.mktime(time.strptime(dt,'%Y-%m-%d_%H:%M:%S')), dt
+
 class BackupServer:
     def __init__(self, cloud_game_id, hostname):
         self.cloud, self.game_id = cloud_game_id.split('-')
         self.hostname = hostname
 
-    def list_backups(self, start_date, days=0, master_backup=False):
+    def list_backups(self, start_datetime, days=0, master_backup=False):
         backups = []
+        if " " in start_datetime:
+            start_date, start_time = start_datetime.split(' ')
+            compare_epoch, ts = backup_filename_to_epoch("backup-%s_%s-00000.mbb" %(start_date, start_time))
+            backup_dir = '%s/%s/%s/%s/%s/' %(consts.STORAGE_SERVER_ROOT, self.game_id,
+                    self.hostname, self.cloud, consts.INCR_DIRNAME)
+            ls_cmd = "/usr/bin/find -L %s -type f -name '*.mbb'" %backup_dir
+            status, output = getcommandoutput(ls_cmd, None)
+            if status != 0:
+                output = ''
+            lines = filter(lambda x: x.strip()!='', output.split('\n'))
+            lines.sort()
+            lines.reverse()
+            for f in lines:
+                epoch, timestamp = backup_filename_to_epoch(f)
+                if epoch < compare_epoch:
+                    regex = re.compile('-(\d+).mbb')
+                    split_no = int(regex.findall(f)[0])
+                    backups.append(Backup(f, timestamp, split_no))
+        else:
+            start_date = start_datetime
+
         year, month, day = map(lambda x: int(x), start_date.split('-'))
         datetime_object = datetime.date(year, month, day)
         for i in range(days+1):
