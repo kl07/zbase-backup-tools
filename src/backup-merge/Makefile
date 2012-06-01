@@ -1,4 +1,4 @@
-FLAGS = -lsqlite3 -std=gnu++0x -W -O3
+FLAGS = -lsqlite3 -ljemalloc -std=gnu++0x -W -O3
 
 SOURCE = merge-incremental.cc
 CC = g++
