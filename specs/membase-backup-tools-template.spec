@@ -7,6 +7,7 @@ License: Proprietary
 Source0: _SOURCE 
 Packager: Sarath Lakshman <slakshman@zynga.com>
 AutoReqProv: no
+Requires: jemalloc
 
 %description 
 Membase 1.7.3 backup and restore tools

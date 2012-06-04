@@ -16,7 +16,7 @@
 #include <string>
 #include <fstream>
 #include <iostream>
-#include <tr1/unordered_map>
+#include <google/sparse_hash_map>
 
 using namespace std;
 
@@ -214,7 +214,7 @@ class Merge {
     bool validation;
     int split_size;
     string output_file_pattern;
-    std::tr1::unordered_map <std::string, bool> klist;
+    google::sparse_hash_map <std::string, bool> klist;
     list <std::string> source_files;
     set <int> checkpoints;
 
