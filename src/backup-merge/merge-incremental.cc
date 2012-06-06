@@ -411,6 +411,14 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    char *outdir = new char[outputfile.length()+1];
+    strcpy(outdir, outputfile.c_str());
+    if (access(dirname(outdir), W_OK)) {
+        cout<<"Permission denied. (Please enable write permission for target directory)"<<endl;
+        exit(1);
+    }
+    delete [] outdir;
+
     if (access(inputfile.c_str(), R_OK)) {
         cout<<"Unable to access backup file list"<<endl;
         exit(1);
