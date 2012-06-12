@@ -274,10 +274,14 @@ class DailyMerge(multiprocessing.Process):
             #create a manifest file at this location
             if create_manifest == True and listmbb != None:
                 if os.path.isfile(manifest_file) :
-                    #manifest file already exists, delete and create a new one
-                    os.system("rm -f %s" %manifest_file)
+                    append = True
+                else:
+                    append = False
 
-                fd = open(manifest_file, "w")
+                fd = open(manifest_file, "aw")
+                if append:
+                    fd.write("\n")
+
                 for line in listmbb:
                     try:
                         fd.write(line)
