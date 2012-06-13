@@ -36,6 +36,10 @@ src/membase-backupd \
 src/membase-restore \
 src/memcacheConstants.py \
 src/util.py \
+src/backup_healthcheck \
+src/count_backup_keys.sh \
+src/healthcheck_runner.sh \
+src/synctos3.sh \
 src/zstore_cmd $RPM_BUILD_ROOT/opt/membase/membase-backup/
 cp src/blobrestore_utils/* $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/
 cp conf/clean_blobrestore_jobs.cron $RPM_BUILD_ROOT/opt/membase/membase-backup/
