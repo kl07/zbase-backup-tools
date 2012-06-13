@@ -28,6 +28,8 @@ def getcommandoutput(cmd, queue=None):
 
     output = str.join("", p.stdout.readlines())
     sts = p.wait()
+    if queue != None:
+        queue.queue.remove(p)
 
     if sts is None:
         sts = 0
