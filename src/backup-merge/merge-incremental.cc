@@ -342,25 +342,24 @@ bool Merge::walk_files(list <string> &files, bool validate) {
             }
 
             if (cpoint_id == 0) {
-                cpoint_id = *(cpoint_list.begin());
+                citr = cpoint_list.end();
+                citr--;
+                cpoint_id = *(citr);
             }
             else {
-                if (last_cpoint_list != cpoint_list) {
-                    if (!(cpoint_id == *(cpoint_list.begin()) || cpoint_id == *(cpoint_list.begin())+1)) {
-                        cout<<"ERROR: Checkpoint mismatch in file "<<(*it)<<" last_file_cpoint_id:"<<cpoint_id<<" current_file_cpoint_id:"<<*(cpoint_list.begin())<<endl;
+                if (last_cpoint_list != cpoint_list &&
+                        !(cpoint_id == *(cpoint_list.begin()) || cpoint_id == *(cpoint_list.begin())+1)) {
+
+                        cout<<"ERROR: Checkpoint mismatch in file "<<(*it)
+                            <<" last_file_cpoint_id:"<<cpoint_id
+                            <<" current_file_cpoint_id:"<<*(cpoint_list.begin())<<endl;
+
                         return false;
-                    }
-                    else {
-                        citr = cpoint_list.end();
-                        citr--;
-                        cpoint_id = *(citr);
-                    }
                 }
-                else {
-                    citr = cpoint_list.end();
-                    citr--;
-                    cpoint_id = *(citr);
-                }
+
+                citr = cpoint_list.end();
+                citr--;
+                cpoint_id = *(citr);
             }
         }
         last_cpoint_list = cpoint_list;
