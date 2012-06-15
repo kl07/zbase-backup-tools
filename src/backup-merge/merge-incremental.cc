@@ -65,6 +65,7 @@ bool OutputStore::create_db_name(string &filename) {
         tmp.insert(tpos, "%05d");
         sprintf(buffer, tmp.c_str(), split_number);
         filename = buffer; 
+        delete [] buffer;
         return true;
     }
 }
@@ -272,7 +273,7 @@ void Merge::process() {
         for (it = is.begin(); it != is.end(); it++) {
             Operation *op = &(*it);
             
-            string key(op->key, 0, op->key_size);
+            string key(op->key, op->key_size);
             if (klist.count(key) == 0) {
                 klist[key] = true;
                 target_store->insert(op);
