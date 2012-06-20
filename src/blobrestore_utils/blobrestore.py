@@ -192,6 +192,12 @@ def parse_args(args):
                             d,t = a.split(' ')
                             year, month, day = map(lambda x: int(x), d.split('-'))
                             hr, mins, secs = map(lambda x: int(x), t.split(':'))
+                            if (month not in range(1,13)) or \
+                                (day not in range(1, 32)) or \
+                                  (hr not in range(0,24)) or \
+                               (mins not in range(0, 61)) or \
+                                (secs not in range(0,61)):
+                                    raise Exception
                             restore_datetime = calendar.timegm((year,month,day,hr,mins,secs))
                             if restore_datetime < (now - 24*60*60):
                                 log("Warning: The time (%s) is ignored since date is older than 1 day" %t)
