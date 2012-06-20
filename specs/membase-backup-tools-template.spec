@@ -17,7 +17,6 @@ Membase 1.7.3 backup and restore tools
 %setup
 
 %install 
-mkdir -p $RPM_BUILD_ROOT/opt/membase/membase-backup/t/
 mkdir -p $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/
 mkdir -p $RPM_BUILD_ROOT/etc/init.d/
 mkdir -p $RPM_BUILD_ROOT/etc/membase-backup/
