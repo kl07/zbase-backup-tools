@@ -82,6 +82,7 @@ class MasterMerge(multiprocessing.Process):
                     master_list = glob.glob("%s/*.mbb" %path)
                     if len(master_list) > 0:
                         found_master = True
+                        break
 
                 path = os.path.join(location, consts.PERIODIC_DIRNAME, datestamp)
                 if os.path.exists(os.path.join(path, ".done")):
@@ -89,9 +90,6 @@ class MasterMerge(multiprocessing.Process):
                     periodic_list.sort()
                     periodic_list.reverse()
                     merge_list.extend(periodic_list)
-
-                if found_master:
-                    break
 
             if found_master:
                 master_list.sort()
