@@ -162,6 +162,10 @@ class BackupFactory:
                 raise Exception("ERROR: Could not register tap: %s" %tapname)
             mc.close()
 
+            sclient = mc_bin_client.MemcachedClient(self.host, self.port)
+            self.max_cpoint_id = int(sclient.stats('checkpoint')['vb_0:open_checkpoint_id'])
+            sclient.close()
+
         self.mc = mc_bin_client.MemcachedClient(host, port)
         ext, val = encodeTAPConnectOpts({
           memcacheConstants.TAP_FLAG_CHECKPOINT: '',
@@ -258,9 +262,6 @@ class BackupFactory:
                 if self.full_backup and self.backfill_chk_start == False and len(self.vbmap) == 0:
                     self.vbmap[vbucketId] = [1, 0]
                     t = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-                    sclient = mc_bin_client.MemcachedClient(self.host, self.port)
-                    self.max_cpoint_id = int(sclient.stats('checkpoint')['vb_0:open_checkpoint_id'])
-                    sclient.close()
                     for i in range(1, self.max_cpoint_id):
                         result = add_record(c, chkpoint_stmt,
                                         (vbucketId, i, -1, self.source, t))
