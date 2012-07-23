@@ -263,6 +263,8 @@ void CheckpointValidator::addCheckpointList(std::list<Checkpoint>& cplist, std::
         std::map<uint64_t, std::list<Checkpoint> >::iterator curr_map_it, last_map_it;
         bool repeated_cpoints(false);
 
+        cplist.sort();
+        cplist.reverse();
         std::list<Checkpoint>::iterator it = cplist.begin();
 
         for (; it!=cplist.end(); it++) {
@@ -273,15 +275,14 @@ void CheckpointValidator::addCheckpointList(std::list<Checkpoint>& cplist, std::
                 cpMap[(*it).getVBId()] = lst;
 
             } else {
+                if ((*curr_map_it).second.back().getCheckpointId() != (*it).getCheckpointId()+1) {
+                    std::cout<<"ERROR: Checkpoint validation failed within the file, "<<filename<<std::endl;
+                    exit(1);
+                }
                 (*curr_map_it).second.push_back(*it);
             }
         }
 
-        for (curr_map_it=cpMap.begin(); curr_map_it!=cpMap.end(); curr_map_it++) {
-            (*curr_map_it).second.sort();
-            (*curr_map_it).second.reverse();
-        }
-        
         if (first_backup) {
             first_backup = false;
         } else {
