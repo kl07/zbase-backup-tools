@@ -10,7 +10,7 @@
 class Timing {
 
 public:
-    Timing(string name, bool autodisplay=true): total(0), stopped(false), display_at_end(autodisplay) {
+    Timing(std::string name, bool autodisplay=true): total(0), stopped(false), display_at_end(autodisplay) {
 #ifdef SHOW_TIME
         blockname = name;
         start();
@@ -65,7 +65,7 @@ private:
         gettimeofday(&time, NULL);
         return time.tv_sec*1000000 + time.tv_usec;
     }
-    string blockname;
+    std::string blockname;
     uint64_t total;
     uint64_t time_start;
     bool stopped;

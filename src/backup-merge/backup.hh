@@ -335,14 +335,14 @@ public:
     /**
      * Initialize
      */
-    Merge(std::list<string> files, std::string output_file, int split, bool validate, size_t max_cache, std::string page_file);
+    Merge(std::list<std::string> files, std::string output_file, int split, bool validate, size_t max_cache, std::string page_file);
 
 
     /**
      * Walk through the source db files and set populate checkpoints set
      * If validate=true, validate checkpoint ordering in the files
      */
-    bool walk_files(list <string> &files, bool validate);
+    bool walk_files(std::list <std::string> &files, bool validate);
 
     /**
      * Start merge processing of files and create output merged split files

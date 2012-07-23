@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     size_t cache_size(1024); 
     int required = 0;
     bool validation(false);
-    std::list <string> files;
+    std::list <std::string> files;
     std::fstream ifs;
     std::string inputfile, outputfile, dbfile;
     std::string buffer;
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
                 break;
             case '?':
                 if (optopt == 'i' || optopt == 'o' || optopt == 'd')
-                    cout<<"Option -"<<(char) optopt<<" requires argument"<<endl;
+                    std::cout<<"Option -"<<(char) optopt<<" requires argument"<<std::endl;
                 exit(1);
             default:
                 exit(1);
@@ -59,14 +59,14 @@ int main(int argc, char **argv) {
     }
     
     if (required != 3) {
-        cout<<"Usage: "<<argv[0]<<" -i files.txt -o file-%.mbb [-s 512] [-v] -d hashdb_file"<<endl;
+        std::cout<<"Usage: "<<argv[0]<<" -i files.txt -o file-%.mbb [-s 512] [-v] -d hashdb_file"<<std::endl;
         exit(1);
     }
 
     dirpath = new char[outputfile.length()+1];
     strcpy(dirpath, outputfile.c_str());
     if (access(dirname(dirpath), W_OK)) {
-        cout<<"Permission denied. (Please enable write permission for target directory)"<<endl;
+        std::cout<<"Permission denied. (Please enable write permission for target directory)"<<std::endl;
         exit(1);
     }
     delete [] dirpath;
@@ -74,28 +74,28 @@ int main(int argc, char **argv) {
     dirpath = new char[dbfile.length()+1];
     strcpy(dirpath, dbfile.c_str());
     if (access(dirname(dirpath), W_OK)) {
-        cout<<"Permission denied. (Please enable write permission for hashdb file directory)"<<endl;
+        std::cout<<"Permission denied. (Please enable write permission for hashdb file directory)"<<std::endl;
         exit(1);
     }
     delete [] dirpath;
 
     if (access(inputfile.c_str(), R_OK)) {
-        cout<<"Unable to access backup file list"<<endl;
+        std::cout<<"Unable to access backup file list"<<std::endl;
         exit(1);
     }
 
-    cout<<"Merging backup files:"<<endl;
-    ifs.open(inputfile.c_str(), fstream::in);
+    std::cout<<"Merging backup files:"<<std::endl;
+    ifs.open(inputfile.c_str(), std::fstream::in);
     while (ifs>>buffer) {   
         if (access(buffer.c_str(), R_OK)) {
-            cout<<"ERROR: File "<<buffer<<" cannot be accessed"<<endl;
+            std::cout<<"ERROR: File "<<buffer<<" cannot be accessed"<<std::endl;
             exit(1);
         }
 
         files.push_back(buffer);
-        cout<<buffer<<endl;
+        std::cout<<buffer<<std::endl;
     }   
-    cout<<endl;
+    std::cout<<std::endl;
 
     Merge merge(files, outputfile, split_size, validation, cache_size, dbfile);
     merge.process();

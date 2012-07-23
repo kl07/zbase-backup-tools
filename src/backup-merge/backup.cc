@@ -173,7 +173,6 @@ void Backup::genTempFileName() {
     }
 }
 
-
 Statements::Statements(SQLiteDB *db, int stmts) {
 
     ins_op = ins_cp = rd_op = rd_cp = cr_index = cr_table_op = cr_table_cp = NULL;
@@ -313,11 +312,11 @@ void CheckpointValidator::addCheckpointList(std::list<Checkpoint>& cplist, std::
 
 }
 
-bool Merge::walk_files(std::list <string> &files, bool validate) {
+bool Merge::walk_files(std::list <std::string> &files, bool validate) {
     CheckpointValidator cv(validate);
     std::list<Checkpoint> cplist;
     Backup *backup;
-    std::list<string>::iterator it;
+    std::list<std::string>::iterator it;
 
     for (it=files.begin(); it!=files.end(); it++) {
         backup = new Backup(*it, BACKUP_CP_RD_ONLY);
@@ -331,7 +330,7 @@ bool Merge::walk_files(std::list <string> &files, bool validate) {
     cv.getCheckpointList(checkpoints);
 }
 
-Merge::Merge(list <string> files, string output_file, int split, bool validate, size_t max_cache, string page_file): 
+Merge::Merge(std::list <std::string> files, std::string output_file, int split, bool validate, size_t max_cache, std::string page_file): 
     source_files(files), output_file_pattern(output_file), split_size(split), validation(validate) {
 
         walk_files(source_files, validation);
@@ -354,7 +353,7 @@ void Merge::process() {
     Timing t_ip_backup_init("Backup - copy to tmpfs"),
            t_op_backup_dest("Backup - copy to disk");
 
-    std::list <string>::iterator f;
+    std::list <std::string>::iterator f;
     f = source_files.begin();
     outfile = genfilename(output_file_pattern, split_no);
     std::cout<<"Creating backup file - "<<outfile<<std::endl;
@@ -367,7 +366,7 @@ void Merge::process() {
         Timing t_total("Total"), t_kyotoinsert("HashDB insert"),
                t_dbinsert("Backup insert"), t_dbread("Backup read");
 
-        cout<<"Processing file - "<<*f<<endl;
+        std::cout<<"Processing file - "<<*f<<std::endl;
 
         t_ip_backup_init.start();
         ibackup = new Backup(*f, BACKUP_RD_ONLY | BACKUP_TMPFS_BACKEND);
@@ -383,7 +382,6 @@ void Merge::process() {
             t_kyotoinsert.stop();
 
             if (isKyotoInsert) {
-
                 t_dbinsert.start();
                 op_rv = obackup->putOperation(op);
                 t_dbinsert.stop();

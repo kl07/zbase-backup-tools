@@ -59,7 +59,7 @@ int PreparedStatement::execute() {
         } else {
             const char *msg = sqlite3_errmsg(db);
             std::cout<<"ERROR: sqlite error: "<<msg<<std::endl;
-            return -1;
+            exit(1);
         }
     }
     return sqlite3_changes(db);
@@ -80,6 +80,7 @@ bool PreparedStatement::fetch() {
         ss << "Unhandled case in sqlite-pst: ";
         const char *msg = sqlite3_errmsg(db);
         std::cout<<"ERROR: "<<ss.str()<<msg<<std::endl;
+        exit(1);
     }
     return rv;
 }

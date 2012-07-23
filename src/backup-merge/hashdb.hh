@@ -6,8 +6,6 @@
 #include <kchashdb.h>
 #define BUCKET_SIZE 100000000
 
-using namespace std;
-
 class HashDB {
 
     public:
@@ -29,7 +27,7 @@ class HashDB {
             if (!db.get(key, &val))
             {
                 if(!db.set(key,"")) {
-                    cout<<"ERROR: Unable to set into Cache"<<endl;
+                    std::cout<<"ERROR: Unable to set into Cache"<<std::endl;
                     exit(1);
                 }
 
