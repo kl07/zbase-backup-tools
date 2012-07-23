@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
     }
     
     if (required != 3) {
-        std::cout<<"Usage: "<<argv[0]<<" -i files.txt -o file-%.mbb [-s 512] [-v] -d hashdb_file"<<std::endl;
+        std::cout<<"Usage: "<<argv[0]<<" -i files.txt -o file-%.mbb [-s 512] [-c 1024] [-v] -d hashdb_file"<<std::endl;
         exit(1);
     }
 
