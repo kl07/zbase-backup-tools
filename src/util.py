@@ -52,7 +52,7 @@ def create_split_db(db_file_name, max_db_size):
         BEGIN;
         CREATE TABLE cpoint_op
         (vbucket_id integer, cpoint_id integer, seq integer, op text,
-        key varchar(250), flg integer, exp integer, cas integer, val blob);
+        key varchar(250), flg integer, exp integer, cas integer, cksum integer, val blob);
         CREATE TABLE cpoint_state
         (vbucket_id integer, cpoint_id integer, prev_cpoint_id integer, state varchar(1),
         source varchar(250), updated_at text);

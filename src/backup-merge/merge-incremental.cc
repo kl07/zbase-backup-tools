@@ -20,16 +20,17 @@ using namespace std;
 
 Operation::Operation(uint32_t exp_val, char *key_val, int key_size_val, char *op_val,
             int op_size_val, char *blob_val, int blob_size_val, uint16_t vbid_val,
-            uint64_t cpoint_id_val, uint32_t flags_val, uint64_t cas_val, uint64_t seq_val):
+            uint64_t cpoint_id_val, uint32_t flags_val, uint64_t cas_val, uint64_t seq_val, 
+            char *ck, size_t ck_len):
         exp(exp_val), key_size(key_size_val), op_size(op_size_val), blob_size(blob_size_val),
         vbid(vbid_val), cpoint_id(cpoint_id_val), flags(flags_val), cas(cas_val), seq(seq_val) {
-
     key = new char[key_size];
     op = new char[op_size];
     blob = new char[blob_size];
     memcpy(key, key_val, key_size);
     memcpy(op, op_val, op_size);
     memcpy(blob, blob_val, blob_size);
+    cksum.assign(ck, ck_len);    
 }
 
 Operation::Operation(const Operation& operation):
@@ -43,6 +44,7 @@ Operation::Operation(const Operation& operation):
     memcpy(key, operation.key, key_size);
     memcpy(op, operation.op, op_size);
     memcpy(blob, operation.blob, blob_size);
+    cksum.assign(operation.cksum);
 }
 
 Operation:: ~Operation() {
@@ -83,6 +85,7 @@ bool OutputStore::initialize_db(string name) {
     }
 
     assert(sqlite3_exec(db, backup_schema, 0, 0, 0) == SQLITE_OK);
+    assert(sqlite3_exec(db, "pragma user_version=2", 0, 0, 0) == SQLITE_OK);
     assert(sqlite3_exec(db, "pragma page_size=1024", 0, 0, 0) == SQLITE_OK);
     assert(sqlite3_exec(db, "pragma count_changes=OFF", 0, 0, 0) == SQLITE_OK);
     assert(sqlite3_exec(db, "pragma temp_store=MEMORY", 0, 0, 0) == SQLITE_OK);
@@ -151,6 +154,7 @@ bool OutputStore::insert(const Operation *op) {
     sqlite3_bind_int(stmt, insert_flag_idx, op->flags);
     sqlite3_bind_int(stmt, insert_exp_idx, op->exp);
     sqlite3_bind_int64(stmt, insert_cas_idx, op->cas);
+    sqlite3_bind_text(stmt, insert_cksum_idx, op->cksum.c_str(), op->cksum.size(), SQLITE_STATIC);
     sqlite3_bind_blob(stmt, insert_blob_idx, op->blob, op->blob_size, SQLITE_STATIC);
     assert(sqlite3_step(stmt) == SQLITE_DONE);
     assert(sqlite3_finalize(stmt)==SQLITE_OK);
@@ -199,16 +203,51 @@ InputStore::InputStore(string file) {
 
 bool InputStore::read() {
     sqlite3_stmt *stmt = NULL;
-    if (sqlite3_prepare_v2(db, read_query, strlen(read_query), &stmt, NULL) != SQLITE_OK) {
+    const char * rquery = NULL;
+    int version = 0, rc;    
+    assert(sqlite3_prepare(db, "pragma user_version;", -1, &stmt, NULL) == SQLITE_OK);
+    while ((rc = sqlite3_step(stmt)) != SQLITE_DONE) {
+        if (rc == SQLITE_ROW) {
+            version = sqlite3_column_int(stmt, 0);
+            break;
+        } else if (rc == SQLITE_BUSY) {
+            cout<<"WARNING: Database busy"<<endl;
+        } else {
+            cout<<"ERROR: Unable to read user_version"<<endl;
+            exit(1);
+        }
+    }
+    sqlite3_finalize(stmt);    
+
+    switch (version) {
+        case NO_VERSION:
+        case DEFAULT_VERSION:
+            rquery = read_query;
+            break;
+        case WITH_CKSUM_VERSION:
+            rquery = read_query_with_cksum;
+            break;
+        default:
+            cout <<"ERROR: Unknown user version " << version << endl; 
+    }
+
+    if (sqlite3_prepare(db, rquery, strlen(rquery), &stmt, NULL) != SQLITE_OK) {
         (void) sqlite3_finalize(stmt);
         (void) sqlite3_close(db);
-        cout<<"ERROR: Reading from backup failed (sqlite prepare)"<<endl;
+        cout<<"ERROR: Reading from backup failed (sqlite prepare) %s"<< sqlite3_errmsg(db)<<endl;
         return false;
     }
 
-    int rc;
+    char *cksum = NULL;
+    int cksum_len = 0;
+        
     while ((rc = sqlite3_step(stmt)) != SQLITE_DONE) {
         if (rc == SQLITE_ROW) {
+            if (version == WITH_CKSUM_VERSION) {
+                cksum_len = sqlite3_column_bytes(stmt, read_cksum_idx);
+                cksum = (char *) sqlite3_column_text(stmt, read_cksum_idx);
+            }
+            
             Operation op(
                     sqlite3_column_int(stmt, read_exp_idx),
                     (char*)sqlite3_column_text(stmt, read_key_idx),
@@ -221,7 +260,9 @@ bool InputStore::read() {
                     (uint64_t)sqlite3_column_int64(stmt, read_cpoint_idx),
                     sqlite3_column_int(stmt, read_flag_idx),
                     sqlite3_column_int64(stmt, read_cas_idx),
-                    sqlite3_column_int64(stmt, read_seq_idx));
+                    sqlite3_column_int64(stmt, read_seq_idx),
+                    cksum,
+                    cksum_len);
             operations.push_back(op);
 
         } else if (rc == SQLITE_BUSY) {
@@ -301,7 +342,7 @@ bool Merge::walk_files(list <string> &files, bool validate) {
 
     for (it=files.begin(); it!=files.end(); it++) {
         assert(sqlite3_open((*it).c_str(), &tmp_db) == SQLITE_OK);
-        if (sqlite3_prepare_v2(tmp_db, cpoint_read, strlen(cpoint_read), &stmt, NULL) != SQLITE_OK) {
+        if (sqlite3_prepare(tmp_db, cpoint_read, strlen(cpoint_read), &stmt, NULL) != SQLITE_OK) {
             cout<<"ERROR: Unable to open file "<<(*it)<<endl;
             return false;
         }

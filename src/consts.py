@@ -39,3 +39,4 @@ STORAGE_SERVER_ROOT = '/var/www/html/membase_backup'
 MAX_BACKUP_LOOKUP_DAYS = 21
 LAST_MASTER_BACKUP_TIME = '/db/last_master_backup'
 NAGIOS_BACKUP_TIME = '/tmp/nagios_state/mb_backup_time'
+CKSUM_VERSION = 2

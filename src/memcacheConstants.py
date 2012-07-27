@@ -115,6 +115,7 @@ TAP_FLAG_SUPPORT_ACK       = 0x10
 TAP_FLAG_REQUEST_KEYS_ONLY = 0x20
 TAP_FLAG_CHECKPOINT        = 0x40
 TAP_FLAG_REGISTERED_CLIENT = 0x80
+TAP_FLAG_CKSUM             = 0x100
 
 TAP_FLAG_TYPES = {TAP_FLAG_BACKFILL: ">Q",
                   TAP_FLAG_REGISTERED_CLIENT: ">B"}
@@ -125,16 +126,18 @@ TAP_FLAG_NO_VALUE = 0x02 # The value for the key is not included in the packet
 
 # Flags, expiration
 SET_PKT_FMT=">II"
+SET_PKT_FMT_WITH_CKSUM=">III"
 
-# flags
+# cksum flags
 GET_RES_FMT=">I"
+GET_RES_FMT_CKSUM=">II"
 
 # How long until the deletion takes effect.
 DEL_PKT_FMT=""
 
 ## TAP stuff
-# eng-specific length, flags, ttl, [res, res, res]; item flags, exp
-TAP_MUTATION_PKT_FMT = ">HHbxxxII"
+# eng-specific length, flags, ttl, cksum_length, [res]; item flags, exp
+TAP_MUTATION_PKT_FMT = ">HHbbxxII"
 TAP_GENERAL_PKT_FMT = ">HHbxxx"
 
 # amount, initial value, expiration

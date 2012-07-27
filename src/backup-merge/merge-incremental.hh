@@ -30,7 +30,8 @@ enum {
     read_cas_idx,
     read_val_idx,
     read_cpoint_idx,
-    read_seq_idx
+    read_seq_idx,
+    read_cksum_idx
 };
 
 enum {
@@ -42,6 +43,7 @@ enum {
     insert_flag_idx,
     insert_exp_idx,
     insert_cas_idx,
+    insert_cksum_idx,
     insert_blob_idx
 };
 
@@ -54,12 +56,18 @@ enum {
     cpstate_dt_text_idx
 };
 
+enum {
+    NO_VERSION,    
+    DEFAULT_VERSION,
+    WITH_CKSUM_VERSION
+};
+
 // SQL Queries
 const char *backup_schema =
         "BEGIN; "
         "CREATE TABLE IF NOT EXISTS cpoint_op"
         "(vbucket_id integer, cpoint_id integer, seq integer, op text, "
-        "key varchar(250), flg integer, exp integer, cas integer, val blob,"
+        "key varchar(250), flg integer, exp integer, cas integer, cksum varchar(100), val blob,"
         "primary key(vbucket_id, key));"
         "CREATE TABLE IF NOT EXISTS cpoint_state"
         "(vbucket_id integer, cpoint_id integer, prev_cpoint_id integer, state varchar(1), "
@@ -68,11 +76,15 @@ const char *backup_schema =
 
 const char *insert_query =
         "INSERT OR IGNORE into cpoint_op"
-        "(vbucket_id, cpoint_id, seq, op, key, flg, exp, cas, val)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)" ;
+        "(vbucket_id, cpoint_id, seq, op, key, flg, exp, cas, cksum, val)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" ;
 
 const char *read_query =
         "select vbucket_id,op,key,flg,exp,cas,val,cpoint_id,seq "
+        "from cpoint_op ";
+
+const char *read_query_with_cksum =
+        "select vbucket_id,op,key,flg,exp,cas,val,cpoint_id,seq,cksum "
         "from cpoint_op ";
 
 const char *insert_cstate =
@@ -91,6 +103,7 @@ class Operation {
     char *key;
     char *op;
     char *blob;
+    string cksum;
     uint16_t vbid;
     uint64_t cpoint_id;
     uint32_t flags;
@@ -107,7 +120,8 @@ public:
      */
     Operation(uint32_t exp_val, char *key_val, int key_size_val, char *op_val,
             int op_size_val, char *blob_val, int blob_size_val, uint16_t vbid_val, 
-            uint64_t cpoint_id_val, uint32_t flags_val, uint64_t cas_val, uint64_t seq_val);
+            uint64_t cpoint_id_val, uint32_t flags_val, uint64_t cas_val, uint64_t seq_val, 
+            char *ck, size_t ck_len);
     /**
      * Copy constructor
      */

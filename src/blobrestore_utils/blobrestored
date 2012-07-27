@@ -220,7 +220,12 @@ class Backup:
         self.db.close()
 
     def get_key(self, key):
-        query = 'select cpoint_id,key,flg,exp,cas,val,"%s",op from cpoint_op where key="%s"' %(self.date, key)
+        cur = self.db.execute("pragma user_version").fetchall()[0][0]
+        query = ''
+        if cur >= consts.CKSUM_VERSION:
+            query = 'select cpoint_id,key,flg,exp,cas,val,"%s",cksum,op from cpoint_op where key="%s"' %(self.date, key)
+        else:  
+            query = 'select cpoint_id,key,flg,exp,cas,val,"%s",op from cpoint_op where key="%s"' %(self.date, key)
         cursor = self.db.execute(query)
         rv = cursor.fetchone()
         if rv:
@@ -229,7 +234,7 @@ class Backup:
             else:
                 rv = rv[:-1]
 
-        return rv
+        return rv, cur >= consts.CKSUM_VERSION
 
     def validate_blob(self, key_item):
         return True
@@ -240,7 +245,7 @@ class Backup:
         for k in keys:
             self.log("Looking for key:%s" %k)
             rv = self.get_key(k)
-            if rv:
+            if rv[0]:
                 if validate:
                     if self.validate_blob(rv):
                         output[k] = rv

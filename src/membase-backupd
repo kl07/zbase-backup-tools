@@ -513,7 +513,7 @@ class BackupProcess:
                     consts.BACKUP_TAPNAME, self.logger, 'localhost',11211) 
         except Exception, e:
             self.logger.log("FAILED: Initializing backup factory instance")
-            self.log(str(e))
+            self.logger.log(str(e))
             self.exit(1)
 
         while not bf_instance.is_complete():

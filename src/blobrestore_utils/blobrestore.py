@@ -265,7 +265,7 @@ class MembasePool:
             sys.exit(1)
             return False
 
-    def set_key(self, key, flg, exp, val, date):
+    def set_key(self, key, flg, exp, val, date, cksum):
         server = None
         try:
             count = len(self.servers)
@@ -273,7 +273,9 @@ class MembasePool:
                 log("No servers added to server list")
                 sys.exit(1)
             server = self.servers[keyhash(key) % count]
-            server.set(key, exp, flg, val)
+            if not server.options_supported():
+                cksum = None
+            server.set(key, exp, flg, val, cksum)
             log("Successfully set key:%s to server:%s date:%s" %(key,
                 server.host, date))
         except Exception, e:
@@ -295,16 +297,19 @@ class KeyStore:
         self.db.executescript("""
         BEGIN;
         CREATE TABLE IF NOT EXISTS restored_keys
-        (cpoint_id integer, key varchar(250), flg integer, exp integer, cas integer, val blob, date text);
+        (cpoint_id integer, key varchar(250), flg integer, exp integer, cas integer, val blob, date text, cksum varchar(100));
         COMMIT;
         """)
 
     def write(self, blobs):
         for b in blobs.values():
-            c = self.db.execute('INSERT INTO restored_keys VALUES(?,?,?,?,?,?,?);', b)
+            if b[1]:
+                c = self.db.execute('INSERT INTO restored_keys VALUES(?,?,?,?,?,?,?,?);', b[0])
+            else:
+                c = self.db.execute('INSERT INTO restored_keys(cpoint_id,key,flg,exp,cas,val,date) VALUES(?,?,?,?,?,?,?);', b[0])
 
     def get_read_cursor(self):
-        cursor = self.db.execute('SELECT key,flg,exp,val,date,cpoint_id from restored_keys')
+        cursor = self.db.execute('SELECT key,flg,exp,val,date,cpoint_id,cksum from restored_keys')
         return cursor
 
     def read(self):
@@ -584,10 +589,12 @@ class BlobrestoreDispatcher:
             ks = KeyStore(fpath)
             restored_key = ks.read()
             while restored_key:
-                key, flg, exp, val, date, cpoint_id = restored_key
+                key, flg, exp, val, date, cpoint_id, cksum = restored_key
+                if cksum:
+                    cksum = str(cksum)
                 if self.options['repair_mode']:
                     key += '_r'
-                membasepool.set_key(str(key), socket.ntohl(flg), exp, str(val), date)
+                membasepool.set_key(str(key), socket.ntohl(flg), exp, str(val), date, cksum)
                 restored_key = ks.read()
 
 if __name__ == '__main__':

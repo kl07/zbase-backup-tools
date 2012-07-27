@@ -9,7 +9,7 @@ import select
 import datetime
 import consts
 
-MBB_VERSION = "1"
+MBB_VERSION = "2"
 TIMEOUT = 0
 TXN_SIZE = 100
 
@@ -24,8 +24,8 @@ chkpoint_stmt = "INSERT into cpoint_state" \
                     " VALUES (?, ?, ?, \"closed\", ?, ?)"
 
 tap_stmt = "INSERT OR REPLACE into cpoint_op" \
-            "(vbucket_id, cpoint_id, seq, op, key, flg, exp, cas, val)" \
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "(vbucket_id, cpoint_id, seq, op, key, flg, exp, cas, cksum, val)" \
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
 del_chk_start_stmt = "DELETE FROM cpoint_state WHERE state=\"closed\" and cpoint_id=%d"
 
@@ -57,16 +57,16 @@ def encodeTAPConnectOpts(opts, backfill=False):
 
 def parseTapExt(ext):
     if len(ext) == 8:
-        flg = exp = 0
+        flg = exp = cksum_len = 0
         eng_length, flags, ttl = \
             struct.unpack(memcacheConstants.TAP_GENERAL_PKT_FMT, ext)
     else:
-        eng_length, flags, ttl, flg, exp = \
+        eng_length, flags, ttl, cksum_len, flg, exp  = \
             struct.unpack(memcacheConstants.TAP_MUTATION_PKT_FMT, ext)
 
     needAck = flags & memcacheConstants.TAP_FLAG_ACK
 
-    return eng_length, flags, ttl, flg, exp, needAck
+    return eng_length, flags, ttl, flg, exp, needAck, cksum_len
 
 def add_record(cursor, stmt, fields):
     result = True
@@ -88,7 +88,7 @@ def create_backup_db(backup_file_name, max_backup_size, split_backup, deduplicat
         BEGIN;
         CREATE TABLE cpoint_op
         (vbucket_id integer, cpoint_id integer, seq integer, op text,
-        key varchar(250), flg integer, exp integer, cas integer, val blob,
+        key varchar(250), flg integer, exp integer, cas integer, cksum varchar(100), val blob,
         primary key(vbucket_id, key));
         CREATE TABLE cpoint_state
         (vbucket_id integer, cpoint_id integer, prev_cpoint_id integer, state varchar(1),
@@ -101,7 +101,7 @@ def create_backup_db(backup_file_name, max_backup_size, split_backup, deduplicat
         BEGIN;
         CREATE TABLE cpoint_op
         (vbucket_id integer, cpoint_id integer, seq integer, op text,
-        key varchar(250), flg integer, exp integer, cas integer, val blob);
+        key varchar(250), flg integer, exp integer, cas integer, cksum varchar(100), val blob);
         CREATE TABLE cpoint_state
         (vbucket_id integer, cpoint_id integer, prev_cpoint_id integer, state varchar(1),
         source varchar(250), updated_at text);
@@ -153,7 +153,8 @@ class BackupFactory:
             memcacheConstants.TAP_FLAG_CHECKPOINT: (1, 0, 0),
             memcacheConstants.TAP_FLAG_SUPPORT_ACK: '',
             memcacheConstants.TAP_FLAG_REGISTERED_CLIENT: 0x01, # "value > 0" means "closed checkpoints only"
-            memcacheConstants.TAP_FLAG_BACKFILL: 0x00000000
+            memcacheConstants.TAP_FLAG_BACKFILL: 0x00000000,
+            memcacheConstants.TAP_FLAG_CKSUM: ''
             }, True)
 
             mc._sendCmd(memcacheConstants.CMD_TAP_CONNECT, tapname, val, 0, ext)
@@ -171,7 +172,8 @@ class BackupFactory:
           memcacheConstants.TAP_FLAG_CHECKPOINT: '',
           memcacheConstants.TAP_FLAG_SUPPORT_ACK: '',
           memcacheConstants.TAP_FLAG_REGISTERED_CLIENT: 0x01, # "value > 0" means "closed checkpoints only"
-          memcacheConstants.TAP_FLAG_BACKFILL: 0xffffffff
+          memcacheConstants.TAP_FLAG_BACKFILL: 0xffffffff,
+          memcacheConstants.TAP_FLAG_CKSUM: ''
         })
 
         self.mc._sendCmd(memcacheConstants.CMD_TAP_CONNECT, tapname, val, 0, ext)
@@ -243,7 +245,7 @@ class BackupFactory:
             db.close()
             self.split_no += 1
             return filepath
-
+               
         while True:
             if TIMEOUT > 0:
                 iready, oready, eready = select.select(self.sinput, [], [], TIMEOUT)
@@ -285,12 +287,18 @@ class BackupFactory:
                 checkpointId = c_s[0]
                 seq          = c_s[1] = c_s[1] + 1
 
-                eng_length, flags, ttl, flg, exp, needAck = parseTapExt(ext)
+                eng_length, flags, ttl, flg, exp, needAck, cksum_len = parseTapExt(ext)
+                cksum = "";
+
+                if cksum_len > 0:
+                    cksum_offset = len(val) - cksum_len
+                    cksum = val[cksum_offset:]
+                    val = val[:cksum_offset]
 
                 val = sqlite3.Binary(val)
-                self.op_records.append((vbucketId, checkpointId, seq, cmdOp,key, flg, exp, cas, val))
+                self.op_records.append((vbucketId, checkpointId, seq, cmdOp,key, flg, exp, cas, cksum, val))
                 result = add_record(c, tap_stmt, (vbucketId, checkpointId, seq, cmdOp,
-                                                  key, flg, exp, cas, val))
+                                                  key, flg, exp, cas, cksum, val))
                 self.update_count = self.update_count + 1
                 if result == False:
                     ## The current backup db file is full
@@ -311,7 +319,7 @@ class BackupFactory:
 
             elif cmd == memcacheConstants.CMD_TAP_CHECKPOINT_START:
                 if len(ext) > 0:
-                    eng_length, flags, ttl, flg, exp, needAck = parseTapExt(ext)
+                    eng_length, flags, ttl, flg, exp, needAck, cksum = parseTapExt(ext)
                 checkpoint_id = struct.unpack(">Q", val)
                 checkpointStartExists = False
                 self.current_checkpoint_id = checkpoint_id[0]
@@ -363,7 +371,7 @@ class BackupFactory:
                              % (checkpoint_id[0], vbucketId, self.current_checkpoint_id))
 
                 if len(ext) > 0:
-                    eng_length, flags, ttl, flg, exp, needAck = parseTapExt(ext)
+                    eng_length, flags, ttl, flg, exp, needAck, cksum = parseTapExt(ext)
 
                 del self.vbmap[vbucketId]
                 db.commit()
@@ -372,7 +380,7 @@ class BackupFactory:
 
             elif cmd == memcacheConstants.CMD_TAP_OPAQUE:
                 if len(ext) > 0:
-                    eng_length, flags, ttl, flg, exp, needAck = parseTapExt(ext)
+                    eng_length, flags, ttl, flg, exp, needAck, cksum = parseTapExt(ext)
                     opaque_opcode = struct.unpack(">I" , val[0:eng_length])
                     if opaque_opcode[0] == memcacheConstants.TAP_OPAQUE_OPEN_CHECKPOINT:
                         if self.update_count > 0:
