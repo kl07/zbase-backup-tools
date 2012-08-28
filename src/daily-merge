@@ -187,22 +187,15 @@ class DailyMerge:
         # delete all the incremental files we just merged if no lock is present
         manifest_file = "%s/manifest.del" %incr_location
         status = self.check_lock(incr_location, True, listfiles, manifest_file)
-        if status == 0:
-            output = os.system("rm -f %s" %listmbb)
-            if output != 0:
-                self.logger.log(" Failed to delete after merge %s" %listmbb)
-                # add these files to the manifest file TODO
-                return False
+
         if status == -1:
             self.logger.log("Failed to check lock for location %s" %self.source_path)
-            os.system("rm -f %s*" %output_file)
             return False
 
         # Remove .split for incrementals that are merged.
         output = os.system("rm -f %s" %" ".join(verified_split))
         if output != 0:
             self.logger.log(" Failed to delete .split in incremental folder after merge %s" %str(verified_split))
-
 
         #add a done file to the directory and we are done for this location
         output = os.system("touch %s" %done_file)
