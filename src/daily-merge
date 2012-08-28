@@ -341,6 +341,4 @@ if __name__ == '__main__':
     fd.close()
 
     merge = DailyMerge(path, date, disk_id)
-    merge.start_merge()
-
-    sys.exit(0)
+    merge.run()

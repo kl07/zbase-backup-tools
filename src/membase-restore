@@ -312,6 +312,7 @@ class Restore:
                 master_backup_epoch -= DAY_EPOCH
                 if attempt == consts.MAX_BACKUP_SEARCH_TRIES - 1:
                     self.logger.log("Could not find master backup. Maximum tries exceeded")
+                    self.exit(1)
                     master_backup_list = []
 
         self.logger.log("Fetching list of periodic backups")

@@ -8,6 +8,9 @@
 #include <iostream>
 #include <sstream>
 
+#define EXIT_COPYFAIL 2
+#define EXIT_REMOVEFAIL 3
+
 
 void copyfile(std::string src, std::string dest, bool nocache_input=true, bool nocache_output=true);
 
