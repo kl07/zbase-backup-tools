@@ -315,7 +315,9 @@ void CheckpointValidator::addCheckpointList(std::list<Checkpoint>& cplist, std::
         }
         
         last_file = filename;
-
+        checkpointList.sort();
+        checkpointList.reverse();
+        checkpointList.unique();
 }
 
 bool Merge::walk_files(std::list <std::string> &files, bool validate) {

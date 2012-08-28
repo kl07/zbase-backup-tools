@@ -9,7 +9,7 @@ from logger import Logger
 from config import Config
 import Queue
 from threading import Thread
-from util import natural_sortkey, backup_filename_to_epoch
+from util import *
 import sys
 import re
 import getopt
@@ -48,8 +48,8 @@ class DailyMerge:
     	# Get all *.splits.
         status, output = commands.getstatusoutput("ls %s/*.split" %incr_location)
         if status != 0:
-            self.logger.log(" Warning: Invalid location %s or no .split files found" %incr_location)
-            return False
+            self.logger.log(" Warning: .split files not found at %s" %incr_location)
+            return True
 
         split_list = output.split("\n")
         split_list = backup_files_filter(self.date, split_list)
@@ -171,7 +171,8 @@ class DailyMerge:
 
         # delete all the incremental files we just merged if no lock is present
         manifest_file = "%s/manifest.del" %incr_location
-        status = self.check_lock(incr_location, True, listfiles, manifest_file)
+        print manifest_file, listfiles
+        status = self.check_lock(incr_location, True, listfiles, manifest_file, True)
 
         if status == -1:
             self.logger.log("Failed to check lock for location %s" %self.source_path)
@@ -247,10 +248,12 @@ class DailyMerge:
 
         return True
 
-    def check_lock(self, location, create_manifest=False, listmbb=None, manifest_file=None):
+    def check_lock(self, location, create_manifest=False, listmbb=None, manifest_file=None, nolockcheck=False):
         locks = glob.glob("%s/.lock-*" %location)
-        if len(locks):
-            self.logger.log("WARNING: .lock file present. Skipping delete")
+        if nolockcheck or len(locks):
+            if nolockcheck == False:
+                self.logger.log("WARNING: .lock file present. Skipping delete")
+
             #create a manifest file at this location
             if create_manifest == True and listmbb != None:
                 if os.path.isfile(manifest_file) :

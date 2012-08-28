@@ -9,14 +9,12 @@ from logger import Logger
 from config import Config
 import Queue
 from threading import Thread
-from util import natural_sortkey
+from util import *
 import sys
 import re
 import getopt
 import datetime
 import fnmatch
-import multiprocessing
-from multiprocessing import Process, Value, Array
 import re
 import time
 import shlex
@@ -25,97 +23,61 @@ import glob
 import tempfile
 import subprocess
 
-PID_FILE = '/var/run/merge.pid'
+class MasterMerge:
 
-class MasterMerge(multiprocessing.Process):
-
-    def __init__(self, pathname=None, token=None):
-        multiprocessing.Process.__init__(self)
+    def __init__(self, source_path, date, disk_id):
+        self.source_path = source_path
+        self.date = date
+        self.timestamp = "%s_00:00:00" %date
+        self.disk_id = disk_id
+        meta_data = "DISK_%d" %disk_id
+        self.logger = Logger(tag = consts.SYSLOG_TAG, meta = meta_data)
 
     def run(self):
+        status = self.start_merge()
+        if status == False:
+            sys.exit(1)
+        else:
+            sys.exit(0)
 
-        try:
-            self.config = Config(consts.CONFIG_FILE)
-            self.config.read()
-            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
-        except Exception, e:
-            self.config.syslog_tag = consts.SYSLOG_TAG
-            self.logger = Logger(tag = self.config.syslog_tag, level = self.config.log_level)
-            self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
+    def start_merge(self):
+        master_location = "%s/master" %self.source_path
+        master_directory = "%s/%s" %(master_location, self.date)
+        self.merged_file = "%s/merged-%s" %(master_directory, self.date)
+        if os.path.isfile(self.merged_file) :
+            self.logger.log("Info: Merging for this location %s has already been completed" %master_location)
+            return True
 
-        self.game_id = self.config.game_id
-        now=datetime.datetime.now()
-        self.now = now
-        self.timestamp = "%d-%02d-%02d_%02d:%02d:%02d" %(now.year,now.month,now.day,now.hour,now.minute,now.second)
-        #get host name from the disk path
-        status,output = commands.getstatusoutput("ls %s/" %pathname)
-        if status != 0:
-            self.logger.log("Cannot find any hostnames in path %s" %pathname)
-            return
+        os.system("rm -f %s/*.mbb" %master_directory)
+        os.system("rm -f %s/*.split" %master_directory)
+        found_master = False
+        merge_list = []
+        yr, mm, dd =  map(lambda x: int(x), self.date.split('-'))
+        datetime_object = datetime.datetime(yr, mm, dd)
+        for i in range(consts.MAX_BACKUP_LOOKUP_DAYS+1):
+            difference = datetime.timedelta(days=-(i))
+            datestamp = (datetime_object + difference).strftime('%Y-%m-%d')
+            path = os.path.join(self.source_path, consts.MASTER_DIRNAME, datestamp)
+            if os.path.exists(os.path.join(path, ".done")):
+                master_list = glob.glob("%s/*.mbb" %path)
+                if len(master_list) > 0:
+                    found_master = True
+                    break
 
-        hosts = output.split()
-        if len(hosts) == 0:
-            self.logger.log(" No directories to process in path %s" %pathname)
-            return
+            path = os.path.join(self.source_path, consts.PERIODIC_DIRNAME, datestamp)
+            if os.path.exists(os.path.join(path, ".done")):
+                periodic_list = glob.glob("%s/*.mbb" %path)
+                periodic_list.sort()
+                periodic_list.reverse()
+                merge_list.extend(periodic_list)
 
-        for hostname in hosts:
-            self.scratch_dir = "/dev/shm/master-%s" %hostname
-            os.system("mkdir -p %s" %self.scratch_dir)
-            location = "%s/%s/%s/%s" %(consts.STORAGE_SERVER_ROOT, self.game_id, hostname, self.config.cloud)
-            master_location = "%s/master" %location
-            master_directory = "%s/%d-%02d-%02d" %(master_location, self.now.year, self.now.month, self.now.day)
-            self.merged_file = "%s/merged-%d-%02d-%02d" %(master_directory, self.now.year, self.now.month, self.now.day)
-            if os.path.isfile(self.merged_file) :
-                self.logger.log("Info: Merged for this location %s already done today" %master_location)
-                continue
-
-            os.system("rm -f %s/*.mbb" %master_directory)
-            os.system("rm -f %s/*.split" %master_directory)
-            found_master = False
-            merge_list = []
-            datetime_object = datetime.date.today()
-            for i in range(consts.MAX_BACKUP_LOOKUP_DAYS+1):
-                difference = datetime.timedelta(days=-(i))
-                datestamp = (datetime_object + difference).strftime('%Y-%m-%d')
-                path = os.path.join(location, consts.MASTER_DIRNAME, datestamp)
-                if os.path.exists(os.path.join(path, ".done")):
-                    master_list = glob.glob("%s/*.mbb" %path)
-                    if len(master_list) > 0:
-                        found_master = True
-                        break
-
-                path = os.path.join(location, consts.PERIODIC_DIRNAME, datestamp)
-                if os.path.exists(os.path.join(path, ".done")):
-                    periodic_list = glob.glob("%s/*.mbb" %path)
-                    periodic_list.sort()
-                    periodic_list.reverse()
-                    merge_list.extend(periodic_list)
-
-            if found_master:
-                master_list.sort()
-                master_list.reverse()
-                merge_list.extend(master_list)
-            else:
-                self.logger.log("No master backupfile found for host %s" %hostname)
-                continue
-
-            #self.logger.log("Going to merge files:")
-            #for f in merge_list:
-            #    self.logger.log("File: %s" %f)
-
-
-            status = self.start_merge(master_location, master_directory, merge_list)
-            status = True
-            if status == False:
-                self.logger.log(" Failed to create daily merged backup for hostname %s" %hostname)
-
-            os.system("rm -rf %s" %self.scratch_dir)
-
-        #increment token to allow another process to continue
-        token.value += 1
-        return
-
-    def start_merge(self, master_location, master_directory, merge_list):
+        if found_master:
+            master_list.sort()
+            master_list.reverse()
+            merge_list.extend(master_list)
+        else:
+            self.logger.log("Err: No master backupfile found")
+            return False
 
         os.system("mkdir -p %s" %master_directory)
 
@@ -151,6 +113,9 @@ class MasterMerge(multiprocessing.Process):
         os.unlink(f.name)
 
         if status != 0:
+            if status == 2: #File copy failed
+                markBadDisk(self.disk_id)
+
             self.logger.log ("Info. Merge failed")
             os.system("rm -f %s/*" %master_directory)
             return False
@@ -199,57 +164,54 @@ class MasterMerge(multiprocessing.Process):
 
         return True
 
+def usage(msg):
+    print "Usage: master-merge -p backup_hostpath -d date"
+    print msg
+    sys.exit(1)
 
 if __name__ == '__main__':
 
-    if os.path.exists(PID_FILE):
-        pid = int(open(PID_FILE, 'r').read())
-        try:
-            os.kill(pid, 0)
-            print("Merge process is already running with PID %d" %pid)
-            os._exit(1)
-        except:
-            pass
-    fd = open(PID_FILE,'w')
-    fd.write(str(os.getpid()))
-    fd.close()
-
-    part_no = 0
-    if len(sys.argv) == 2:
-        part_no = int(sys.argv[1])
-
-    elif len(sys.argv) > 2:
-        print
-        print "Usage: %s <partition number>" %sys.argv[0]
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 'p:d:')
+    except getopt.GetoptError, e:
+        usage(e.msg)
         sys.exit(1)
 
-    jobs = []
-    token = Value('i', 3)
+    date = None
+    path = None
 
-    today=datetime.datetime.date(datetime.datetime.now())
-    partition = today.strftime("%w")
+    try:
+        c = 0
+        for (o,a) in opts:
+            if o == "-p":
+                path = a
+                c+=1
+            elif o == "-d":
+                date = a
+                c+=1
 
-    if part_no == 0:
-        part_no = int(partition) + 1
+        if c != 2:
+            usage("")
 
-    pathname = "/data_%s" %part_no
-    print "Operating on parition %s" %pathname
+        disk_id = int((path.split('/')[1]).split('_')[1])
+    except Exception,e:
+        usage(str(e))
+
+    if date == None or path == None:
+        usage("date and path cannot be empty")
+
+    pidfile = os.path.join("/var/run/master-merge-disk-%d.pid" %disk_id)
+
+    if os.path.exists(pidfile):
+        pid = int(open(pidfile, 'r').read())
+        try:
+            os.kill(pid, 0)
+            print("Mastery merge process is already running with PID %d for disk-%d" %(pid, disk_id))
+            sys.exit(0)
+        except:
+            pass
 
 
-    for i in range(1):
-        #pathname = "/data_%d" %(i+1)
-        #pathname = "/data_3"
-        #while token.value == 0:
-            #wait until a token is available
-            #time.sleep(60)
+    merge = MasterMerge(path, date, disk_id)
+    merge.run()
 
-        merge = MasterMerge(pathname, token)
-        token.value -= 1
-        jobs.append(merge)
-        merge.start()
-
-    #jobs[-1].terminate()
-    for j in jobs:
-        j.join()
-
-    os._exit(0)
