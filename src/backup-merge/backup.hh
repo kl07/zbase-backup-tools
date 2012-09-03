@@ -304,11 +304,17 @@ private:
 class CheckpointValidator {
 
 public:
-    CheckpointValidator(bool v=true): first_backup(true), validation(v) {}
+    CheckpointValidator(bool v=true): first_backup(true), validation(v), cplist_dirty(false) {}
 
     void addCheckpointList(std::list<Checkpoint>& cplist, std::string filename);
 
     void getCheckpointList(std::list<Checkpoint>& cplist) {
+        if (cplist_dirty) {
+            checkpointList.sort();
+            checkpointList.reverse();
+            checkpointList.unique();
+            cplist_dirty = false;
+        }
         cplist = checkpointList;
     }
 private:
@@ -318,6 +324,7 @@ private:
     std::string last_file;
     bool validation;
     bool first_backup;
+    bool cplist_dirty;
 
 };
 

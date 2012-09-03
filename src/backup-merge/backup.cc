@@ -267,6 +267,7 @@ void CheckpointValidator::addCheckpointList(std::list<Checkpoint>& cplist, std::
         std::map<uint64_t, std::list<Checkpoint> > cpMap;
         std::map<uint64_t, std::list<Checkpoint> >::iterator curr_map_it, last_map_it;
         bool repeated_cpoints(false);
+        cplist_dirty = true;
 
         cplist.sort();
         cplist.reverse();
@@ -315,9 +316,7 @@ void CheckpointValidator::addCheckpointList(std::list<Checkpoint>& cplist, std::
         }
         
         last_file = filename;
-        checkpointList.sort();
-        checkpointList.reverse();
-        checkpointList.unique();
+
 }
 
 bool Merge::walk_files(std::list <std::string> &files, bool validate) {
