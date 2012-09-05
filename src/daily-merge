@@ -324,6 +324,7 @@ if __name__ == '__main__':
             sys.exit(0)
         except:
             pass
+
     fd = open(pidfile,'w')
     fd.write(str(os.getpid()))
     fd.close()

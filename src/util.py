@@ -6,6 +6,7 @@ import shlex
 import sqlite3
 import socket
 import time
+import fcntl
 import consts
 
 tokenize = re.compile(r'(\d+)|(\D+)').findall
@@ -135,11 +136,23 @@ def markBadDisk(disk_id):
     The disk mapper can verify the disk and consider for swapping disk
     """
 
-    import fcntl
+    return appendToFile_Locked(consts.BAD_DISK_FILE, "/data_%d\n" %disk_id)
 
-    f = open(consts.BAD_DISK_FILE, 'aw')
-    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-    f.write("/data_%d\n" %disk_id)
-    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-    f.close()
+def appendToFile_Locked(filename, data):
+    """
+    Append to a file after holding an flock
+    Create the file if it does not exist
+    """
+
+    try:
+        f = open(filename, 'aw')
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        f.write(data)
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        f.close()
+    except:
+        return False
+
+    return True
+
 

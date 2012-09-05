@@ -1,22 +1,22 @@
-Summary: Membase 1.7.3 backup and restore tools 
+Summary: Membase 1.7.3 backup and restore tools
 Name: membase-backup-tools
 Version: _VERSION
 Release: _RELEASE
 Group: General
 License: Proprietary
-Source0: _SOURCE 
+Source0: _SOURCE
 Packager: Sarath Lakshman <slakshman@zynga.com>
 AutoReqProv: no
 Requires: jemalloc
 
-%description 
+%description
 Membase 1.7.3 backup and restore tools
 
-%prep 
+%prep
 %define _rpmfilename %%{NAME}-_COMMIT.%%{ARCH}.rpm
 %setup
 
-%install 
+%install
 mkdir -p $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/
 mkdir -p $RPM_BUILD_ROOT/etc/init.d/
 mkdir -p $RPM_BUILD_ROOT/etc/membase-backup/
@@ -37,11 +37,14 @@ src/backup_healthcheck \
 src/count_backup_keys.sh \
 src/healthcheck_runner.sh \
 src/synctos3.sh \
+src/scheduler.py \
+src/backup_merged \
 src/zstore_cmd $RPM_BUILD_ROOT/opt/membase/membase-backup/
 cp src/blobrestore_utils/* $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/
 cp conf/clean_blobrestore_jobs.cron $RPM_BUILD_ROOT/opt/membase/membase-backup/
 cp conf/init.d/membase-backupd $RPM_BUILD_ROOT/etc/init.d/
 cp conf/init.d/blobrestored $RPM_BUILD_ROOT/etc/init.d/
+cp conf/init.d/backup_merged $RPM_BUILD_ROOT/etc/init.d/
 cp conf/default.ini $RPM_BUILD_ROOT/etc/membase-backup/
 chown root $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobrestore_sshkey
 chmod 700 $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobrestore_sshkey
@@ -50,6 +53,7 @@ chmod 700 $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobresto
 /etc/membase-backup/*
 /etc/init.d/membase-backupd
 /etc/init.d/blobrestored
+/etc/init.d/backup_merged
 /opt/membase/membase-backup/*
 
 %post

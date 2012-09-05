@@ -1,0 +1,99 @@
+#!/usr/bin/env python
+"""
+ Copyright 2012 Zynga
+ Author: Sarath Lakshman
+ Email: slakshman@zynga.com
+ Description: Backup merge daemon
+"""
+
+from scheduler import DailyMergeScheduler, MasterMergeScheduler
+from config import Config
+from logger import Logger
+
+import datetime
+import time
+import os
+import glob
+import sys
+import signal
+import consts
+
+def start():
+    """
+    Start daemon
+    """
+
+    fd = open(consts.SCHEDULER_PID_FILE,'w')
+    fd.write(str(os.getpid()))
+    fd.close()
+    killmergejobs()
+    processLoop()
+
+def getpid(f):
+    """
+    Return pid by reading the .pid file
+    """
+    handle = open(f)
+    pid = int(handle.read())
+    handle.close()
+    return pid
+
+def killmergejobs():
+    """
+    Kill all the master and daily merge jobs which are already running
+    """
+    pidfiles = glob.glob("/var/run/daily-merge-disk-*")
+    pidfiles.extend(glob.glob("/var/run/master-merge-disk-*"))
+    pids = map(getpid, pidfiles)
+
+    for p in pids:
+        if os.path.exists(os.path.join("/proc/%d" %p)):
+            os.killpg(p, 9)
+
+def stop(*args):
+    """
+    Stop daemon
+    """
+    pid = getpid(consts.SCHEDULER_PID_FILE)
+    if os.path.exists("/proc/%d" %pid):
+        killmergejobs()
+        os.kill(pid, 9)
+        os._exit(0)
+    else:
+        os._exit(1)
+
+def processLoop():
+    """
+    Continously run merge process
+    Daily merge followed by master merge
+    """
+
+    config = Config(consts.CONFIG_FILE)
+    config.read()
+    logger = Logger(tag = consts.SYSLOG_TAG, meta = "SCHEDULER")
+    daily_scheduler = DailyMergeScheduler(config, logger)
+    master_scheduler = MasterMergeScheduler(config, logger)
+
+    while True:
+        daily_date = datetime.date.strftime(datetime.date.today(), "%Y-%m-%d")
+        weekday = int(datetime.date.strftime(datetime.date.today(), "%w"))
+        dobj = datetime.date.today() - datetime.timedelta(days=weekday)
+        master_date = datetime.date.strftime(dobj, "%Y-%m-%d")
+
+        daily_scheduler.execute(daily_date)
+        master_scheduler.execute(master_date)
+        curr_date = datetime.date.strftime(datetime.date.today(), "%Y-%m-%d")
+
+        while curr_date == daily_date:
+            time.sleep(5)
+            curr_date = datetime.date.strftime(datetime.date.today(), "%Y-%m-%d")
+
+
+if __name__ == '__main__':
+
+    if len(sys.argv) == 2:
+        if sys.argv[1] == 'start':
+            start()
+        elif sys.argv[1] == 'stop':
+            stop()
+

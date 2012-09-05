@@ -211,6 +211,9 @@ if __name__ == '__main__':
         except:
             pass
 
+    fd = open(pidfile,'w')
+    fd.write(str(os.getpid()))
+    fd.close()
 
     merge = MasterMerge(path, date, disk_id)
     merge.run()

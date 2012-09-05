@@ -8,7 +8,7 @@ from util import gethostname
 
 class Config:
     def __init__(self, conf_file = None):
-        self.conf_file = conf_file 
+        self.conf_file = conf_file
         self.config = ConfigParser.ConfigParser()
         self.log_level = consts.DEFAULT_LOGLEVEL
         self.syslog_tag = consts.SYSLOG_TAG
@@ -46,3 +46,25 @@ class Config:
         if 'blobrestore' in self.config.sections():
             self.parallel_jobs = int(self.config.get('blobrestore',
                     'parallel_jobs'))
+
+        try:
+            self.parallel_daily_jobs = int(self.config.get('daily_merge', 'parallel_processes'))
+        except:
+            self.parallel_daily_jobs = consts.MAX_DAILYJOBS
+
+        try:
+            self.daily_mem_threshold = int(self.config.get('daily_merge', 'free_memory_threshold'))
+        except:
+            self.daily_mem_threshold = consts.DAILYJOB_MEM_THRESHOLD
+
+        try:
+            self.parallel_master_jobs = int(self.config.get('master_merge', 'parallel_processes'))
+        except:
+            self.parallel_master_jobs = consts.MAX_MASTERJOBS
+
+        try:
+            self.master_mem_threshold = int(self.config.get('master_merge', 'free_memory_threshold'))
+        except:
+            self.master_mem_threshold = consts.MASTERJOB_MEM_THRESHOLD
+
+

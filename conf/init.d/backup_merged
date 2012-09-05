@@ -1,0 +1,76 @@
+#!/bin/bash
+
+. /etc/init.d/functions
+PIDFILE=/var/run/backup_merge.pid
+
+command=$1
+
+if [ $UID -ne 0 ];
+then
+    echo "Please run as root"
+    exit 1
+fi
+
+status(){
+    if [ -e $PIDFILE ];
+    then
+        PID=$(cat $PIDFILE)
+        kill -s 0 $PID 2> /dev/null && echo "Backup merge daemon is running with pid $PID" && exit 0
+        echo "Backup merge daemon is not running"
+    else
+        echo "Backup merge daemon is not running"
+    fi
+}
+
+start(){
+    if [ -e $PIDFILE ];
+    then
+        PID=$(cat $PIDFILE)
+        kill -s 0 $PID 2> /dev/null && echo "Backup merge daemon is running with pid $PID" && exit 0
+    fi
+
+        /usr/bin/python26 /opt/membase/membase-backup/backup_merged start >/dev/null 2>&1 &
+
+    sleep 1
+    status | grep 'is running' 2> /dev/null
+    if [ $? -eq 0 ];
+    then
+        echo Started backup merge daemon && exit 0
+    else
+        echo Failed to start backup merge daemon && exit 1
+    fi
+}
+
+
+stop(){
+
+    echo "Stopping backup merge daemon"
+    /usr/bin/python26 /opt/membase/membase-backup/backup_merged stop >/dev/null 2>&1 &
+
+    if [ $? -eq 0 ];
+    then
+        echo "Stopped backup merge daemon successfully"
+    else
+        echo "Backup merge daemon is not running"
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+    stop
+    ;;
+    status)
+    status;
+    ;;
+    restart)
+    stop; start 0;
+    ;;
+    *)
+    echo $"Usage: $0 {start|stop|status|restart}"
+    exit 1
+esac
+
+
