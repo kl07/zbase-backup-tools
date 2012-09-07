@@ -8,6 +8,8 @@ import socket
 import time
 import fcntl
 import consts
+import subprocess
+import json
 
 tokenize = re.compile(r'(\d+)|(\D+)').findall
 def natural_sortkey(string):
@@ -155,4 +157,27 @@ def appendToFile_Locked(filename, data):
 
     return True
 
+def zruntime_readkey(user, passwd, namespace, gameid, key):
+    """
+    Read a key from zRuntime
+    """
+
+    cmd = "curl %s/%s/%s/current --insecure -u %s:%s" %(consts.ZRT_URL, gameid,
+            namespace, user, passwd)
+
+    p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        d = p.communicate()[0]
+        data = json.loads(d)
+    except Exception, e:
+        return False
+
+    if p.returncode == 0:
+        if data['output'].has_key(key):
+            return data['output'][key]
+        else:
+            return None
+    else:
+        print p.returncode
+        return False
 

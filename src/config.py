@@ -48,6 +48,20 @@ class Config:
                     'parallel_jobs'))
 
         try:
+            self.zruntime_user = self.config.get('zruntime', 'user')
+            self.zruntime_passwd = self.config.get('zruntime', 'passwd')
+            self.zruntime_namespace = self.config.get('zruntime', 'namespace')
+        except:
+            self.zruntime_user = None
+            self.zruntime_passwd = None
+            self.zruntime_namespace = None
+
+        try:
+            self.zruntime_mapperkey = self.config.get('zruntime', 'mapper_key')
+        except:
+            self.zruntime_mapperkey = 'ACTIVE_MCS'
+
+        try:
             self.parallel_daily_jobs = int(self.config.get('daily_merge', 'parallel_processes'))
         except:
             self.parallel_daily_jobs = consts.MAX_DAILYJOBS
