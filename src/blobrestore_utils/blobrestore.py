@@ -15,6 +15,7 @@ import sqlite3
 import datetime
 import calendar
 import time
+import json
 import socket
 
 PYTHON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../')
@@ -23,7 +24,8 @@ sys.path.insert(0, PYTHON_PATH)
 
 import consts
 from mc_bin_client import MemcachedClient
-from util import getcommandoutput
+from util import getcommandoutput, zruntime_readkey
+from config import Config
 
 def exit(*x):
     print "Exiting the blobrestore driver"
@@ -112,7 +114,7 @@ def remote_filecopy(src_file, dest_file):
 
     if ':' in dest_file:
         dest_file = "blobrestore@%s" %dest_file
- 
+
     cmd = "scp -i %s -r -q -o PasswordAuthentication=no -o" \
             "StrictHostKeyChecking=no %s %s" %(SSH_KEY_PATH, src_file, dest_file)
     status = os.system(cmd)
@@ -126,32 +128,22 @@ def remote_cmd(server, cmd):
             %(SSH_KEY_PATH, server, cmd)
     return commands.getstatusoutput(cmd)
 
-def get_array_iplist(game_id):
+def get_storageserver_map(mapping_server):
     """
-    Get the ipaddress list of operational nodes in server array
+    Fetch the server to storage server mapping
+    from mapping server API
     """
-    tmpfile = '/tmp/array_ips.list'
-    try:
-        os.unlink(tmpfile)
-    except:
-        pass
-
-    status = download_file("%s/%s" %(consts.BACKUP_ARRAY_IPLIST, game_id), tmpfile)
+    cmd = "curl -s -L http://%s/%s" %(mapping_server, consts.BLOBRESTORE_API_PATH)
+    status, output = getcommandoutput(cmd)
     if status == 0:
-        ips = []
-        for ip in open(tmpfile):
-            ip = ip.strip()
-            if ip != '':
-                ips.append(ip)
-            else:
-                continue
-    elif status == 1:
-        log("Unable to locate storage server config file for game-id %s" %game_id)
-        sys.exit(1)
+        try:
+            return json.loads(str(output))
+        except Exception, e:
+            sys.exit("ERROR: Unable to parse host to storage server map (%s)" \
+                    %str(e))
     else:
-        log("Downloading Backup array iplist failed")
-        sys.exit(1)
-    return ips
+        sys.exit("ERROR: Failed to download host to storage server map from server:%s" \
+                %(mapping_server))
 
 def parse_args(args):
     """
@@ -160,6 +152,9 @@ def parse_args(args):
 
     if len(args) < 3:
         usage("ERROR: Not enough arguments")
+
+    config = Config(consts.CONFIG_FILE)
+    config.read()
 
     options = {}
     options['command'] = args[1]
@@ -212,8 +207,8 @@ def parse_args(args):
 
                 elif o == '-g':
                     options['game_id'] = a
-                    if len(a.split('-')) != 2:
-                        usage("ERROR: game_id should be in the format zc1-empire")
+                    if len(a.split('-')) < 2:
+                        usage("ERROR: game_id should be in the format cloud-gameid")
 
                 elif o == '-p':
                     options['hostname_prefix'] = a
@@ -227,6 +222,14 @@ def parse_args(args):
                     usage()
         except Exception, e:
             usage("Invalid arguments (%s)" %str(e))
+
+        options['mapping_server'] = zruntime_readkey(config.zruntime_user,
+                config.zruntime_passwd,
+                config.zruntime_namespace,
+                "-".join(options['game_id'].split('-')[1:]),
+                config.zruntime_mapperkey)
+        if not options['mapping_server']:
+            sys.exit("ERROR: Unable to obtain Mapping server address from zruntime")
 
     elif options['command'] == 'restore-server':
         if len(args) < 4:
@@ -344,8 +347,8 @@ class NodeJob:
 
         self.jobs = {}
 
-    def add_shard_and_keys(self, shard, keys):
-        self.jobs[shard] = keys
+    def add_hostdata(self, shard, keys, disk):
+        self.jobs[shard] = keys, disk
 
     def write_to_file(self):
         f = tempfile.NamedTemporaryFile(delete=False)
@@ -440,19 +443,25 @@ class BlobrestoreDispatcher:
         job_id = random.randint(0,10000000000)
         self.options['job_id'] = job_id
         #TODO: Dynamic scaling array
-        array_node_list = get_array_iplist(options['game_id'])
-        array_node_count = len(array_node_list)
+        storageserver_map = get_storageserver_map(self.options['mapping_server'])
         grouped_keys = group_keys(self.options['key_file'], self.options['shard_count'])
         for host_shard in grouped_keys:
-            i = (host_shard+1) % array_node_count
-            if self.node_job.has_key(i):
-                self.node_job[i].add_shard_and_keys(host_shard,
-                        grouped_keys[host_shard])
+            shard = str(host_shard+1).rjust(consts.PADDING_ZEROS, '0')
+            hostname = "%s-%s" %(self.options['hostname_prefix'], shard)
+
+            if storageserver_map.has_key(hostname):
+                data = storageserver_map[hostname]
             else:
-                ipaddr = array_node_list[i]
+                sys.exit("ERROR: Unable to find %s in storage server map" %hostname)
+
+            if self.node_job.has_key(hostname):
+                self.node_job[data['storage_server']].add_hostdata(host_shard,
+                        grouped_keys[host_shard], data['disk'])
+            else:
+                ipaddr = data['storage_server']
                 job = NodeJob(self.options, ipaddr)
-                job.add_shard_and_keys(host_shard, grouped_keys[host_shard])
-                self.node_job[i] = job
+                job.add_hostdata(host_shard, grouped_keys[host_shard], data['disk'])
+                self.node_job[ipaddr] = job
 
     def _create_batchjob_file(self):
         """
@@ -606,3 +615,4 @@ if __name__ == '__main__':
     init_logger()
     options = parse_args(sys.argv)
     bd = BlobrestoreDispatcher(options)
+

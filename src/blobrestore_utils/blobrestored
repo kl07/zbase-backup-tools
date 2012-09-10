@@ -48,18 +48,21 @@ def backup_filename_to_epoch(filename):
     return time.mktime(time.strptime(dt,'%Y-%m-%d_%H:%M:%S')), dt
 
 class BackupServer:
-    def __init__(self, cloud_game_id, hostname):
-        self.cloud, self.game_id = cloud_game_id.split('-')
+    def __init__(self, cloud_game_id, hostname, disk):
+        s = cloud_game_id.split('-')
+        self.cloud = s[0]
+        self.game_id = "-".join(s[1:])
         self.hostname = hostname
+        self.disk = disk
 
     def list_backups(self, start_datetime, days=0, master_backup=False):
         backups = []
         if " " in start_datetime:
             start_date, start_time = start_datetime.split(' ')
             compare_epoch, ts = backup_filename_to_epoch("backup-%s_%s-00000.mbb" %(start_date, start_time))
-            backup_dir = '%s/%s/%s/%s/%s/' %(consts.STORAGE_SERVER_ROOT, self.game_id,
+            backup_dir = '/%s/*/%s/%s/%s/%s/*.mbb' %(self.disk, self.game_id,
                     self.hostname, self.cloud, consts.INCR_DIRNAME)
-            ls_cmd = "/usr/bin/find -L %s -type f -name '*.mbb'" %backup_dir
+            ls_cmd = "/usr/bin/find /%s -path %s -type f" %(self.disk, backup_dir)
             status, output = getcommandoutput(ls_cmd, None)
             if status != 0:
                 output = ''
@@ -83,21 +86,20 @@ class BackupServer:
             if master_backup:
                 backup_types = [consts.MASTER_DIRNAME, consts.PERIODIC_DIRNAME]
             else:
-                backup_types = [consts.PERIODIC_DIRNAME] 
+                backup_types = [consts.PERIODIC_DIRNAME]
 
             for btype in backup_types:
                 master_backup_exists = False
-                backup_dir = '%s/%s/%s/%s/%s/%s/' %(consts.STORAGE_SERVER_ROOT, self.game_id,
+                backup_dir = '/%s/*/%s/%s/%s/%s/%s/*.mbb' %(self.disk, self.game_id,
                         self.hostname, self.cloud, btype, datestamp)
-                ls_cmd = "/usr/bin/find -L %s -type f" %backup_dir 
+                ls_cmd = "/usr/bin/find /%s -path %s -type f" %(self.disk, backup_dir)
                 status, output = getcommandoutput(ls_cmd, None)
                 if btype == consts.MASTER_DIRNAME and status == 0:
                     master_backup_exists = True
 
                 if status != 0:
                     output = ''
-                lines = output.split('\n')
-                files = filter(lambda y: y.endswith('.mbb'), lines)
+                files = filter(lambda x: x.strip()!='', output.split('\n'))
                 for f in files:
                     regex = re.compile('-(\d+).mbb')
                     split_no = int(regex.findall(f)[0])
@@ -274,6 +276,7 @@ class Job:
         self.restore_queue = Queue.Queue()
         self.total_keys_count = 0
         self.keylist = []
+        self.disk = None
         self.complete = False
         self.download_onprogress = False
 
@@ -286,7 +289,8 @@ class Job:
         self.restore_date = nodejob.restore_date
         self.force_find_days = nodejob.force_find_days
         self.check_master_backup = nodejob.check_master_backup
-        self.keylist.extend(nodejob.jobs[i])
+        self.keylist = nodejob.jobs[i][0]
+        self.disk = nodejob.jobs[i][1]
         self.total_keys_count = len(self.keylist)
 
     def activate(self):
@@ -307,7 +311,7 @@ class Job:
 
     def process(self):
         try:
-            bs = BackupServer(self.game_id, self.hostname)
+            bs = BackupServer(self.game_id, self.hostname, self.disk)
             self.log("Searching for backups")
             backup_search_list = bs.list_backups(self.restore_date,
                     self.force_find_days, self.check_master_backup)

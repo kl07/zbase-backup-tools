@@ -26,6 +26,7 @@ def getcommandoutput(cmd, queue=None):
     """Return (status, output) of executing cmd in a shell."""
     """Add the process object to the queue"""
     import subprocess
+    cmd = str(cmd)
     args = shlex.split(cmd)
     p = subprocess.Popen(args, shell=False, universal_newlines=True,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -169,15 +170,15 @@ def zruntime_readkey(user, passwd, namespace, gameid, key):
     try:
         d = p.communicate()[0]
         data = json.loads(d)
-    except Exception, e:
-        return False
 
-    if p.returncode == 0:
-        if data['output'].has_key(key):
-            return data['output'][key]
+        if p.returncode == 0:
+            if data['output'].has_key(key):
+                return data['output'][key]
+            else:
+                return None
         else:
-            return None
-    else:
-        print p.returncode
+            print p.returncode
+            return False
+    except Exception, e:
         return False
 

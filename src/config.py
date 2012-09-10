@@ -59,7 +59,7 @@ class Config:
         try:
             self.zruntime_mapperkey = self.config.get('zruntime', 'mapper_key')
         except:
-            self.zruntime_mapperkey = 'ACTIVE_MCS'
+            self.zruntime_mapperkey = consts.ZRT_MAPPER_KEY
 
         try:
             self.parallel_daily_jobs = int(self.config.get('daily_merge', 'parallel_processes'))
