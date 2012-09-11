@@ -3,7 +3,7 @@
 #include "backup.hh"
 #include "timing.hh"
 
-Backup::Backup(std::string fn, int m, std::string bfr_path): 
+Backup::Backup(std::string fn, int m, std::string bfr_path):
     filename(fn), mode(m), maxsize(0), buffer_path(bfr_path) {
     int flags;
     if (mode & BACKUP_RD_ONLY || mode & BACKUP_CP_RD_ONLY) {
@@ -28,14 +28,18 @@ Backup::Backup(std::string fn, int m, std::string bfr_path):
     }
 
     if (mode & BACKUP_RD_ONLY) {
-        stmts = new Statements(db, STMT_READ_OP | STMT_READ_CP);
+        if (db->getVersion() == BACKUP_VERSION) {
+            stmts = new Statements(db, STMT_READ_OP | STMT_READ_CP | STMT_CKSUM);
+        } else {
+            stmts = new Statements(db, STMT_READ_OP | STMT_READ_CP);
+        }
     } else if(mode & BACKUP_CP_RD_ONLY) {
         stmts = new Statements(db, STMT_READ_CP);
     } else if(mode & BACKUP_WR_ONLY) {
         db->set_journal_mode("OFF");
         db->setVersion(BACKUP_VERSION);
 
-        stmts = new Statements(db, STMT_CREATE_TABLE_OP);
+        stmts = new Statements(db, STMT_CREATE_TABLE_OP | STMT_CKSUM);
         (stmts->create_table_op())->execute();
         delete stmts;
 
@@ -44,7 +48,7 @@ Backup::Backup(std::string fn, int m, std::string bfr_path):
         delete stmts;
 
         stmts = new Statements(db, STMT_INSERT_OP | STMT_INSERT_CP
-                | STMT_CREATE_INDEX);
+                | STMT_CREATE_INDEX | STMT_CKSUM);
 
         db->start_transaction();
     } else {
@@ -55,7 +59,15 @@ Backup::Backup(std::string fn, int m, std::string bfr_path):
 
 BACKUP_OPERATION_STATUS Backup::getOperation(Operation **op) {
     bool rv;
+    const char *cksum(NULL);
+    size_t cksum_len(0);
+
     PreparedStatement *st = stmts->read_op();
+
+    if (getVersion() == BACKUP_VERSION) {
+        cksum =  st->column(read_cksum_idx);
+        cksum_len = st->column_bytes(read_cksum_idx);
+    }
 
     rv = st->fetch();
     if (rv) {
@@ -71,7 +83,9 @@ BACKUP_OPERATION_STATUS Backup::getOperation(Operation **op) {
                 st->column_int64(read_cpoint_idx),
                 st->column_int(read_flag_idx),
                 st->column_int64(read_cas_idx),
-                st->column_int64(read_seq_idx)
+                st->column_int64(read_seq_idx),
+                cksum,
+                cksum_len
                 );
         return OP_RD_SUCCESS;
     } else {
@@ -96,6 +110,7 @@ BACKUP_OPERATION_STATUS Backup::putOperation(const Operation *op) {
     st->bind(insert_flag_idx, op->getFlag());
     st->bind(insert_exp_idx, op->getExp());
     st->bind(insert_cas_idx, op->getCas());
+    st->bind(insert_cksum_idx, op->getCksum().c_str(), op->getCksum().length());
     st->bind_blob(insert_blob_idx, op->getBlob(), op->getBlobLen());
 
     st->execute();
@@ -183,14 +198,24 @@ Statements::Statements(SQLiteDB *db, int stmts) {
     ins_op = ins_cp = rd_op = rd_cp = cr_index = cr_table_op = cr_table_cp = NULL;
 
     if (stmts & STMT_CREATE_TABLE_OP) {
-        cr_table_op = new PreparedStatement(db->getDB(), 
-                "CREATE TABLE cpoint_op"
-                "(vbucket_id integer, cpoint_id integer, seq integer, op text, "
-                "key varchar(250), flg integer, exp integer, cas integer, val blob);");
+
+        if (stmts & STMT_CKSUM) {
+            cr_table_op = new PreparedStatement(db->getDB(),
+                    "CREATE TABLE cpoint_op"
+                    "(vbucket_id integer, cpoint_id integer, seq integer, op text, "
+                    "key varchar(250), flg integer, exp integer, cas integer, "
+                    "cksum varchar(100), val blob);");
+        } else {
+            cr_table_op = new PreparedStatement(db->getDB(),
+                    "CREATE TABLE cpoint_op"
+                    "(vbucket_id integer, cpoint_id integer, seq integer, op text, "
+                    "key varchar(250), flg integer, exp integer, cas integer, val blob);");
+        }
+
     }
 
     if (stmts & STMT_CREATE_TABLE_CP) {
-        cr_table_cp = new PreparedStatement(db->getDB(), 
+        cr_table_cp = new PreparedStatement(db->getDB(),
                 "CREATE TABLE cpoint_state"
                 "(vbucket_id integer, cpoint_id integer, prev_cpoint_id integer, state varchar(1), "
                 "source varchar(250), updated_at text);");
@@ -202,15 +227,29 @@ Statements::Statements(SQLiteDB *db, int stmts) {
     }
 
     if (stmts & STMT_INSERT_OP) {
-        ins_op = new PreparedStatement(db->getDB(),
-                "INSERT INTO cpoint_op"
-                "(vbucket_id, cpoint_id, seq, op, key, flg, exp, cas, val)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        if (stmts & STMT_CKSUM) {
+            ins_op = new PreparedStatement(db->getDB(),
+                    "INSERT INTO cpoint_op"
+                    "(vbucket_id, cpoint_id, seq, op, key, flg, exp, cas, cksum, val)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        } else {
+            ins_op = new PreparedStatement(db->getDB(),
+                    "INSERT INTO cpoint_op"
+                    "(vbucket_id, cpoint_id, seq, op, key, flg, exp, cas, val)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        }
+
     }
 
     if (stmts & STMT_READ_OP) {
-        rd_op = new PreparedStatement(db->getDB(), "SELECT vbucket_id,op,key,flg,exp,cas,val,cpoint_id,seq "
-                "FROM cpoint_op");
+        if (stmts & STMT_CKSUM) {
+            rd_op = new PreparedStatement(db->getDB(), "SELECT vbucket_id,op,key,flg,exp,cas,val,cpoint_id,seq,cksum "
+                    "FROM cpoint_op");
+        } else {
+
+            rd_op = new PreparedStatement(db->getDB(), "SELECT vbucket_id,op,key,flg,exp,cas,val,cpoint_id,seq "
+                    "FROM cpoint_op");
+        }
     }
 
     if (stmts & STMT_READ_CP) {
@@ -239,11 +278,13 @@ Statements::~Statements() {
 
 Operation::Operation(uint32_t exp_val, const char *key_val, size_t key_size_val, const char *op_val,
             size_t op_size_val, const void *blob_val, size_t blob_size_val, uint32_t vbid_val,
-            uint64_t cpoint_id_val, uint32_t flags_val, uint64_t cas_val, uint64_t seq_val):
+            uint64_t cpoint_id_val, uint32_t flags_val, uint64_t cas_val, uint64_t seq_val,
+            const char *ck, size_t ck_len):
         exp(exp_val), blob_size(blob_size_val),
         vbid(vbid_val), cpoint_id(cpoint_id_val), flags(flags_val), cas(cas_val), seq(seq_val) {
 
     key.assign(key_val, key_size_val);
+    cksum.assign(ck, ck_len);
     op.assign(op_val, op_size_val);
     blob = new char[blob_size];
     memcpy(blob, (char *) blob_val, blob_size);
@@ -314,7 +355,7 @@ void CheckpointValidator::addCheckpointList(std::list<Checkpoint>& cplist, std::
         if (!repeated_cpoints) {
             checkpointList.insert(checkpointList.end(), cplist.begin(), cplist.end());
         }
-        
+
         last_file = filename;
 
 }
@@ -424,7 +465,6 @@ void Merge::process() {
         delete ibackup;
         f++;
 
-        
     }
     t_op_backup_dest.start();
     if (obackup != NULL) {

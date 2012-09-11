@@ -10,14 +10,14 @@
 #include <list>
 #include <map>
 
-#define BACKUP_VERSION 1
+#define BACKUP_VERSION 2
 
 class Operation;
 class Statements;
 class Checkpoint;
 
 enum {
-    BACKUP_RD_ONLY=1, 
+    BACKUP_RD_ONLY=1,
     BACKUP_WR_ONLY=2,
     BACKUP_TMPFS_BACKEND=4,
     BACKUP_CP_RD_ONLY=8
@@ -40,7 +40,8 @@ enum {
     STMT_READ_CP=8,
     STMT_CREATE_INDEX=16,
     STMT_CREATE_TABLE_OP=32,
-    STMT_CREATE_TABLE_CP=64
+    STMT_CREATE_TABLE_CP=64,
+    STMT_CKSUM=128
 };
 
 
@@ -54,7 +55,8 @@ enum {
     read_cas_idx,
     read_val_idx,
     read_cpoint_idx,
-    read_seq_idx
+    read_seq_idx,
+    read_cksum_idx
 };
 
 enum {
@@ -66,6 +68,7 @@ enum {
     insert_flag_idx,
     insert_exp_idx,
     insert_cas_idx,
+    insert_cksum_idx,
     insert_blob_idx
 };
 
@@ -95,7 +98,7 @@ enum {
 class Backup {
 
 public:
-    Backup(std::string fn, int m, std::string bfr_path=TMPFS_PATH); 
+    Backup(std::string fn, int m, std::string bfr_path=TMPFS_PATH);
 
     BACKUP_OPERATION_STATUS getOperation(Operation **op);
 
@@ -104,7 +107,7 @@ public:
     void setSize(size_t sz);
 
     int getVersion();
-        
+
     BACKUP_OPERATION_STATUS getCheckpoints(std::list<Checkpoint>& checkpoints);
 
     BACKUP_OPERATION_STATUS putCheckpoints(std::list<Checkpoint> checkpoints);
@@ -176,9 +179,10 @@ public:
     /**
      * Constructor that takes the value and create a mutation object
      */
-    Operation(uint32_t exp_val, const char *key_val, size_t key_size_val, const char *op_val, 
-            size_t op_size_val, const void *blob_val, size_t blob_size_val, uint32_t vbid_val, 
-            uint64_t cpoint_id_val, uint32_t flags_val, uint64_t cas_val, uint64_t seq_val);
+    Operation(uint32_t exp_val, const char *key_val, size_t key_size_val, const char *op_val,
+            size_t op_size_val, const void *blob_val, size_t blob_size_val, uint32_t vbid_val,
+            uint64_t cpoint_id_val, uint32_t flags_val, uint64_t cas_val, uint64_t seq_val,
+            const char *ck, size_t ck_len);
     /**
      * Copy constructor
      */
@@ -186,7 +190,7 @@ public:
 
     std::string getKey() const {
         return key;
-    } 
+    }
 
     std::string getOp() const {
         return op;
@@ -216,6 +220,10 @@ public:
         return seq;
     }
 
+    std::string getCksum() const {
+        return cksum;
+    }
+
     char *getBlob() const {
         return blob;
     }
@@ -229,7 +237,7 @@ public:
      * Destructor
      */
     ~Operation();
-    
+
 private:
     uint32_t exp;
     std::string key;
@@ -241,6 +249,7 @@ private:
     uint64_t cas;
     uint64_t seq;
     size_t blob_size;
+    std::string cksum;
 };
 
 /**
@@ -340,7 +349,7 @@ class Merge {
     std::string output_file_pattern;
     HashTable *keyhash;
     std::list <std::string> source_files;
-    std::list <Checkpoint> checkpoints; 
+    std::list <Checkpoint> checkpoints;
 
 public:
     /**
