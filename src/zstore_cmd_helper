@@ -1,0 +1,23 @@
+#!/bin/bash
+#Description: Wrapper method for zstore_cmd
+
+zstore_cmd=$(dirname $0)/zstore_cmd
+
+if [ -z "$MAPPING_SERVER" ];
+then
+    echo MAPPING_SERVER not defined
+    exit 1
+fi
+
+args=$(echo "$@" | sed "s|s3://|s3://$MAPPING_SERVER/|")
+
+out="$($zstore_cmd)"
+status=$?
+
+if [ $status -ne 0 ];
+then
+    exit $status
+fi
+
+echo "$out" | sed "s|s3://[^/]*/|s3://|"
+
