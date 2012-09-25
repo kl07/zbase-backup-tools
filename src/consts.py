@@ -43,8 +43,7 @@ CKSUM_VERSION = 2
 DB_PATHS = ['/db/membase/']
 MIN_INCR_BACKUPS_COUNT = 15
 BAD_DISK_FILE = '/var/tmp/disk_mapper/bad_disk'
-DIRTY_DISK_FILE = 'dirty_disk'
-BUSY_DISK_FILE = 'busy_disk'
+DIRTY_DISK_FILE = 'dirty'
 PATH_DAILY_MERGE = '/opt/membase/membase-backup/daily-merge'
 PATH_MASTER_MERGE = '/opt/membase/membase-backup/master-merge'
 MAX_MASTERJOBS = 1
@@ -52,6 +51,6 @@ MAX_DAILYJOBS = 5
 DAILYJOB_MEM_THRESHOLD = 10240
 MASTERJOB_MEM_THRESHOLD = 15360
 ZRT_URL = 'https://api.runtime.zynga.com:8994'
-BLOBRESTORE_API_PATH = 'blobrestore_mapping'
+BLOBRESTORE_API_PATH = 'api?action=get_host_config'
 PADDING_ZEROS = 3
 ZRT_MAPPER_KEY = 'ACTIVE_MCS'

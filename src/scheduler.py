@@ -203,11 +203,15 @@ class BaseScheduler:
         """
         Check if the a disk is being used
         """
-        if os.path.exists(os.path.join(disk, consts.DIRTY_DISK_FILE)) or \
-                os.path.exists(os.path.join(disk, consts.BUSY_DISK_FILE)):
+        if os.path.exists(os.path.join(disk, consts.DIRTY_DISK_FILE)):
+            data = open(os.path.join(disk, consts.DIRTY_DISK_FILE), 'r').read().strip()
+            if data != "":
+                return True
+
+        if os.system('ps -eo comm | grep "aria2c" | grep "%s" > /dev/null 2>&1' %disk) == 0:
             return True
-        else:
-            return False
+
+        return False
 
     def waitForProcessSlot(self, completeAll=False):
         """
