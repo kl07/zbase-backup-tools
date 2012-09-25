@@ -39,7 +39,8 @@ src/healthcheck_runner.sh \
 src/synctos3.sh \
 src/scheduler.py \
 src/backup_merged \
-src/zstore_cmd $RPM_BUILD_ROOT/opt/membase/membase-backup/
+src/zstore_cmd \
+src/zstore_cmd_helper $RPM_BUILD_ROOT/opt/membase/membase-backup/
 cp src/blobrestore_utils/* $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/
 cp conf/clean_blobrestore_jobs.cron $RPM_BUILD_ROOT/opt/membase/membase-backup/
 cp conf/init.d/membase-backupd $RPM_BUILD_ROOT/etc/init.d/

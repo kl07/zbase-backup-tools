@@ -11,7 +11,7 @@ fi
 
 args=$(echo "$@" | sed "s|s3://|s3://$MAPPING_SERVER/|")
 
-out="$($zstore_cmd)"
+out="$($zstore_cmd $args)"
 status=$?
 
 if [ $status -ne 0 ];
