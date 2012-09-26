@@ -192,7 +192,7 @@ class BaseScheduler:
         hosts = []
         disks = self.getDisks()
         for d in disks:
-            st, out = getcommandoutput("find %s/primary -maxdepth 3 -mindepth 3 -type d" %d)
+            st, out = getcommandoutput("find %s/primary -maxdepth 2 -mindepth 2 -type d" %d)
             if st == 0:
                 for h in out.split():
                     hosts.append((d,h))

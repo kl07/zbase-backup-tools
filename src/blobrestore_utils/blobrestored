@@ -60,7 +60,7 @@ class BackupServer:
         if " " in start_datetime:
             start_date, start_time = start_datetime.split(' ')
             compare_epoch, ts = backup_filename_to_epoch("backup-%s_%s-00000.mbb" %(start_date, start_time))
-            backup_dir = '/%s/*/%s/%s/%s/%s/*.mbb' %(self.disk, self.game_id,
+            backup_dir = '/%s/*/%s/%s/%s/*.mbb' %(self.disk,
                     self.hostname, self.cloud, consts.INCR_DIRNAME)
             ls_cmd = "/usr/bin/find /%s -path %s -type f" %(self.disk, backup_dir)
             status, output = getcommandoutput(ls_cmd, None)
@@ -90,7 +90,7 @@ class BackupServer:
 
             for btype in backup_types:
                 master_backup_exists = False
-                backup_dir = '/%s/*/%s/%s/%s/%s/%s/*.mbb' %(self.disk, self.game_id,
+                backup_dir = '/%s/*/%s/%s/%s/%s/*.mbb' %(self.disk,
                         self.hostname, self.cloud, btype, datestamp)
                 ls_cmd = "/usr/bin/find /%s -path %s -type f" %(self.disk, backup_dir)
                 status, output = getcommandoutput(ls_cmd, None)

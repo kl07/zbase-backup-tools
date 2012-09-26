@@ -105,7 +105,7 @@ class BackupProcess:
         self.config.game_id,
         self.config.zruntime_mapperkey)
 
-        if self.mapping_server:
+        if not mapping_server:
             self.logger.log("FAILED: Unable to read from zRuntime")
             self.exit(1)
         else:
@@ -135,7 +135,7 @@ class BackupProcess:
             s3_master_path = "s3://%s/%s/%s/" %(dirpath_suffix, consts.MASTER_DIRNAME, date)
             status, output = self.getstatusoutput("%s ls %s" %(consts.PATH_S3CMD_EXEC, s3_master_path))
             if status > 0:
-                self.logger.log("FAILED: Listing master backup files from storage server")
+                self.logger.log("FAILED: Listing master backup files from storage server (%s)" %output)
                 self.exit(1)
             found_split_index = False
             for f in output.split():
@@ -241,7 +241,6 @@ class BackupProcess:
             self.logger.log("FAILED: Upload to S3 failed for backup file %s (%s)" %(filepath, output))
             return False
         else:
-            self.logger.log(output)
             self.logger.log("SUCCESS: Uploading %s to %s (retries=%d)" %(filepath, s3path, i))
         return True
 
