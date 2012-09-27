@@ -227,11 +227,13 @@ class BaseScheduler:
                     self.current_execjobs.remove(j)
                     slotfree=True
 
-            if not completeAll:
+            if completeAll == False:
                 if slotfree or len(self.current_execjobs)==0:
                     break
                 else:
                     time.sleep(1)
+            elif completeAll == None:
+                break
             else:
                 if len(self.current_execjobs):
                     time.sleep(1)
@@ -286,6 +288,7 @@ class BaseScheduler:
                     self.current_execjobs.append(job)
                 elif resp == BaseScheduler.IGNORE:
                     self.jobs.insert(0, job)
+                    self.waitForProcessSlot(None)
                     time.sleep(1)
                 elif resp == BaseScheduler.WAIT:
                     self.jobs.append(job)
