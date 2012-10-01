@@ -151,6 +151,7 @@ def appendToFile_Locked(filename, data):
         f = open(filename, 'aw')
         fcntl.flock(f.fileno(), fcntl.LOCK_EX)
         f.write(data)
+        os.chown(filename, 48, -1)
         fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         f.close()
     except:
