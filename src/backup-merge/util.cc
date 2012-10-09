@@ -5,6 +5,8 @@
 void copyfile(std::string src, std::string dest, bool nocache_input, bool nocache_output) {
     std::stringstream cmd;
 
+    int retry(0);
+
     cmd<<"dd";
     if (nocache_input)
     {
@@ -15,19 +17,27 @@ void copyfile(std::string src, std::string dest, bool nocache_input, bool nocach
         cmd<<" oflag=direct";
     }
     cmd<<" bs=512k if="<<src<<" of="<<dest<<" 2> /dev/null";
-    if (system(cmd.str().c_str()) != 0) {
-        std::cout<<"ERROR: File copy failed ("<<cmd.str()<<")"<<std::endl;
-        exit(EXIT_COPYFAIL);
+    while (system(cmd.str().c_str()) != 0) {
+        retry++;
+        if (retry == 4) {
+            std::cout<<"ERROR: File copy failed ("<<cmd.str()<<")"<<std::endl;
+            exit(EXIT_COPYFAIL);
+        }
     }
 }
 
 void removefile(std::string file) {
     std::stringstream cmd;
 
+    int retry(0);
     cmd<<"rm -f "<<file;
-    if (system(cmd.str().c_str()) != 0) {
-        std::cout<<"ERROR: File remove failed ("<<cmd.str()<<")"<<std::endl;
-        exit(EXIT_REMOVEFAIL);
+
+    while (system(cmd.str().c_str()) != 0) {
+        retry++;
+        if (retry == 4) {
+            std::cout<<"ERROR: File remove failed ("<<cmd.str()<<")"<<std::endl;
+            exit(EXIT_REMOVEFAIL);
+        }
     }
 }
 

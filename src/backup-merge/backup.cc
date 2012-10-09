@@ -63,14 +63,13 @@ BACKUP_OPERATION_STATUS Backup::getOperation(Operation **op) {
     size_t cksum_len(0);
 
     PreparedStatement *st = stmts->read_op();
-
-    if (getVersion() == BACKUP_VERSION) {
-        cksum =  st->column(read_cksum_idx);
-        cksum_len = st->column_bytes(read_cksum_idx);
-    }
-
     rv = st->fetch();
+
     if (rv) {
+        if (getVersion() == BACKUP_VERSION) {
+            cksum =  st->column(read_cksum_idx);
+            cksum_len = st->column_bytes(read_cksum_idx);
+        }
         *op = new Operation(
                 st->column_int(read_exp_idx),
                 st->column(read_key_idx),
@@ -329,6 +328,7 @@ void CheckpointValidator::addCheckpointList(std::list<Checkpoint>& cplist, std::
                 (*curr_map_it).second.push_back(*it);
             }
         }
+//TODO: Fix empty checkpoint list - multivbuckets validation
 
         if (first_backup) {
             first_backup = false;
