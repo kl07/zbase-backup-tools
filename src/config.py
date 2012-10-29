@@ -11,6 +11,7 @@ class Config:
         self.config = ConfigParser.ConfigParser()
         self.log_level = consts.DEFAULT_LOGLEVEL
         self.syslog_tag = consts.SYSLOG_TAG
+        self.membase_db_paths = consts.DB_PATHS
 
     def read(self):
         self.config.read(self.conf_file)
@@ -29,6 +30,9 @@ class Config:
         self.cloud = self.config.get('general', 'cloud')
         self.game_id = self.config.get('general', 'game_id')
         self.buffer_list = self.config.get('general', 'buffer_list')
+        if self.config.has_option("general", "membase_db_paths"):
+            self.membase_db_paths = self.config.get('general', 'membase_db_paths').split(',')
+
         try:
             hostname = self.config.get('restore', 'hostname')
         except:

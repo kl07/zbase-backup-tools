@@ -96,12 +96,13 @@ class Restore:
                 pass
 
         self.logger.log("Cleaning up membase db directory")
-        rm_db_cmd = "find /db/membase/ -type f -delete"
-        status, output = self.getstatusoutput(rm_db_cmd)
-        if status > 0:
-            self.logger.log("FAILED: Failed to clean membase db directory" \
-                    " (%s)" %output)
-            self.exit(1)
+        for dbpath in self.config.membase_db_paths:
+            rm_db_cmd = "find %s -type f -delete" %dbpath
+            status, output = self.getstatusoutput(rm_db_cmd)
+            if status > 0:
+                self.logger.log("FAILED: Failed to clean membase db directory" \
+                        " (%s)" %output)
+                self.exit(1)
 
         self.logger.log("Updating membase config file to start as restore mode")
         f = open(consts.MEMCACHED_SYSCONFIG_FILE)
