@@ -191,8 +191,7 @@ class BackupProcess:
 
             self.backup_queue.put(item)
 
-            if b in self.free_buffer_list.queue:
-                 self.free_buffer_list.queue.remove(b)
+            self.free_buffer_list.queue.remove(backup_files[backup_file])
 
     def _upload_file(self, filepath, buffer_path, nonbackup=False):
         retries = self.config.upload_retries
