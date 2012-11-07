@@ -12,6 +12,7 @@ import consts
 MBB_VERSION = "2"
 TIMEOUT = 0
 TXN_SIZE = 100
+EXT_LEN_WITHOUT_QTIME = 16
 
 cmdInfo = {
     memcacheConstants.CMD_TAP_MUTATION: ('mutation', 'm'),
@@ -62,7 +63,7 @@ def parseTapExt(ext):
             struct.unpack(memcacheConstants.TAP_GENERAL_PKT_FMT, ext)
     else:
         eng_length, flags, ttl, cksum_len, flg, exp  = \
-            struct.unpack(memcacheConstants.TAP_MUTATION_PKT_FMT, ext)
+                struct.unpack(memcacheConstants.TAP_MUTATION_PKT_FMT, ext[:EXT_LEN_WITHOUT_QTIME])
 
     needAck = flags & memcacheConstants.TAP_FLAG_ACK
 
