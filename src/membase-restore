@@ -95,7 +95,7 @@ class Restore:
             self.logger.log("FAILED: Unable to read from zRuntime")
             self.exit(1)
         else:
-            os.putenv("MAPPING_SERVER", mapping_server)
+            os.environ["MAPPING_SERVER"] = mapping_server
 
     def setup_restore_env(self):
         self.logger.log("Setting up restore environment for membase server")

@@ -109,7 +109,7 @@ class BackupProcess:
             self.logger.log("FAILED: Unable to read from zRuntime")
             self.exit(1)
         else:
-            os.putenv("MAPPING_SERVER", mapping_server)
+            os.environ["MAPPING_SERVER"] = mapping_server
 
     def getstatusoutput(self, cmd):
         return getcommandoutput(cmd, self.processlist)
