@@ -180,7 +180,6 @@ class BackupFactory:
         self.mc._sendCmd(memcacheConstants.CMD_TAP_CONNECT, tapname, val, 0, ext)
         self.sinput = [self.mc.s]
         self.op_records = []
-        self.openchk = 0
 
         self.vbmap = {} # Key is vbucketId, value is [checkpointId, seq].
 
@@ -246,7 +245,8 @@ class BackupFactory:
             db.close()
             self.split_no += 1
             return filepath
-               
+
+        last_checkpoint_id = -1
         while True:
             if TIMEOUT > 0:
                 iready, oready, eready = select.select(self.sinput, [], [], TIMEOUT)
@@ -324,18 +324,19 @@ class BackupFactory:
                 checkpoint_id = struct.unpack(">Q", val)
                 checkpointStartExists = False
                 self.current_checkpoint_id = checkpoint_id[0]
-                self.openchk = self.current_checkpoint_id
 
                 if self.backfill_chk_start:
                     del self.vbmap[vbucketId]
+                elif last_checkpoint_id > 0 and last_checkpoint_id == checkpoint_id[0] - 1:
+                    del self.vbmap[vbucketId]
+                elif last_checkpoint_id > 0 and last_checkpoint_id != checkpoint_id[0]:
+                    raise Exception("Checkpoints received are not continous. cpoint_id:%d " \
+                            "received after cpoint_id:%d" %(checkpoint_id[0], last_checkpoint_id))
 
                 if vbucketId in self.vbmap:
                     if self.vbmap[vbucketId][0] == checkpoint_id[0]:
                         checkpointStartExists = True
-                    else:
-                        raise Exception("ERROR: CHECKPOINT_START with checkpoint Id %s arrived" \
-                                 " before receiving CHECKPOINT_END with checkpoint Id %s"
-                                 % (checkpoint_id[0], self.vbmap[vbucketId][0]))
+
                 if checkpointStartExists == False:
                     self.vbmap[vbucketId] = [checkpoint_id[0], 0]
                     t = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
@@ -351,33 +352,11 @@ class BackupFactory:
                         db.commit()
                         self.op_records = []
                         self.update_count = 0
+                    last_checkpoint_id = checkpoint_id[0]
 
             elif cmd == memcacheConstants.CMD_TAP_CHECKPOINT_END:
-                if self.update_count > 0:
-                    db.commit()
-                    self.op_records = []
-                    self.update_count = 0
-                checkpoint_id = struct.unpack(">Q", val)
-
-                if self.openchk == checkpoint_id[0]:
-                    self.openchk = 0
-
-                if not vbucketId in self.vbmap:
-                    raise Exception("ERROR: unmatched checkpoint end: %s vb: %s"
-                             % (checkpoint_id[0], vbucketId))
-
-                self.current_checkpoint_id, seq = self.vbmap[vbucketId]
-                if self.current_checkpoint_id != checkpoint_id[0]:
-                    raise Exception("ERROR: unmatched checkpoint end id: %s vb: %s cp: %s"
-                             % (checkpoint_id[0], vbucketId, self.current_checkpoint_id))
-
                 if len(ext) > 0:
                     eng_length, flags, ttl, flg, exp, needAck, cksum = parseTapExt(ext)
-
-                del self.vbmap[vbucketId]
-                db.commit()
-                self.update_count = 0
-                self.op_records = []
 
             elif cmd == memcacheConstants.CMD_TAP_OPAQUE:
                 if len(ext) > 0:
@@ -388,9 +367,7 @@ class BackupFactory:
                             db.commit()
                             self.op_records = []
                             self.update_count = 0
-                        ## Clear all checkpoint state records that have "open" state.
-                        if self.openchk > 0:
-                            c.execute(del_chk_start_stmt %self.openchk)
+
                         db.commit()
                         self.update_count = 0
                         self.complete = True
