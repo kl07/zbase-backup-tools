@@ -2,6 +2,7 @@
 #Description: Wrapper script that downloads, merges and uploads
 
 import time
+import signal
 import os
 import consts
 import commands
@@ -140,7 +141,7 @@ class DailyMerge:
 
         split_file_name = "%s/backup-%s-%%.mbb" %(output_location, self.timestamp)
         merge_cmd = "%s -o %s -i %s -s %d -b %s -v" %(consts.PATH_MBMERGE_EXEC,
-                                        split_file_name, f.name, consts.SPLIT_SIZE, self.disk_id)
+                                        split_file_name, f.name, consts.SPLIT_SIZE, "/dev/shm/%d/" %self.disk_id)
 
         process = subprocess.Popen(shlex.split(merge_cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         status = 0
@@ -330,10 +331,10 @@ if __name__ == '__main__':
     fd.write(str(os.getpid()))
     fd.close()
 
-    merge = DailyMerge(path, date, disk_id)
-    merge.run()
-
-    def rmpid():
+    def rmpid(s = None, f = None):
         os.unlink(pidfile)
 
-    atexit.register(rmpid)
+    signal.signal(signal.SIGINT, rmpid)
+    merge = DailyMerge(path, date, disk_id)
+    merge.run() 
+    rmpid()

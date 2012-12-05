@@ -33,6 +33,7 @@ src/membase-backupd \
 src/membase-restore \
 src/memcacheConstants.py \
 src/util.py \
+src/diffdisk.py \
 src/backup_healthcheck \
 src/count_backup_keys.sh \
 src/healthcheck_runner.sh \

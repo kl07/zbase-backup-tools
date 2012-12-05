@@ -100,7 +100,7 @@ class MergeJob:
             self.logger.error("Unable to generate dirty and deleted files list for disk:%s" %self.getDisk())
             return False
 
-        if appendToFile_Locked(dirtylist, dirty_filename) and appendToFile_Locked(deletedlist, deleted_filename):
+        if appendToFile_Locked(dirty_filename, dirtylist) and appendToFile_Locked(deleted_filename, deletedlist):
             return True
         else:
             self.logger.error("Unable to mark %s to dirtyfile and add deleted files, %s" %(self.path, dirty_filename))
