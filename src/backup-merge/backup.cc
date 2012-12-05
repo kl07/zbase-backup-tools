@@ -382,9 +382,15 @@ bool Merge::walk_files(std::list <std::string> &files, bool validate) {
     cv.getCheckpointList(checkpoints);
 }
 
-Merge::Merge(std::list <std::string> files, std::string output_file, int split, bool validate):
-    source_files(files), output_file_pattern(output_file), split_size(split), validation(validate) {
+Merge::Merge(std::list <std::string> files, std::string output_file, int split, bool validate, std::string bfr_path):
+    source_files(files), output_file_pattern(output_file), split_size(split), validation(validate), buffer_path(bfr_path) {
 
+        std::stringstream cmd_setup_buffer;
+        cmd_setup_buffer<<"rm -rf "<<buffer_path<<" && mkdir -p "<<buffer_path;
+        if (system(cmd_setup_buffer.str().c_str())) {
+            std::cout<<"ERROR: Unable to setup work buffer ("<<cmd_setup_buffer<<")"<<std::endl;
+            exit(1);
+        }
         walk_files(source_files, validation);
         keyhash = new HashTable;
 }
@@ -410,7 +416,7 @@ void Merge::process() {
     outfile = genfilename(output_file_pattern, split_no);
     std::cout<<"Creating backup file - "<<outfile<<std::endl;
 
-    obackup = new Backup(outfile, BACKUP_WR_ONLY | BACKUP_TMPFS_BACKEND);
+    obackup = new Backup(outfile, BACKUP_WR_ONLY | BACKUP_TMPFS_BACKEND, buffer_path);
     obackup->setSize(split_size*1024*1024);
     obackup->putCheckpoints(checkpoints);
 
@@ -421,7 +427,7 @@ void Merge::process() {
         std::cout<<"Processing file - "<<*f<<std::endl;
 
         t_ip_backup_init.start();
-        ibackup = new Backup(*f, BACKUP_RD_ONLY | BACKUP_TMPFS_BACKEND);
+        ibackup = new Backup(*f, BACKUP_RD_ONLY | BACKUP_TMPFS_BACKEND, buffer_path);
         t_ip_backup_init.stop();
         t_ip_backup_init.display();
         t_ip_backup_init.reset();
@@ -449,7 +455,7 @@ void Merge::process() {
                     split_no++;
                     outfile = genfilename(output_file_pattern, split_no);
                     std::cout<<"Creating backup file - "<<outfile<<std::endl;
-                    obackup = new Backup(outfile, BACKUP_WR_ONLY | BACKUP_TMPFS_BACKEND);
+                    obackup = new Backup(outfile, BACKUP_WR_ONLY | BACKUP_TMPFS_BACKEND, buffer_path);
                     obackup->setSize(split_size*1024*1024);
                     obackup->putCheckpoints(checkpoints);
                     op_rv = obackup->putOperation(op);

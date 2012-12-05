@@ -350,12 +350,13 @@ class Merge {
     HashTable *keyhash;
     std::list <std::string> source_files;
     std::list <Checkpoint> checkpoints;
+    std::string buffer_path;
 
 public:
     /**
      * Initialize
      */
-    Merge(std::list<std::string> files, std::string output_file, int split, bool validate);
+    Merge(std::list<std::string> files, std::string output_file, int split, bool validate, std::string bfr_path);
 
 
     /**

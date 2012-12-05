@@ -94,8 +94,8 @@ class MasterMerge:
         f.close()
 
         split_file_name = "%s/backup-%s-%%.mbb" %(master_directory, self.timestamp)
-        merge_cmd = "%s -o %s -i %s -s %d -v" %(consts.PATH_MBMERGE_EXEC,
-                                        split_file_name, f.name, consts.SPLIT_SIZE)
+        merge_cmd = "%s -o %s -i %s -s %d -b %s -v" %(consts.PATH_MBMERGE_EXEC,
+                                        split_file_name, f.name, consts.SPLIT_SIZE, self.disk_id)
 
         process = subprocess.Popen(shlex.split(merge_cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         status = 0

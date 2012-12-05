@@ -20,11 +20,11 @@ int main(int argc, char **argv) {
     bool validation(false);
     std::list <std::string> files;
     std::fstream ifs;
-    std::string inputfile, outputfile;
+    std::string inputfile, outputfile, workbuffdir;
     std::string buffer;
     char *dirpath;
 
-    while ((c = getopt (argc, argv, "i:o:s:v")) != -1) {
+    while ((c = getopt (argc, argv, "i:o:s:b:v")) != -1) {
         switch (c) 
         {   
             case 'i':
@@ -33,6 +33,10 @@ int main(int argc, char **argv) {
                 break;
             case 'o':
                 outputfile = optarg;
+                required++;
+                break;
+            case 'b':
+                workbuffdir = optarg;
                 required++;
                 break;
             case 's':
@@ -50,8 +54,8 @@ int main(int argc, char **argv) {
         }   
     }
     
-    if (required != 2) {
-        std::cout<<"Usage: "<<argv[0]<<" -i files.txt -o file-%.mbb [-s 512] [-v]"<<std::endl;
+    if (required != 3) {
+        std::cout<<"Usage: "<<argv[0]<<" -i files.txt -o file-%.mbb -b /dev/shm/buffdir/ [-s 512] [-v]"<<std::endl;
         exit(1);
     }
 
@@ -81,7 +85,7 @@ int main(int argc, char **argv) {
     }   
     std::cout<<std::endl;
 
-    Merge merge(files, outputfile, split_size, validation);
+    Merge merge(files, outputfile, split_size, validation, workbuffdir);
     merge.process();
 
     return 0;
