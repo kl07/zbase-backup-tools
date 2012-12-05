@@ -22,6 +22,7 @@ import pdb
 import glob
 import tempfile
 import subprocess
+import atexit
 
 class MasterMerge:
 
@@ -218,3 +219,7 @@ if __name__ == '__main__':
     merge = MasterMerge(path, date, disk_id)
     merge.run()
 
+    def rmpid():
+        os.unlink(pidfile)
+
+    atexit.register(rmpid)
