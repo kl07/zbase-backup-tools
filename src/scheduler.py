@@ -15,6 +15,7 @@ import datetime
 import glob
 import os
 import consts
+import diffdisk
 
 class MergeJob:
     """
@@ -90,11 +91,19 @@ class MergeJob:
         """
         Add the files to be copied to secondary disk by marking the directory as dirty
         """
-        dirtyfile = os.path.join(self.getDisk(), consts.DIRTY_DISK_FILE)
-        if appendToFile_Locked(dirtyfile, "%s\n" %self.path):
+        dirty_filename = os.path.join(self.getDisk(), consts.DIRTY_DISK_FILE)
+        deleted_filename = os.path.join(self.getDisk(), consts.TO_BE_DELETED_FILE)
+
+        try:
+            dirtylist, deletedlist = diffdisk.dirdiff(self.getDisk(), "primary")
+        except Exception, e:
+            self.logger.error("Unable to generate dirty and deleted files list for disk:%s" %self.getDisk())
+            return False
+
+        if appendToFile_Locked(dirtylist, dirty_filename) and appendToFile_Locked(deletedlist, deleted_filename):
             return True
         else:
-            self.logger.error("Unable to mark %s to dirtyfile, %s" %(self.path, dirtyfile))
+            self.logger.error("Unable to mark %s to dirtyfile and add deleted files, %s" %(self.path, dirty_filename))
             return False
 
     def isRunning(self):

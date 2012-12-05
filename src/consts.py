@@ -44,6 +44,7 @@ DB_PATHS = ['/db/membase/']
 MIN_INCR_BACKUPS_COUNT = 15
 BAD_DISK_FILE = '/var/tmp/disk_mapper/bad_disk'
 DIRTY_DISK_FILE = 'dirty'
+TO_BE_DELETED_FILE = 'to_be_deleted'
 PATH_DAILY_MERGE = '/opt/membase/membase-backup/daily-merge'
 PATH_MASTER_MERGE = '/opt/membase/membase-backup/master-merge'
 MAX_MASTERJOBS = 1

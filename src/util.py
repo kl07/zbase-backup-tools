@@ -139,7 +139,7 @@ def markBadDisk(disk_id):
     The disk mapper can verify the disk and consider for swapping disk
     """
 
-    return appendToFile_Locked(consts.BAD_DISK_FILE, "/data_%d\n" %disk_id)
+    return appendToFile_Locked(consts.BAD_DISK_FILE, ["/data_%d" %disk_id])
 
 def appendToFile_Locked(filename, data):
     """
@@ -148,12 +148,16 @@ def appendToFile_Locked(filename, data):
     """
 
     try:
+        lockname = "%s.lock" %filename
+        lock = open(lockname, 'w')
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         f = open(filename, 'aw')
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-        f.write(data)
+        for d in data:
+            f.write("%s\n" %d)
         os.chown(filename, 48, -1)
-        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         f.close()
+        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+        lock.close()
     except:
         return False
 
