@@ -23,7 +23,6 @@ import pdb
 import shlex
 import tempfile
 import subprocess
-import atexit
 
 class DailyMerge:
 
@@ -38,9 +37,9 @@ class DailyMerge:
     def run(self):
         status = self.start_merge()
         if status == False:
-            sys.exit(1)
+            return 1
         else:
-            sys.exit(0)
+            return 0
 
     def start_merge(self):
 
@@ -336,5 +335,6 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, rmpid)
     merge = DailyMerge(path, date, disk_id)
-    merge.run() 
+    rv = merge.run() 
     rmpid()
+    sys.exit(rv)

@@ -23,7 +23,6 @@ import pdb
 import glob
 import tempfile
 import subprocess
-import atexit
 
 class MasterMerge:
 
@@ -38,9 +37,9 @@ class MasterMerge:
     def run(self):
         status = self.start_merge()
         if status == False:
-            sys.exit(1)
+            return 1
         else:
-            sys.exit(0)
+            return 0
 
     def start_merge(self):
         master_location = "%s/master" %self.source_path
@@ -222,5 +221,6 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, rmpid)
     merge = MasterMerge(path, date, disk_id)
-    merge.run()
+    rv = merge.run()
     rmpid()
+    sys.exit(rv)
