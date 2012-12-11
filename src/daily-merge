@@ -32,7 +32,7 @@ class DailyMerge:
         self.date = date
         self.timestamp = "%s_00:00:00" %date
         self.disk_id = disk_id
-        meta_data = "DISK_%d" %disk_id
+        meta_data = "DailyMerge:DISK_%d" %disk_id
         self.logger = Logger(tag = consts.SYSLOG_TAG, meta = meta_data)
 
     def run(self):
