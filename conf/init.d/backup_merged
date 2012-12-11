@@ -45,7 +45,7 @@ start(){
 stop(){
 
     echo "Stopping backup merge daemon"
-    /usr/bin/python26 /opt/membase/membase-backup/backup_merged stop >/dev/null 2>&1 &
+    /usr/bin/python26 /opt/membase/membase-backup/backup_merged stop >/dev/null 2>&1
 
     if [ $? -eq 0 ];
     then
