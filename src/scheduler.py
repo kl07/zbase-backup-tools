@@ -134,6 +134,8 @@ class MergeJob:
             if self.isProcessComplete():
                 if self.process.returncode == 0:
                     stext = "SUCCESS"
+                elif self.process.returncode == 3:
+                    stext = "NOT-ENOUGH-FILES"
                 else:
                     stext = "FAILED"
             else:

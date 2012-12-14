@@ -82,7 +82,7 @@ class DailyMerge:
 
         if c < consts.MIN_INCR_BACKUPS_COUNT:
             self.logger.log("Warning: We should have count(backups) > %d to process. Skipping daily merge" %consts.MIN_INCR_BACKUPS_COUNT)
-            sys.exit(0)
+            sys.exit(3)
 
         listfiles = "\n".join(lines)
         #check for existence of done file
