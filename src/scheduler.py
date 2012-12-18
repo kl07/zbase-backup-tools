@@ -280,7 +280,7 @@ class BaseScheduler:
         ignore = False
         ret = True
         self.logger.info("==== Executing job processor for %s ====" %self.type)
-        self.findJobs(date)
+        self.jobs = self.findJobs(date)
         if len(self.jobs):
             self.logger.info("Merge jobs to be processed: %s" %", ".join(["DISK:%s HOST:%s" %(x.getDisk(), x.getHost()) for x in self.jobs]))
         else:
@@ -315,6 +315,11 @@ class BaseScheduler:
             else:
                 break
 
+            newjobs = self.findJobs(date)
+            if len(newjobs) != len(self.jobs):
+                self.jobs = newjobs
+                self.logger.info("Merge jobs to be processed: %s" %", ".join(["DISK:%s HOST:%s" %(x.getDisk(), x.getHost()) for x in self.jobs]))
+
         self.waitForProcessSlot(True)
 
         if skipped == True:
@@ -339,6 +344,7 @@ class DailyMergeScheduler(BaseScheduler):
         self.logger.info("Initializing Daily Merge Scheduler")
 
     def findJobs(self, date):
+        jobs = []
         for d,h in self.getLocations():
             path = os.path.join(h, consts.PERIODIC_DIRNAME, date)
             addhost = False
@@ -352,9 +358,10 @@ class DailyMergeScheduler(BaseScheduler):
                 job = MergeJob(MergeJob.DAILYJOB, h, date, self.logger)
                 if job not in self.current_execjobs:
                     if self.isDiskBusy(d):
-                        self.jobs.insert(0, job)
+                        jobs.insert(0, job)
                     else:
-                        self.jobs.append(job)
+                        jobs.append(job)
+        return jobs
 
     def canSchedule(self, job):
 
@@ -382,6 +389,7 @@ class MasterMergeScheduler(BaseScheduler):
         self.startdate = datetime.date.today()
 
     def findJobs(self, date):
+        jobs = []
         for d,h in self.getLocations():
             path = os.path.join(h, consts.MASTER_DIRNAME, date)
             addhost = False
@@ -395,9 +403,10 @@ class MasterMergeScheduler(BaseScheduler):
                 job = MergeJob(MergeJob.MASTERJOB, h, date, self.logger)
                 if job not in self.current_execjobs:
                     if self.isDiskBusy(d):
-                        self.jobs.insert(0, job)
+                        jobs.insert(0, job)
                     else:
-                        self.jobs.append(job)
+                        jobs.append(job)
+        return jobs
 
     def canSchedule(self, job):
 
