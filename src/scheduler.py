@@ -114,6 +114,7 @@ class MergeJob:
         Execute backup merge job  - master merge or daily merge
         """
         self.running = True
+        diffdisk.dirdiff(self.getDisk(), "primary")
         self.process = Popen(self.getCommand(), stdout=PIPE, stderr=PIPE, preexec_fn=os.setsid)
 
     def isProcessComplete(self):
