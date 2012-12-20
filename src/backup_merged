@@ -44,11 +44,14 @@ def killmergejobs():
     """
     pidfiles = glob.glob("/var/run/daily-merge-disk-*")
     pidfiles.extend(glob.glob("/var/run/master-merge-disk-*"))
-    pids = map(getpid, pidfiles)
+    pids = map(lambda x: (getpid(x), x), pidfiles)
 
-    for p in pids:
+    for p,fname in pids:
         if os.path.exists(os.path.join("/proc/%d" %p)):
             os.killpg(p, 9)
+
+        os.unlink(fname)
+
 
 def stop(*args):
     """
