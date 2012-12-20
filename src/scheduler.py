@@ -47,6 +47,12 @@ class MergeJob:
         """
         return self.location.split('/')[-2]
 
+    def getLocation(self):
+        """
+        Return the location of the backup directory
+        """
+        return self.location
+
     def getDisk(self):
         """
         Return the disk for the current merge job
@@ -227,6 +233,16 @@ class BaseScheduler:
 
         return False
 
+    def isRestoreRunning(self, location):
+        """
+        Check if restore lock file is present
+        """
+        locks = glob.glob("%s/lock-*" %(os.path.join(location, consts.INCR_DIRNAME)))
+        if len(locks):
+            return True
+        else:
+            return False
+
     def waitForProcessSlot(self, completeAll=False):
         """
         Wait until atleast one jobslot is free
@@ -391,7 +407,7 @@ class DailyMergeScheduler(BaseScheduler):
             return BaseScheduler.NOMEMORY
 
         if len(self.current_execjobs) < self.config.parallel_daily_jobs:
-            if self.isDiskBusy(job.getDisk()):
+            if self.isDiskBusy(job.getDisk()) or self.isRestoreRunning(job.getLocation()):
                 return BaseScheduler.IGNORE
             else:
                 return BaseScheduler.PROCEED
