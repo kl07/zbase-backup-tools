@@ -154,7 +154,7 @@ def appendToFile_Locked(filename, data):
         f = open(filename, 'aw')
         for d in data:
             f.write("%s\n" %d)
-        os.chown(filename, 48, -1)
+        os.system("chown storageserver.storageserver %s" %filename)
         f.close()
         fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
         lock.close()

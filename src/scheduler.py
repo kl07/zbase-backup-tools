@@ -84,8 +84,10 @@ class MergeJob:
         if os.system("touch %s" %os.path.join(self.path, "complete")):
             self.logger.error("Unable to create complete at %s" %self.path)
 
-        if os.system("chown apache.apache -R %s" %self.path):
-            self.logger.error("Unable to change permission to apache for location %s" %self.path)
+        if os.system("chown storageserver.storageserver -R %s %s" %(self.path,
+                os.path.join(self.location, consts.INCR_DIRNAME))):
+            self.logger.error("Unable to change permission to storageserver for location %s" %self.path)
+
 
     def markForCopy(self):
         """
