@@ -26,7 +26,15 @@ def write_list(filename, l):
 
 
 def diff_list(l1, l2):
-    return set(l2) - set(l1), set(l1) - set(l2)
+    new, removed = list(set(l2) - set(l1)), list(set(l1) - set(l2))
+    newlist = []
+    for ftype in [".mbb", ".split", "manifest.del", "done-", "merged-", "done", "complete"]:
+        for line in new:
+            if ftype in line:
+                newlist.append(line)
+                new.remove(line)
+
+    return newlist, removed
 
 def dirdiff(basedir, dirname, manifest=".diffdata"):
     dirty, deleted = set([]), set([])
