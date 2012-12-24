@@ -139,7 +139,7 @@ def markBadDisk(disk_id):
     The disk mapper can verify the disk and consider for swapping disk
     """
 
-    return appendToFile_Locked(consts.BAD_DISK_FILE, ["/data_%d" %disk_id])
+    return appendToFile_Locked(consts.BAD_DISK_FILE, ["data_%d" %disk_id])
 
 def appendToFile_Locked(filename, data):
     """

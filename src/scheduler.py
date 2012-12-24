@@ -199,7 +199,7 @@ class BaseScheduler:
             bad_disks = f.readlines()
             f.close()
             for d in disks[:]:
-                for b in bad_disks:
+                for b in map(lambda x: x.split('/')[-1], bad_disks):
                     if d in b:
                         disks.remove(d)
         return disks
