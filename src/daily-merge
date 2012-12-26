@@ -50,7 +50,7 @@ class DailyMerge:
         status, output = commands.getstatusoutput("ls %s/*.split" %incr_location)
         if status != 0:
             self.logger.log(" Warning: .split files not found at %s" %incr_location)
-            return True
+            sys.exit(3)
 
         split_list = output.split("\n")
         split_list = backup_files_filter(self.date, split_list)
@@ -60,7 +60,7 @@ class DailyMerge:
         status, output = commands.getstatusoutput("ls %s/*.mbb" %incr_location)
         if status != 0:
             self.logger.log(" Warning: Invalid location %s or no backup files found" %incr_location)
-            return False
+            sys.exit(3)
 
         backup_list = output.split("\n")
 

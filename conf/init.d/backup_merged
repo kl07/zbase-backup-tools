@@ -2,6 +2,7 @@
 
 . /etc/init.d/functions
 PIDFILE=/var/run/backup_merge.pid
+exec &> >(tee /dev/stderr | logger -t 'Membasebackup' --)
 
 command=$1
 

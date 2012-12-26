@@ -90,8 +90,10 @@ class MergeJob:
         if os.system("touch %s" %os.path.join(self.path, "complete")):
             self.logger.error("Unable to create complete at %s" %self.path)
 
+        os.system("mkdir -p %s" %os.path.join(self.location, consts.INCR_DIRNAME))
         if os.system("chown storageserver.storageserver -R %s %s" %(self.path,
-                os.path.join(self.location, consts.INCR_DIRNAME))):
+                os.path.join(self.location, consts.INCR_DIRNAME))) or \
+                os.system("chown storageserver.storageserver %s" %os.path.dirname(self.path)):
             self.logger.error("Unable to change permission to storageserver for location %s" %self.path)
 
 

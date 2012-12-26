@@ -1,7 +1,7 @@
 #!/usr/bin/env python26
 #Description: Constants definitions
 
-SYSLOG_TAG = 'membase-backup'
+SYSLOG_TAG = 'Membasebackup'
 MBRESTORE_PID_FILE = '/var/run/mbrestore.pid'
 MBBACKUP_PID_FILE = '/var/run/mbbackup.pid'
 SCHEDULER_PID_FILE = '/var/run/backup_merge.pid'
