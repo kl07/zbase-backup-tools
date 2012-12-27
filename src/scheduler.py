@@ -303,9 +303,9 @@ class BaseScheduler:
         self.logger.info("==== Executing job processor for %s ====" %self.type)
         self.jobs = self.findJobs(date)
         if len(self.jobs):
-            self.logger.info("Merge jobs to be processed: %s" %", ".join(["DISK:%s HOST:%s" %(x.getDisk(), x.getHost()) for x in self.jobs]))
+            self.logger.info("(%s) Merge jobs to be processed: %s" %(self.type, ", ".join(["DISK:%s HOST:%s" %(x.getDisk(), x.getHost()) for x in self.jobs])))
         else:
-            self.logger.info("No merge jobs found to be processed")
+            self.logger.info("(%s) No merge jobs found to be processed" %self.type)
             ignore = True
 
         skipped = False
@@ -323,19 +323,19 @@ class BaseScheduler:
                     last_resp = job_states[job.getHost()]
 
                 if resp == BaseScheduler.PROCEED:
-                    self.logger.info("Executing merge job [ DISK:%s HOST:%s ]" %(job.getDisk(), job.getHost()))
+                    self.logger.info("(%s) Executing merge job [ DISK:%s HOST:%s ]" %(self.type, job.getDisk(), job.getHost()))
                     job.startExecution()
                     self.current_execjobs.append(job)
                 elif resp == BaseScheduler.IGNORE:
                     if last_resp != resp:
-                        self.logger.info("Ignoring merge job [ DISK:%s HOST:%s ] - Disk busy" %(job.getDisk(), job.getHost()))
+                        self.logger.info("(%s) Ignoring merge job [ DISK:%s HOST:%s ] - Disk busy" %(self.type, job.getDisk(), job.getHost()))
 
                     self.jobs.insert(0, job)
                     self.waitForProcessSlot(None)
                     time.sleep(1)
                 elif resp == BaseScheduler.WAIT:
                     if last_resp != resp:
-                        self.logger.info("Ignoring merge job [ DISK:%s HOST:%s ] - No process slot available" %(job.getDisk(), job.getHost()))
+                        self.logger.info("(%s) Ignoring merge job [ DISK:%s HOST:%s ] - No process slot available" %(self.type, job.getDisk(), job.getHost()))
 
                     self.jobs.append(job)
                     self.waitForProcessSlot()
@@ -344,7 +344,7 @@ class BaseScheduler:
                     break
                 elif resp == BaseScheduler.NOMEMORY:
                     if last_resp != resp:
-                        self.logger.info("Ignoring merge job [ DISK:%s HOST:%s ] - Not enough memory available" %(job.getDisk(), job.getHost()))
+                        self.logger.info("(%s) Ignoring merge job [ DISK:%s HOST:%s ] - Not enough memory available" %(self.type, job.getDisk(), job.getHost()))
 
                     time.sleep(1)
                     self.jobs.append(job)
@@ -357,7 +357,7 @@ class BaseScheduler:
             newjobs = self.findJobs(date)
             if len(newjobs) != len(self.jobs):
                 self.jobs = newjobs
-                self.logger.info("Merge jobs to be processed: %s" %", ".join(["DISK:%s HOST:%s" %(x.getDisk(), x.getHost()) for x in self.jobs]))
+                self.logger.info("(%s) Merge jobs to be processed: %s" %(self.type, ", ".join(["DISK:%s HOST:%s" %(x.getDisk(), x.getHost()) for x in self.jobs])))
                 job_states = {}
 
         self.waitForProcessSlot(True)
