@@ -351,14 +351,18 @@ class BaseScheduler:
                     self.waitForProcessSlot()
 
                 job_states[job.getHost()] = resp
-            else:
-                break
 
             newjobs = self.findJobs(date)
             if len(newjobs) != len(self.jobs):
                 self.jobs = newjobs
                 self.logger.info("(%s) Merge jobs to be processed: %s" %(self.type, ", ".join(["DISK:%s HOST:%s" %(x.getDisk(), x.getHost()) for x in self.jobs])))
                 job_states = {}
+
+            self.waitForProcessSlot(None)
+            if len(self.jobs) == 0 and len(self.current_execjobs) == 0:
+                break
+            else:
+                time.sleep(1)
 
         self.waitForProcessSlot(True)
 
