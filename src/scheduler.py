@@ -198,11 +198,11 @@ class BaseScheduler:
         disks = glob.glob('/data_*')
         if os.path.exists(consts.BAD_DISK_FILE):
             f = open(consts.BAD_DISK_FILE)
-            bad_disks = f.readlines()
+            bad_disks = filter(lambda y: y != "", map(lambda x: x.strip(), f.readlines()))
             f.close()
             for d in disks[:]:
                 for b in map(lambda x: x.split('/')[-1], bad_disks):
-                    if d in b:
+                    if b in d:
                         disks.remove(d)
         return disks
 
