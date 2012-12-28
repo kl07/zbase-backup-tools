@@ -17,6 +17,7 @@ import glob
 import sys
 import signal
 import consts
+import commands
 
 def start():
     """
@@ -78,6 +79,7 @@ def processLoop():
     master_scheduler = MasterMergeScheduler(config, logger)
 
     while True:
+        lasthostlist = None
         daily_date = datetime.date.strftime(datetime.date.today(), "%Y-%m-%d")
         weekday = int(datetime.date.strftime(datetime.date.today(), "%w"))
         dobj = datetime.date.today() - datetime.timedelta(days=weekday)
@@ -88,6 +90,11 @@ def processLoop():
         curr_date = datetime.date.strftime(datetime.date.today(), "%Y-%m-%d")
 
         while curr_date == daily_date:
+            hosts = commands.getoutput("ls /data_*/primary/")
+            if lasthostlist != None:
+                if lasthostlist != hosts:
+                    break
+            lasthostlist = hosts
             time.sleep(5)
             curr_date = datetime.date.strftime(datetime.date.today(), "%Y-%m-%d")
 
