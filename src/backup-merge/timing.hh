@@ -6,6 +6,8 @@
 #include <sys/time.h>
 #include <iomanip>
 
+using namespace std;
+
 // Timing class for profiling code blocks
 class Timing {
 

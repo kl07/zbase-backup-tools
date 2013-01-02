@@ -5,6 +5,7 @@ import os
 import shlex
 import sqlite3
 import socket
+import time
 
 tokenize = re.compile(r'(\d+)|(\D+)').findall
 def natural_sortkey(string):
@@ -100,3 +101,12 @@ def gethostname():
     """
     hostname = socket.gethostname().split('.')
     return hostname[0]
+
+def backup_filename_to_epoch(filename):
+    """
+    Return epoch from filename-timestamp
+    """
+
+    dt = "-".join(os.path.basename(filename).split('-')[1:-1])
+    return time.mktime(time.strptime(dt,'%Y-%m-%d_%H:%M:%S'))
+

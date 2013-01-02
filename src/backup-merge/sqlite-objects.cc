@@ -156,6 +156,22 @@ size_t SQLiteDB::getSize() {
     return st.st_size;
 }
 
+int SQLiteDB::getVersion() {
+    PreparedStatement p(db, "pragma user_version");
+    if (p.fetch()) {
+        return p.column_int(0);
+    } else {
+        return 0;
+    }
+}
+
+void SQLiteDB::setVersion(int version) {
+    std::stringstream cmd;
+    cmd<<"pragma user_version="<<version;
+    PreparedStatement p(db, cmd.str().c_str());
+    p.execute();
+}
+
 void SQLiteDB::closeDB() {
     sqlite3_close(db);
     close(file_fd);

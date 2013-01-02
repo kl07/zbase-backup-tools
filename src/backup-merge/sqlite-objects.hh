@@ -181,6 +181,10 @@ public:
 
     size_t getSize();
 
+    int getVersion();
+
+    void setVersion(int version);
+
     void closeDB();
 
     ~SQLiteDB();

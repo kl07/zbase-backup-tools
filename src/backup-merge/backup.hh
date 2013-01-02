@@ -5,10 +5,12 @@
 
 #include "sqlite-objects.hh"
 #include "util.hh"
-#include "hashdb.hh"
+#include "hashtable.hh"
 #include <iostream>
 #include <list>
 #include <map>
+
+#define BACKUP_VERSION 1
 
 class Operation;
 class Statements;
@@ -100,6 +102,8 @@ public:
     BACKUP_OPERATION_STATUS putOperation(const Operation *op);
 
     void setSize(size_t sz);
+
+    int getVersion();
         
     BACKUP_OPERATION_STATUS getCheckpoints(std::list<Checkpoint>& checkpoints);
 
@@ -327,7 +331,7 @@ class Merge {
     bool validation;
     int split_size;
     std::string output_file_pattern;
-    HashDB *keyhash;
+    HashTable *keyhash;
     std::list <std::string> source_files;
     std::list <Checkpoint> checkpoints; 
 
@@ -335,7 +339,7 @@ public:
     /**
      * Initialize
      */
-    Merge(std::list<std::string> files, std::string output_file, int split, bool validate, size_t max_cache, std::string page_file);
+    Merge(std::list<std::string> files, std::string output_file, int split, bool validate);
 
 
     /**

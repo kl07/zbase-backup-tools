@@ -19,7 +19,7 @@ Backup::Backup(std::string fn, int m, std::string bfr_path):
     if (mode & BACKUP_TMPFS_BACKEND) {
         genTempFileName();
         if (mode & BACKUP_RD_ONLY) {
-            copyfile(filename, tmpfs_file, true, false);
+            copyfile(filename, tmpfs_file, false, false);
         }
 
         db = new SQLiteDB(tmpfs_file, flags);
@@ -33,6 +33,7 @@ Backup::Backup(std::string fn, int m, std::string bfr_path):
         stmts = new Statements(db, STMT_READ_CP);
     } else if(mode & BACKUP_WR_ONLY) {
         db->set_journal_mode("OFF");
+        db->setVersion(BACKUP_VERSION);
 
         stmts = new Statements(db, STMT_CREATE_TABLE_OP);
         (stmts->create_table_op())->execute();
@@ -106,6 +107,10 @@ void Backup::setSize(size_t sz) {
     maxsize = sz;
 }
 
+int Backup::getVersion() {
+    return db->getVersion();
+}
+
 BACKUP_OPERATION_STATUS Backup::getCheckpoints(std::list<Checkpoint>& checkpoints) {
     PreparedStatement *st = stmts->read_cp();
     Checkpoint *cp;
@@ -153,7 +158,7 @@ Backup::~Backup() {
         delete db;
 
         if (mode & BACKUP_TMPFS_BACKEND) {
-            movefile(tmpfs_file, filename, false, true);
+            movefile(tmpfs_file, filename, false, false);
         }
     } else {
         delete stmts;
@@ -323,6 +328,10 @@ bool Merge::walk_files(std::list <std::string> &files, bool validate) {
         backup = new Backup(*it, BACKUP_CP_RD_ONLY);
 
         backup->getCheckpoints(cplist);
+        if (backup->getVersion() > BACKUP_VERSION) {
+            std::cout<<"ERROR: Backup version should be <= "<<BACKUP_VERSION<<" for "<<*it<<std::endl;
+            exit(1);
+        }
         cv.addCheckpointList(cplist, *it);
         delete backup;
         cplist.clear();
@@ -331,11 +340,11 @@ bool Merge::walk_files(std::list <std::string> &files, bool validate) {
     cv.getCheckpointList(checkpoints);
 }
 
-Merge::Merge(std::list <std::string> files, std::string output_file, int split, bool validate, size_t max_cache, std::string page_file): 
+Merge::Merge(std::list <std::string> files, std::string output_file, int split, bool validate):
     source_files(files), output_file_pattern(output_file), split_size(split), validation(validate) {
 
         walk_files(source_files, validation);
-        keyhash = new HashDB(max_cache*1024*1024, page_file);
+        keyhash = new HashTable;
 }
 
 Merge::~Merge() {
@@ -343,7 +352,7 @@ Merge::~Merge() {
 }
 
 void Merge::process() {
-    bool isKyotoInsert;
+    bool ishashinsert;
 
     Operation *op;
     Backup *ibackup, *obackup;
@@ -364,7 +373,7 @@ void Merge::process() {
     obackup->putCheckpoints(checkpoints);
 
     while (f != source_files.end()) {
-        Timing t_total("Total"), t_kyotoinsert("HashDB insert"),
+        Timing t_total("Total"), t_hashinsert("HashDB insert"),
                t_dbinsert("Backup insert"), t_dbread("Backup read");
 
         std::cout<<"Processing file - "<<*f<<std::endl;
@@ -378,11 +387,11 @@ void Merge::process() {
         op_rv = ibackup->getOperation(&op);
 
         while (op_rv != OP_RD_COMPLETE) {
-            t_kyotoinsert.start();
-            isKyotoInsert = keyhash->add(op->getKey());
-            t_kyotoinsert.stop();
+            t_hashinsert.start();
+            ishashinsert = keyhash->add(op->getKey());
+            t_hashinsert.stop();
 
-            if (isKyotoInsert) {
+            if (ishashinsert) {
                 t_dbinsert.start();
                 op_rv = obackup->putOperation(op);
                 t_dbinsert.stop();

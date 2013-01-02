@@ -9,11 +9,17 @@ class Logger:
     """
     Logger class
     """
-    def __init__(self, tag = consts.SYSLOG_TAG, level = 'INFO'):
+    def __init__(self, tag = consts.SYSLOG_TAG, level = 'INFO', meta = None):
         self.pid = os.getpid()
-	syslog.openlog(tag)
+        self.meta = meta
+        syslog.openlog(tag)
 
     def log(self, msg):
         print str(msg)
-	syslog.syslog("PID=%d %s" %(self.pid, str(msg)))
+
+        syslogmsg = "PID=%d " %self.pid
+        if self.meta:
+            syslogmsg += "%s " %self.meta
+        syslogmsg += str(msg)
+        syslog.syslog(syslogmsg)
 

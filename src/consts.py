@@ -41,3 +41,4 @@ LAST_MASTER_BACKUP_TIME = '/db/last_master_backup'
 NAGIOS_BACKUP_TIME = '/tmp/nagios_state/mb_backup_time'
 CKSUM_VERSION = 2
 DB_PATHS = ['/db/membase/']
+MIN_INCR_BACKUPS_COUNT = 15
