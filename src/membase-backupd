@@ -16,7 +16,7 @@ from config import Config
 from logger import Logger
 from mc_bin_client import MemcachedClient
 from util import setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
-from util import natural_sortkey
+from util import natural_sortkey, gethostname
 from backuplib import BackupFactory
 
 # Setup the sqlite3 LD_LIBRARY_PATH before importing sqlite3
@@ -55,7 +55,6 @@ class BackupProcess:
 
         sys.stderr = stderrlog(backup_process)
         try:
-            self.hostname = socket.gethostname()
             raw_buffer_list = self.config.buffer_list.split(',')
             buffer_list = set(raw_buffer_list)
             if not len(buffer_list):
@@ -100,7 +99,7 @@ class BackupProcess:
 
     def resume_process(self):
         self.logger.log("Looking for backup files to resume upload process")
-        dirpath_suffix = '%s/%s/%s' %(self.config.game_id, self.hostname, self.config.cloud)
+        dirpath_suffix = '%s/%s/%s' %(self.config.game_id, gethostname(), self.config.cloud)
         backup_files = {}
         split_index_group = {}
         dot_done_backup = None
@@ -422,7 +421,7 @@ class BackupProcess:
                 backup_filename = time.strftime('backup-%Y-%m-%d_%H:%M:%S-%.mbb',now)
                 if self.first_master_backup or master_backup_attempt:
                     backup_dir = os.path.join(self.config.game_id,
-                            self.hostname, self.config.cloud,
+                            gethostname(), self.config.cloud,
                             consts.MASTER_DIRNAME, "%s"
                             %(time.strftime('%Y-%m-%d', now)))
                     self.first_master_backup = False
@@ -447,12 +446,12 @@ class BackupProcess:
 
                     if last_checkpoint == 0:
                         backup_dir = os.path.join(self.config.game_id,
-                                self.hostname, self.config.cloud,
+                                gethostname(), self.config.cloud,
                                 consts.MASTER_DIRNAME, "%s"
                                 %(time.strftime('%Y-%m-%d', now)))
                         dot_done = True
                     else:
-                        backup_dir = os.path.join(self.config.game_id, self.hostname, self.config.cloud, consts.INCR_DIRNAME)
+                        backup_dir = os.path.join(self.config.game_id, gethostname(), self.config.cloud, consts.INCR_DIRNAME)
                     full_backup = False
 
                 backup_filepath = os.path.join(backup_dir, backup_filename)

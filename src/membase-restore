@@ -13,7 +13,7 @@ from threading import Thread
 from mc_bin_client import MemcachedClient
 from logger import Logger
 from config import Config
-from util import natural_sortkey, setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
+from util import natural_sortkey, setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup, gethostname
 
 DAY_EPOCH = 60*60*24
 
@@ -285,7 +285,7 @@ class Restore:
             incremental_backup_list = []
         else:
             self.verify_split_index(incremental_backup_s3path, incremental_backup_list)
-            hostname = socket.gethostname()
+            hostname = gethostname()
             f = open('/tmp/.lock-%s' %hostname,'w')
             f.close()
             self.s3_lock_file = "%s.lock-%s" %(incremental_backup_s3path, hostname)

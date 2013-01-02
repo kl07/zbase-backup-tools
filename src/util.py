@@ -4,6 +4,7 @@ import re
 import os
 import shlex
 import sqlite3
+import socket
 
 tokenize = re.compile(r'(\d+)|(\D+)').findall
 def natural_sortkey(string):
@@ -93,3 +94,9 @@ def copy_checkpoint_op_records(op_records, db):
     c.close()
     return result
 
+def gethostname():
+    """
+    Return hostname from hostname.va2.zynga.com
+    """
+    hostname = socket.gethostname().split('.')
+    return hostname[0]

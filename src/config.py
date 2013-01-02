@@ -4,6 +4,7 @@
 import ConfigParser
 import socket
 import consts
+from util import gethostname
 
 class Config:
     def __init__(self, conf_file = None):
@@ -36,7 +37,7 @@ class Config:
         try:
             hostname = self.config.get('restore', 'hostname')
         except:
-            hostname = socket.gethostname()
+            hostname = gethostname()
         self.hostname = hostname
 
         self.download_retries = int(self.config.get('restore', 'download_retries'))
