@@ -16,7 +16,7 @@ from config import Config
 from logger import Logger
 from mc_bin_client import MemcachedClient
 from util import setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
-from util import natural_sortkey, gethostname
+from util import natural_sortkey, zruntime_readkey, gethostname
 from backuplib import BackupFactory
 
 # Setup the sqlite3 LD_LIBRARY_PATH before importing sqlite3
@@ -89,10 +89,27 @@ class BackupProcess:
         except:
             pass
 
+
         self.logger.log("=== Starting Membase Backup Daemon ===")
-	signal.signal(signal.SIGINT, self.graceful_exit)
-	signal.signal(signal.SIGQUIT, self.graceful_exit)
-	signal.signal(signal.SIGTERM, self.graceful_exit)
+        signal.signal(signal.SIGINT, self.graceful_exit)
+        signal.signal(signal.SIGQUIT, self.graceful_exit)
+        signal.signal(signal.SIGTERM, self.graceful_exit)
+
+    def update_mappingserver(self):
+        """
+        Update mapping server env variable
+        """
+        mapping_server = zruntime_readkey(self.config.zruntime_user,
+        self.config.zruntime_passwd,
+        self.config.zruntime_namespace,
+        self.config.game_id,
+        self.config.zruntime_mapperkey)
+
+        if self.mapping_server:
+            self.logger.log("FAILED: Unable to read from zRuntime")
+            self.exit(1)
+        else:
+            os.putenv("MAPPING_SERVER", mapping_server)
 
     def getstatusoutput(self, cmd):
         return getcommandoutput(cmd, self.processlist)
@@ -207,9 +224,13 @@ class BackupProcess:
         self.logger.log("ATTEMPT: Uploading %s to %s " %(filepath, s3path))
         upload_cmd = "%s sync %s %s" %(consts.PATH_S3CMD_EXEC, filepath, s3path)
         self.logger.log("Executing command, %s " %upload_cmd)
+        firstretry = True
         for i in range(retries):
             if i > 0:
                 self.logger.log("Retrying upload for %s " %filepath)
+                if firstretry:
+                    firstretry = False
+                    self.update_mappingserver()
 
             self.logger.log("Uploading file %s to %s " %(filepath, s3path))
             status, output = self.getstatusoutput(upload_cmd)
@@ -260,9 +281,14 @@ class BackupProcess:
         s3path = "s3://%s" %(s3suffix_path)
         del_cmd = "%s del %s" %(consts.PATH_S3CMD_EXEC, s3path)
         self.logger.log("Executing command, %s " %del_cmd)
+        firstretry = True
         for i in range(retries):
             if i > 0:
                 self.logger.log("Retrying delete for %s " %f)
+                if firstretry:
+                    firstretry = False
+                    self.update_mappingserver()
+
             status, output = self.getstatusoutput(del_cmd)
             if status == 0:
                 break
