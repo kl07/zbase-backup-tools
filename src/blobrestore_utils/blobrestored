@@ -425,6 +425,7 @@ class BlobrestoreManager:
         try:
             os.makedirs(os.path.join(consts.BLOBRESTORE_JOBS_DIR, 'pending'))
             os.makedirs(consts.BLOBRESTORE_PROCESSED_JOBS_DIR)
+            os.system("chown -R storageserver %s %s" %(consts.BLOBRESTORE_JOBS_DIR, consts.BLOBRESTORE_PROCESSED_JOBS_DIR))
         except:
             pass
 
