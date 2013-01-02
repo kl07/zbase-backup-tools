@@ -13,12 +13,9 @@ from threading import Thread
 from mc_bin_client import MemcachedClient
 from logger import Logger
 from config import Config
-from util import natural_sortkey, setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup, gethostname
+from util import natural_sortkey, zruntime_readkey, getcommandoutput, get_checkpoints_frombackup, gethostname
 
 DAY_EPOCH = 60*60*24
-
-# Setup the sqlite3 LD_LIBRARY_PATH before importing sqlite3
-setup_sqlite_lib()
 
 def epoch2date(epoch):
     lt = time.gmtime(epoch)
@@ -78,6 +75,7 @@ class Restore:
                 self.exit(1)
             self.free_buffer_list.put(b)
 
+        self.update_mappingserver()
         self.restore_queue = Queue.Queue()
         signal.signal(signal.SIGINT, self.graceful_exit)
         signal.signal(signal.SIGQUIT, self.graceful_exit)

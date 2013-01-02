@@ -89,7 +89,7 @@ class BackupProcess:
         except:
             pass
 
-
+        self.update_mappingserver()
         self.logger.log("=== Starting Membase Backup Daemon ===")
         signal.signal(signal.SIGINT, self.graceful_exit)
         signal.signal(signal.SIGQUIT, self.graceful_exit)
@@ -164,7 +164,7 @@ class BackupProcess:
         s3_incr_path = "s3://%s/%s/" %(dirpath_suffix, consts.INCR_DIRNAME)
         status, output = self.getstatusoutput("%s ls %s" %(consts.PATH_S3CMD_EXEC, s3_incr_path))
         if status > 0:
-            self.logger.log("FAILED: Listing incremental files from storage server")
+            self.logger.log("FAILED: Listing incremental files from storage server (%s)" %output)
             self.exit(1)
 
         s3_incr_files = filter(lambda x: x.endswith('.mbb'), output.split())
