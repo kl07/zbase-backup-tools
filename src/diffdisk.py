@@ -5,7 +5,7 @@ import os
 import sys
 
 def list_files(dirname):
-    status, output = commands.getstatusoutput('find %s -type f \( -name "*.mbb" -o -name "*.split" -o -name "manifest.del" -o -name ".done" -o -name ".complete" -o -name "done-*" -o -name "merged-*" \)' %dirname)
+    status, output = commands.getstatusoutput('find %s -type f \( -name "*.mbb" -o -name "*.split" -o -name "manifest.del" -o -name "done" -o -name "complete" -o -name "done-*" -o -name "merged-*" \)' %dirname)
     if status == 0:
         return [ x for x in output.split('\n') if x != '']
     else:

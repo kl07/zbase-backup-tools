@@ -189,7 +189,7 @@ class BackupProcess:
             self._remove_file(split_index_file)
 
         for backup_file in backup_files:
-            if backup_file.endswith('.done') or backup_file.endswith('.split'):
+            if backup_file.endswith('done') or backup_file.endswith('.split'):
                 self._remove_file(backup_file)
                 continue
 
@@ -306,7 +306,7 @@ class BackupProcess:
 
             if dot_done:
                 basepath = os.path.dirname(backup_filepath)
-                donepath = os.path.join(basepath, '.done')
+                donepath = os.path.join(basepath, 'done')
                 f = open(donepath, 'w')
                 f.write(' ')
                 f.close()

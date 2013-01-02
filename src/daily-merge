@@ -98,7 +98,7 @@ class DailyMerge:
         manifest_file = "%s/manifest.del" %incr_location
 
         if os.path.isfile(manifest_file):
-            #means that .lock exists
+            #means that lock exists
             fd = open(manifest_file, "r")
             buffer = fd.read()
             fd.close()
@@ -190,11 +190,11 @@ class DailyMerge:
             self.logger.log (" Failed to add done file %s" %done_file)
             return False
 
-        #add a .done file to the output directory
+        #add a done file to the output directory
         try:
-            os.system("touch %s/.done" %output_location)
+            os.system("touch %s/done" %output_location)
         except:
-            self.logger.log("Failed to add .done file to %s" %output_location)
+            self.logger.log("Failed to add done file to %s" %output_location)
 
         # create a manifest.split file in the output directory. this contains the list
         # of split files that the restore script needs to verify
@@ -250,10 +250,10 @@ class DailyMerge:
         return True
 
     def check_lock(self, location, create_manifest=False, listmbb=None, manifest_file=None, nolockcheck=False):
-        locks = glob.glob("%s/.lock-*" %location)
+        locks = glob.glob("%s/lock-*" %location)
         if nolockcheck or len(locks):
             if nolockcheck == False:
-                self.logger.log("WARNING: .lock file present. Skipping delete")
+                self.logger.log("WARNING: lock file present. Skipping delete")
 
             #create a manifest file at this location
             if create_manifest == True and listmbb != None:

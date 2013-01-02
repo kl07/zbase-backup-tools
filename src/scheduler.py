@@ -66,7 +66,7 @@ class MergeJob:
 
     def markComplete(self):
         """
-        Put .complete marker in the output directory
+        Put complete marker in the output directory
         Set the directory permissions to apache
         """
 
@@ -81,8 +81,8 @@ class MergeJob:
         except:
             self.logger.error("Unable to create directory, %s" %self.path)
 
-        if os.system("touch %s" %os.path.join(self.path, ".complete")):
-            self.logger.error("Unable to create .complete at %s" %self.path)
+        if os.system("touch %s" %os.path.join(self.path, "complete")):
+            self.logger.error("Unable to create complete at %s" %self.path)
 
         if os.system("chown apache.apache -R %s" %self.path):
             self.logger.error("Unable to change permission to apache for location %s" %self.path)
@@ -152,7 +152,7 @@ class MergeJob:
         """
         self.markComplete()
         if self.getStatus() == "SUCCESS":
-            if os.path.exists(os.path.join(self.path, ".done")):
+            if os.path.exists(os.path.join(self.path, "done")):
                 self.markForCopy()
 
 
@@ -343,7 +343,7 @@ class DailyMergeScheduler(BaseScheduler):
             path = os.path.join(h, consts.PERIODIC_DIRNAME, date)
             addhost = False
             if os.path.exists(path):
-                if not os.path.exists(os.path.join(path, ".complete")):
+                if not os.path.exists(os.path.join(path, "complete")):
                     addhost = True
             else:
                 addhost = True
@@ -386,7 +386,7 @@ class MasterMergeScheduler(BaseScheduler):
             path = os.path.join(h, consts.MASTER_DIRNAME, date)
             addhost = False
             if os.path.exists(path):
-                if not os.path.exists(os.path.join(path, ".complete")):
+                if not os.path.exists(os.path.join(path, "complete")):
                     addhost = True
             else:
                 addhost = True

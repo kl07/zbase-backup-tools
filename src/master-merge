@@ -59,14 +59,14 @@ class MasterMerge:
             difference = datetime.timedelta(days=-(i))
             datestamp = (datetime_object + difference).strftime('%Y-%m-%d')
             path = os.path.join(self.source_path, consts.MASTER_DIRNAME, datestamp)
-            if os.path.exists(os.path.join(path, ".done")):
+            if os.path.exists(os.path.join(path, "done")):
                 master_list = glob.glob("%s/*.mbb" %path)
                 if len(master_list) > 0:
                     found_master = True
                     break
 
             path = os.path.join(self.source_path, consts.PERIODIC_DIRNAME, datestamp)
-            if os.path.exists(os.path.join(path, ".done")):
+            if os.path.exists(os.path.join(path, "done")):
                 periodic_list = glob.glob("%s/*.mbb" %path)
                 periodic_list.sort()
                 periodic_list.reverse()
@@ -154,11 +154,11 @@ class MasterMerge:
                 return False
         fd.close()
 
-        #add a .done file to the output directory
+        #add a done file to the output directory
         try:
-            os.system("touch %s/.done" %master_directory)
+            os.system("touch %s/done" %master_directory)
         except:
-            self.logger.log("Failed to add .done file to %s" %master_directory)
+            self.logger.log("Failed to add done file to %s" %master_directory)
 
         os.system("touch %s" %self.merged_file)
         self.logger.log("Success: Master merge completed")

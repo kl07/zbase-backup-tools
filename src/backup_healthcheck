@@ -182,7 +182,7 @@ class Verifier:
             difference = datetime.timedelta(days=-(i))
             datestamp = (datetime_object + difference).strftime('%Y-%m-%d')
             path = os.path.join(self.backup_root, hostname, self.cloud, consts.MASTER_DIRNAME, datestamp)
-            if os.path.exists(os.path.join(path, ".done")):
+            if os.path.exists(os.path.join(path, "done")):
                 master_list = glob.glob("%s/*.mbb" %path)
                 if len(master_list) > 0:
                     self.log("INFO:%s Found master backup for date:%s" \
@@ -204,7 +204,7 @@ class Verifier:
                 break
 
             path = os.path.join(self.backup_root, hostname, self.cloud, consts.PERIODIC_DIRNAME, datestamp)
-            if os.path.exists(os.path.join(path, ".done")):
+            if os.path.exists(os.path.join(path, "done")):
                 periodic_list = glob.glob("%s/*.mbb" %path)
                 self.log("INFO:%s Found daily backup for date:%s" \
                             %(hostname, datestamp)) 
