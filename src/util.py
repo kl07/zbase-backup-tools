@@ -6,6 +6,7 @@ import shlex
 import sqlite3
 import socket
 import time
+import consts
 
 tokenize = re.compile(r'(\d+)|(\D+)').findall
 def natural_sortkey(string):
@@ -109,4 +110,36 @@ def backup_filename_to_epoch(filename):
 
     dt = "-".join(os.path.basename(filename).split('-')[1:-1])
     return time.mktime(time.strptime(dt,'%Y-%m-%d_%H:%M:%S'))
+
+def backup_files_filter(date, files):
+    """
+    Filter files list by comparing date < given data
+    """
+    r_list = []
+    cmp_epoch = backup_filename_to_epoch("backup-%s_00:00:00-00000.mbb" %date)
+    for f in files:
+        s = os.path.basename(f)
+        if '.split' in f:
+            s = s.replace('.split', '-00000.mbb')
+
+        epoch = backup_filename_to_epoch(s)
+
+        if epoch < cmp_epoch:
+            r_list.append(f)
+
+    return r_list
+
+def markBadDisk(disk_id):
+    """
+    Add the given disk into bad disk file
+    The disk mapper can verify the disk and consider for swapping disk
+    """
+
+    import fcntl
+
+    f = open(consts.BAD_DISK_FILE, 'aw')
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    f.write("/data_%d\n" %disk_id)
+    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    f.close()
 

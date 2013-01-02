@@ -16,6 +16,7 @@ void copyfile(std::string src, std::string dest, bool nocache_input, bool nocach
     }
     cmd<<" bs=512k if="<<src<<" of="<<dest<<" 2> /dev/null";
     if (system(cmd.str().c_str()) != 0) {
+        std::cout<<"ERROR: File copy failed ("<<cmd.str()<<")"<<std::endl;
         exit(EXIT_COPYFAIL);
     }
 }
@@ -24,7 +25,8 @@ void removefile(std::string file) {
     std::stringstream cmd;
 
     cmd<<"rm -f "<<file;
-    if (system(cmd.str().c_str()) == 0) {
+    if (system(cmd.str().c_str()) != 0) {
+        std::cout<<"ERROR: File remove failed ("<<cmd.str()<<")"<<std::endl;
         exit(EXIT_REMOVEFAIL);
     }
 }
