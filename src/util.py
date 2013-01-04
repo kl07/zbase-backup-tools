@@ -149,6 +149,10 @@ def appendToFile_Locked(filename, data):
 
     try:
         lockname = "%s.lock" %filename
+        for fl in (lockname, filename):
+            if not os.path.exists(fl):
+                os.system("touch %s && chown storageserver.storageserver %s" %(fl, fl))
+
         lock = open(lockname, 'w')
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         f = open(filename, 'aw')
