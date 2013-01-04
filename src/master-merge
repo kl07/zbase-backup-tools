@@ -156,11 +156,11 @@ class MasterMerge:
 
         #add a done file to the output directory
         try:
-            os.system("touch %s/done" %master_directory)
+            os.system("echo 0 > %s/done" %master_directory)
         except:
             self.logger.log("Failed to add done file to %s" %master_directory)
 
-        os.system("touch %s" %self.merged_file)
+        os.system("echo 0 > %s" %self.merged_file)
         self.logger.log("Success: Master merge completed")
 
         return True

@@ -87,7 +87,7 @@ class MergeJob:
         except:
             self.logger.error("Unable to create directory, %s" %self.path)
 
-        if os.system("touch %s" %os.path.join(self.path, "complete")):
+        if os.system("echo 0 > %s" %os.path.join(self.path, "complete")):
             self.logger.error("Unable to create complete at %s" %self.path)
 
         os.system("mkdir -p %s" %os.path.join(self.location, consts.INCR_DIRNAME))
