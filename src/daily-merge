@@ -38,8 +38,10 @@ class DailyMerge:
         status = self.start_merge()
         if status == False:
             return 1
-        else:
+        elif status == True:
             return 0
+        else:
+            return status
 
     def start_merge(self):
 
@@ -50,7 +52,7 @@ class DailyMerge:
         status, output = commands.getstatusoutput("ls %s/*.split" %incr_location)
         if status != 0:
             self.logger.log(" Warning: .split files not found at %s" %incr_location)
-            sys.exit(3)
+            return 3
 
         split_list = output.split("\n")
         split_list = backup_files_filter(self.date, split_list)
@@ -60,7 +62,7 @@ class DailyMerge:
         status, output = commands.getstatusoutput("ls %s/*.mbb" %incr_location)
         if status != 0:
             self.logger.log(" Warning: Invalid location %s or no backup files found" %incr_location)
-            sys.exit(3)
+            return 3
 
         backup_list = output.split("\n")
 
@@ -78,11 +80,11 @@ class DailyMerge:
             else:
                 if split_list[-1] != split:
                     self.logger.log("Failed : Files missing in split index file : %s" %split)
-                    sys.exit(1)
+                    return False
 
         if c < consts.MIN_INCR_BACKUPS_COUNT:
             self.logger.log("Warning: We should have count(backups) > %d to process. Skipping daily merge" %consts.MIN_INCR_BACKUPS_COUNT)
-            sys.exit(3)
+            return 3
 
         listfiles = "\n".join(lines)
         #check for existence of done file
