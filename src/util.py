@@ -191,3 +191,15 @@ def zruntime_readkey(user, passwd, namespace, gameid, key):
     except Exception, e:
         return False
 
+def parse_backupname(filename):
+    if filename.endswith(".mbb"):
+        return "-".join(os.path.basename(filename).split('-')[:-1])
+    else:
+        return os.path.basename(filename).replace(".split", "")
+
+def split_by_lines(data):
+    d = data.split('\n')
+    d = map(lambda x: x.strip(), d)
+    d = filter(lambda x: x != "", d)
+    return d
+

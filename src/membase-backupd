@@ -12,11 +12,12 @@ import datetime
 import random
 from threading import Thread, Lock
 import consts
+import json
 from config import Config
 from logger import Logger
 from mc_bin_client import MemcachedClient
 from util import setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
-from util import natural_sortkey, zruntime_readkey, gethostname
+from util import natural_sortkey, zruntime_readkey, gethostname, parse_backupname, split_by_lines
 from backuplib import BackupFactory
 
 # Setup the sqlite3 LD_LIBRARY_PATH before importing sqlite3
@@ -297,6 +298,10 @@ class BackupProcess:
             self.logger.log("Waiting for obtaining backup file")
             backup_item = self.backup_queue.get()
             (backup_filepath, buffer_path, dot_done) = backup_item
+
+            if self.is_failover_needed():
+                self._upload_missing_backups(backup_filepath)
+
             status = self._upload_file(backup_filepath, buffer_path)
             if status:
                 self.free_buffer_list.put(buffer_path)
@@ -481,6 +486,7 @@ class BackupProcess:
                 self.backup_lock.acquire()
                 status = self._take_backup(backup_filepath, datetimestamp,
                                                         full_backup, dot_done)
+                self._rotate_local_backups()
                 self.backup_lock.release()
 
                 os.unlink(consts.NAGIOS_BACKUP_TIME)
@@ -506,6 +512,164 @@ class BackupProcess:
                     sleep_time = interval
 
                 time.sleep(sleep_time)
+
+    def _rotate_local_backups(self):
+        """
+        Delete old backups and keep X recent backups
+        """
+        self.logger.log("Clearing old local backups..")
+        local_backups = os.listdir(self.config.localsnapshot_path)
+        while len(local_backups) > self.config.localsnapshot_count:
+            local_backups.sort()
+            local_backups.reverse()
+            old = local_backups.pop()
+            self.logger.log(" - Removing local backup %s" %old)
+            os.system("rm -rf %s" %(os.path.join(self.config.localsnapshot_path, old)))
+
+    def _snapshot_backup_file(self, filepath):
+        """
+        Copy backup file to the local backup snapshot directory
+        """
+
+        backup_name = parse_backupname(filepath)
+        local_backup_path = os.path.join(self.config.localsnapshot_path, backup_name)
+        if not os.path.exists(local_backup_path):
+            os.makedirs(local_backup_path)
+
+        rv = os.system("cp %s %s" %(filepath, local_backup_path))
+        if rv != 0:
+            self.logger.log("ERROR: Unable to snapshot backup - %s" %filepath)
+            self.exit(1)
+
+    def is_failover_needed(self):
+        """
+        Figure out if a disk has gone down, in that case upload missing backups from
+        available local backups.
+        """
+        mapping_server = os.environ["MAPPING_SERVER"]
+
+        for retry in range(self.config.upload_retries):
+            if retry > 0:
+                self.update_mappingserver()
+
+            cmd = "curl -s -L http://%s/%s" %(mapping_server, consts.BLOBRESTORE_API_PATH)
+            status, output = self.getstatusoutput(cmd)
+            if status > 0:
+                continue
+
+        if status > 0:
+            self.logger.log("ERROR: Failed to contact mapping_server (%s) for get_host_config")
+            self.exit(1)
+
+        config = str(json.loads(output)[gethostname()])
+        failover = False
+        if os.path.exists(consts.DISKMAPPER_HOSTCONFIG):
+            f = open(consts.DISKMAPPER_HOSTCONFIG)
+            old_config = f.read()
+            f.close()
+
+            if config != old_config:
+                failover = True
+
+        f = open(consts.DISKMAPPER_HOSTCONFIG, 'w')
+        f.write(config)
+        f.close()
+
+        return failover
+
+    def _upload_missing_backups(self, exclude_backup):
+        """
+        Compare with the list of available backups on storage server.
+        Upload missing backups using the local backups
+        """
+
+        class RetryException(Exception):
+            def __init__(self, retry):
+                self.message = "Retrying %d" %retry
+
+        self.logger.log("Diskmapper hostconfig has changed. Executing localbackup based resolution")
+        storage_url = 's3://%s/%s/%s/%s/' %(self.config.game_id, gethostname(), self.config.cloud, consts.INCR_DIRNAME)
+        exclude_backup = os.path.basename(exclude_backup)
+        for retry in range(self.config.upload_retries):
+            if retry > 0:
+                self.update_mappingserver()
+
+            try:
+
+                status, output = self.getstatusoutput("%s ls %s" %(consts.PATH_S3CMD_EXEC, storage_url))
+                if status > 0:
+                    raise RetryException(retry)
+
+                def filter_mbbs(file, exclude_backup):
+                    return filter(lambda x: x.endswith(".mbb") and (not exclude_backup in x), files)
+
+                backup_set = {}
+
+                files = map(lambda x: os.path.basename(x), split_by_lines(output))
+                if consts.DEL_MANIFEST in files:
+                    url = os.path.join(storage_url, consts.DEL_MANIFEST)
+                    status, output = self.getstatusoutput("%s get %s /tmp/manifest.del" %(consts.PATH_S3CMD_EXEC, url))
+                    if status > 0:
+                        raise RetryException(retry)
+
+                    f = open("/tmp/manifest.del")
+                    output = f.read()
+                    f.close()
+                    os.unlink(f.name)
+                    old_files = set(map(lambda x: os.path.basename(x), split_by_lines(output)))
+                    files = list(set(files) - old_files)
+
+                files = filter_mbbs(files, parse_backupname(exclude_backup))
+
+                for fname in files:
+                    bname = parse_backupname(fname)
+                    backuplist = backup_set.get(bname, [])
+                    backuplist.append(fname)
+                    backup_set[bname] = backuplist
+
+                local_backup_set = {}
+                for lbackup in os.listdir(self.config.localsnapshot_path):
+                    tmp = os.listdir(os.path.join(self.config.localsnapshot_path, lbackup))
+                    if exclude_backup in tmp:
+                        tmp.remove(exclude_backup)
+
+                    local_backup_set[lbackup] = tmp
+
+                remote_backups = backup_set.keys()
+                remote_backups.sort()
+
+                local_backups = local_backup_set.keys()
+                local_backups.sort()
+
+                if len(remote_backups) > 0:
+                    last_backup = remote_backups.pop()
+                else:
+                    return
+
+                try:
+                    index = local_backups.index(last_backup)
+                except ValueError:
+                    self.logger.log("WARNING: Unable to find local copy of backup : %s" %last_backup)
+                    return
+
+                self.logger.log("Uploading missing backups to storage server...")
+                for i in range(index, len(local_backups)):
+                    backup_name = local_backups[i]
+                    for f in local_backup_set[backup_name]:
+                        cmd = "%s put %s %s" %(consts.PATH_S3CMD_EXEC,
+                            os.path.join(self.config.localsnapshot_path, backup_name, f), storage_url)
+                        self.logger.log(cmd)
+                        status, output = self.getstatusoutput(cmd)
+                        if status > 0:
+                            raise RetryException(retry)
+                return
+
+            except RetryException:
+                continue
+
+            self.logger.log("ERROR: Upload missing backups. Retries exceeded.")
+            self.exit(1)
+
 
     def _take_backup(self, backup_filepath, datetimestamp, full_backup,
                                                             dot_done=False):
@@ -533,9 +697,16 @@ class BackupProcess:
             self.logger.log(str(e))
             self.exit(1)
 
+        if os.path.exists(consts.LAST_CHECKPOINT_FILE) and not full_backup:
+            f = open(consts.LAST_CHECKPOINT_FILE)
+            last_backup_checkpoint = int(f.read())
+            f.close()
+        else:
+            last_backup_checkpoint = 0
+
         while not bf_instance.is_complete():
-	    self.logger.log("Waiting for obtaining free ramfs buffer")
-	    buffer_path = self.free_buffer_list.get()
+            self.logger.log("Waiting for obtaining free ramfs buffer")
+            buffer_path = self.free_buffer_list.get()
             self.logger.log("Obtained buffer %s " %buffer_path)
             try:
                 filepath = bf_instance.create_next_split(buffer_path)
@@ -553,6 +724,10 @@ class BackupProcess:
                     self.logger.log("FAILED: sqlite file %s is corrupt (%s)" %(backup_filepath, str(e)))
                     raise Exception("Sqlite file corrupt")
 
+                # Take local snapshot
+                if not full_backup and last_backup_checkpoint != 0:
+                    self._snapshot_backup_file(filepath)
+
                 if bf_instance.is_complete() and dot_done:
                     self.backup_queue.put((filepath, buffer_path, True))
                 else:
@@ -568,13 +743,6 @@ class BackupProcess:
                 self.exit(1)
 
         checkpoints.sort()
-        if os.path.exists(consts.LAST_CHECKPOINT_FILE) and not full_backup:
-            f = open(consts.LAST_CHECKPOINT_FILE)
-            last_backup_checkpoint = int(f.read())
-            f.close()
-        else:
-            last_backup_checkpoint = 0
-
         if len(checkpoints):
             if last_backup_checkpoint > 0:
                 if last_backup_checkpoint + 1 != checkpoints[0]:
@@ -592,6 +760,11 @@ class BackupProcess:
             for split_file in split_files:
                 fd.write("%s\n" %split_file)
             fd.close()
+
+            # Snapshot split-index to local directory
+            if not full_backup and last_backup_checkpoint != 0:
+                self._snapshot_backup_file(split_index_path)
+
             status = self._upload_file(split_index_path, buffer_path, True)
             if status:
                 self._remove_file(split_index_path)

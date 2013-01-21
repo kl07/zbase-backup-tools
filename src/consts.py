@@ -55,3 +55,7 @@ ZRT_URL = 'https://api.runtime.zynga.com:8994'
 BLOBRESTORE_API_PATH = 'api?action=get_host_config'
 PADDING_ZEROS = 3
 ZRT_MAPPER_KEY = 'ACTIVE_MCS'
+LOCAL_BACKUP_PATH = '/db_localbackup/'
+LOCAL_BACKUP_COUNT = 5
+DISKMAPPER_HOSTCONFIG = '/var/tmp/diskmapper_hostconfig'
+DEL_MANIFEST = 'manifest.del'

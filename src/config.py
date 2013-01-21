@@ -18,6 +18,17 @@ class Config:
         self.config.read(self.conf_file)
         self.backup_interval_mins = int(self.config.get('backup', 'interval'))
         try:
+            self.localsnapshot_path = self.config.get('backup', 'localsnapshot_path')
+        except:
+            self.localsnapshot_path = consts.LOCAL_BACKUP_PATH
+
+        try:
+            self.localsnapshot_count = int(self.config.get('backup', 'localbackup_count'))
+        except:
+            self.localsnapshot_count = consts.LOCAL_BACKUP_COUNT
+
+
+        try:
             self.master_backup_interval_days = int(self.config.get('backup', 'full_backup_interval'))
         except:
             self.master_backup_interval_days = 0

@@ -182,7 +182,7 @@ class Restore:
                 if f.endswith('done'):
                     found_dot_done = True
 
-                if f.endswith('manifest.del'):
+                if f.endswith(consts.DEL_MANIFEST):
                     self.logger.log("Downloading delete manifest file")
                     dlmanifest_cmd = '%s get %s /tmp/manifest.del' \
                             %(consts.PATH_S3CMD_EXEC, f)

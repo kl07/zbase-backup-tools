@@ -97,7 +97,7 @@ class DailyMerge:
         old_done_files = "%s/done-*" %(incr_location)
         os.system(" rm -f %s" %old_done_files)
 
-        manifest_file = "%s/manifest.del" %incr_location
+        manifest_file = "%s/%s" %(incr_location, consts.DEL_MANIFEST)
 
         if os.path.isfile(manifest_file):
             #means that lock exists
@@ -173,8 +173,7 @@ class DailyMerge:
         self.logger.log ("Info. Merge complete for %s. Took %d sec " %(output_location, (t_end - t_start)))
 
         # delete all the incremental files we just merged if no lock is present
-        manifest_file = "%s/manifest.del" %incr_location
-        print manifest_file, listfiles
+        manifest_file = "%s/%s" %(incr_location, consts.DEL_MANIFEST)
         status = self.check_lock(incr_location, True, listfiles, manifest_file, True)
 
         if status == -1:
