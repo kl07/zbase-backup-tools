@@ -47,6 +47,26 @@ class DailyMerge:
 
         incr_location = "%s/%s" %(self.source_path, consts.INCR_DIRNAME)
         self.logger.log(" Location %s " %incr_location)
+        manifest_file = os.path.join(incr_location, consts.DEL_MANIFEST)
+        if os.path.exists(manifest_file):
+            fd = open(manifest_file)
+            lines = split_by_lines(fd.read())
+            lines = map(lambda x: os.path.basename(x), lines)
+            lines.sort()
+            incr_files = os.listdir(incr_location)
+            incr_files = filter(lambda x: x.endswith(".mbb") or x.endswith(".split"), incr_files)
+            if len(lines) > 0:
+                old_file_by_timestamp = lines[0]
+                incr_files.append(old_file_by_timestamp)
+                incr_files.sort()
+                invalid_files = incr_files[:incr_files.index(old_file_by_timestamp)]
+                if len(invalid_files) > 0:
+                    self.logger.log("Clearing invalid files which are older than timestamp in manifest.del")
+
+                for line in invalid_files:
+                    os.system ("rm -f %s" %line)
+
+            fd.close()
 
     	# Get all *.splits.
         status, output = commands.getstatusoutput("ls %s/*.split" %incr_location)

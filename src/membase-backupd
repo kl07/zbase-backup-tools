@@ -649,7 +649,8 @@ class BackupProcess:
                 try:
                     index = local_backups.index(last_backup)
                 except ValueError:
-                    self.logger.log("WARNING: Unable to find local copy of backup : %s" %last_backup)
+                    self.logger.log("ERROR: Unable to find local copy of backup : %s" %last_backup)
+                    self.exit(1)
                     return
 
                 self.logger.log("Uploading missing backups to storage server...")
