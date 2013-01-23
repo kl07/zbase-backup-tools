@@ -561,7 +561,11 @@ class BackupProcess:
             self.logger.log("ERROR: Failed to contact mapping_server (%s) for get_host_config")
             self.exit(1)
 
-        config = str(json.loads(output)[gethostname()])
+        try:
+            config = str(json.loads(output)[gethostname()])
+        except:
+            return False
+
         failover = False
         if os.path.exists(consts.DISKMAPPER_HOSTCONFIG):
             f = open(consts.DISKMAPPER_HOSTCONFIG)
