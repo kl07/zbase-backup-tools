@@ -198,12 +198,13 @@ class BaseScheduler:
         disks = glob.glob('/data_*')
         if os.path.exists(consts.BAD_DISK_FILE):
             f = open(consts.BAD_DISK_FILE)
-            bad_disks = filter(lambda y: y != "", map(lambda x: x.strip(), f.readlines()))
+            bad_disks = set(filter(lambda y: y != "", map(lambda x: x.strip(), f.readlines())))
             f.close()
             for d in disks[:]:
                 for b in map(lambda x: x.split('/')[-1], bad_disks):
                     if b in d:
-                        disks.remove(d)
+                        if d in disks:
+                            disks.remove(d)
         return disks
 
     def getLocations(self):
