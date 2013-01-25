@@ -28,9 +28,11 @@ def write_list(filename, l):
 def diff_list(l1, l2):
     new, removed = list(set(l2) - set(l1)), list(set(l1) - set(l2))
     newlist = []
-    for ftype in [".mbb", ".split", "manifest.del", "done-", "merged-", "done", "complete"]:
+    for ftype in [".mbb", ".split", "merged-", "done", "complete", "done-", "manifest.del"]:
         for line in new[:]:
             if ftype in line:
+                if ftype == "done" and not line.endswith("done"):
+                    continue
                 newlist.append(line)
                 new.remove(line)
 
