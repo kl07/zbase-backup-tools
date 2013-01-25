@@ -246,6 +246,13 @@ class BaseScheduler:
         else:
             return False
 
+    def isPromoteRunning(self, location):
+        """
+        Check if a host is undergoing promote
+        """
+        return os.path.exists("%s/%s" %(location, consts.PROMOTE_MANIFEST))
+
+
     def waitForProcessSlot(self, completeAll=False):
         """
         Wait until atleast one jobslot is free
@@ -256,7 +263,7 @@ class BaseScheduler:
             for j in self.current_execjobs:
                 if j.isProcessComplete():
                     j.postExecutionSteps()
-                    self.logger.info("Completed execution of job [ DISK:%s HOST:%s STATUS:%s ]" %(j.getDisk(), j.getHost(), j.getStatus()))
+                    self.logger.info("(%s) Completed execution of job [ DISK:%s HOST:%s STATUS:%s ]" %(self.type, j.getDisk(), j.getHost(), j.getStatus()))
                     self.current_execjobs.remove(j)
                     slotfree=True
 
@@ -414,7 +421,8 @@ class DailyMergeScheduler(BaseScheduler):
             return BaseScheduler.NOMEMORY
 
         if len(self.current_execjobs) < self.config.parallel_daily_jobs:
-            if self.isDiskBusy(job.getDisk()) or self.isRestoreRunning(job.getLocation()):
+            if self.isDiskBusy(job.getDisk()) or self.isRestoreRunning(job.getLocation()) \
+                            or self.isPromoteRunning(job.getLocation()):
                 return BaseScheduler.IGNORE
             else:
                 return BaseScheduler.PROCEED
