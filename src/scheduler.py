@@ -306,6 +306,7 @@ class BaseScheduler:
         Execute jobs batch by batch in parallel
         """
 
+        self.startdate = datetime.date.today()
         ignore = False
         ret = True
         self.logger.info("==== Executing job processor for %s ====" %self.type)
@@ -439,7 +440,6 @@ class MasterMergeScheduler(BaseScheduler):
 
     def initialize(self):
         self.logger.info("Initializing Master Merge Scheduler")
-        self.startdate = datetime.date.today()
 
     def findJobs(self, date):
         jobs = []
