@@ -45,7 +45,7 @@ class MasterMerge:
         master_location = "%s/master" %self.source_path
         master_directory = "%s/%s" %(master_location, self.date)
         self.merged_file = "%s/merged-%s" %(master_directory, self.date)
-        if os.path.isfile(self.merged_file) :
+        if os.path.isfile(self.merged_file) or os.path.isfile("%s/done" %master_directory):
             self.logger.log("Info: Merging for this location %s has already been completed" %master_location)
             return True
 
