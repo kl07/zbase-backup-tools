@@ -61,3 +61,4 @@ LOCAL_BACKUP_COUNT = 5
 DISKMAPPER_HOSTCONFIG = '/var/tmp/diskmapper_hostconfig'
 DEL_MANIFEST = 'manifest.del'
 PROMOTE_MANIFEST = '.promoting'
+CONNECT_RETRIES = 20

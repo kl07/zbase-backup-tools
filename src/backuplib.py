@@ -14,6 +14,10 @@ TIMEOUT = 0
 TXN_SIZE = 100
 EXT_LEN_WITHOUT_QTIME = 16
 
+class ConnectException(Exception):
+    def __str__(self):
+        return "TAP Connect error"
+
 cmdInfo = {
     memcacheConstants.CMD_TAP_MUTATION: ('mutation', 'm'),
     memcacheConstants.CMD_TAP_DELETE: ('delete', 'd'),
@@ -182,6 +186,10 @@ class BackupFactory:
         self.op_records = []
 
         self.vbmap = {} # Key is vbucketId, value is [checkpointId, seq].
+
+    def __del__(self):
+        if self.mc:
+            self.mc.close()
 
     def _get_next_file(self, buffer_path):
         path = os.path.join(buffer_path, self.base_filepath)
@@ -374,11 +382,11 @@ class BackupFactory:
                         return filepath
 
             elif cmd == memcacheConstants.CMD_TAP_CONNECT:
-                if self.update_count > 0:
-                    db.commit()
-                    self.op_records = []
-                    self.update_count = 0
-                raise Exception("ERROR: TAP_CONNECT error: " + str(key))
+                db.close()
+                os.remove(filepath)
+                self.mc.close()
+                self.mc = None
+                raise ConnectException
 
             elif cmd == memcacheConstants.CMD_NOOP:
                 pass

@@ -18,7 +18,7 @@ from logger import Logger
 from mc_bin_client import MemcachedClient
 from util import setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
 from util import natural_sortkey, zruntime_readkey, gethostname, parse_backupname, split_by_lines
-from backuplib import BackupFactory
+from backuplib import BackupFactory, ConnectException
 
 # Setup the sqlite3 LD_LIBRARY_PATH before importing sqlite3
 setup_sqlite_lib()
@@ -388,7 +388,7 @@ class BackupProcess:
         stats = self.mbstats('checkpoint')
         current_checkpoint = int(stats['vb_0:last_closed_checkpoint_id'])
         self.logger.log("Last closed checkpoint ID: %d, Current closed checkpoint ID: %d" %(last_checkpoint, current_checkpoint))
-	self.current_checkpoint = current_checkpoint
+        self.current_checkpoint = current_checkpoint
         if current_checkpoint != 0 and last_checkpoint != current_checkpoint:
             return True
         else:
@@ -697,13 +697,71 @@ class BackupProcess:
         self.logger.log("==== START BACKUP ====")
         self.logger.log("Creating %s Backup for %s " %(btype, datetimestamp))
 
-        try:
-            bf_instance = BackupFactory(backup_filepath, btype,
-                    consts.BACKUP_TAPNAME, self.logger, 'localhost',11211) 
-        except Exception, e:
-            self.logger.log("FAILED: Initializing backup factory instance")
-            self.logger.log(str(e))
+        for r in range(consts.CONNECT_RETRIES):
+            retry = False
+            try:
+                bf_instance = BackupFactory(backup_filepath, btype,
+                        consts.BACKUP_TAPNAME, self.logger, 'localhost',11211) 
+            except Exception, e:
+                self.logger.log("FAILED: Initializing backup factory instance")
+                self.logger.log(str(e))
+                self.exit(1)
+
+            while not bf_instance.is_complete():
+                self.logger.log("Waiting for obtaining free ramfs buffer")
+                buffer_path = self.free_buffer_list.get()
+                self.logger.log("Obtained buffer %s " %buffer_path)
+                try:
+                    filepath = bf_instance.create_next_split(buffer_path)
+                    size = os.stat(filepath).st_size
+                    total_size += size
+
+                    if size <= 4096:
+                        if not self._is_backup_valid(filepath):
+                            self.logger.log("FAILED: Backup size is %d" %size)
+                            raise Exception("Backup is invalid")
+
+                    try:
+                        checkpoints.extend(get_checkpoints_frombackup(filepath))
+                    except Exception, e:
+                        self.logger.log("FAILED: sqlite file %s is corrupt (%s)" %(backup_filepath, str(e)))
+                        raise Exception("Sqlite file corrupt")
+
+                    # Take local snapshot
+                    if not full_backup and last_backup_checkpoint != 0:
+                        self._snapshot_backup_file(filepath)
+
+                    if bf_instance.is_complete() and dot_done:
+                        self.backup_queue.put((filepath, buffer_path, True))
+                    else:
+                        self.backup_queue.put((filepath, buffer_path, False))
+
+                    self.logger.log("Added %s to upload queue" %filepath)
+                    retry = False
+
+                except ConnectException:
+                    retry = True
+                    time.sleep(1)
+                    break
+
+                except Exception, e:
+                    self.logger.log(str(e))
+                    self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
+                    split_file = bf_instance.get_current_split()
+                    if split_file:
+                        self._remove_file(split_file)
+                    self.exit(1)
+
+            if retry:
+                continue
+            else:
+                break
+
+        if retry:
+            self.logger.log("FAILED: TAP connection retrying failed (%d)" %consts.CONNECT_RETRIES)
             self.exit(1)
+
+        checkpoints.sort()
 
         if os.path.exists(consts.LAST_CHECKPOINT_FILE) and not full_backup:
             f = open(consts.LAST_CHECKPOINT_FILE)
@@ -712,45 +770,6 @@ class BackupProcess:
         else:
             last_backup_checkpoint = 0
 
-        while not bf_instance.is_complete():
-            self.logger.log("Waiting for obtaining free ramfs buffer")
-            buffer_path = self.free_buffer_list.get()
-            self.logger.log("Obtained buffer %s " %buffer_path)
-            try:
-                filepath = bf_instance.create_next_split(buffer_path)
-                size = os.stat(filepath).st_size
-                total_size += size
-
-                if size <= 4096:
-                    if not self._is_backup_valid(filepath):
-                        self.logger.log("FAILED: Backup size is %d" %size)
-                        raise Exception("Backup is invalid")
-
-                try:
-                    checkpoints.extend(get_checkpoints_frombackup(filepath))
-                except Exception, e:
-                    self.logger.log("FAILED: sqlite file %s is corrupt (%s)" %(backup_filepath, str(e)))
-                    raise Exception("Sqlite file corrupt")
-
-                # Take local snapshot
-                if not full_backup and last_backup_checkpoint != 0:
-                    self._snapshot_backup_file(filepath)
-
-                if bf_instance.is_complete() and dot_done:
-                    self.backup_queue.put((filepath, buffer_path, True))
-                else:
-                    self.backup_queue.put((filepath, buffer_path, False))
-
-                self.logger.log("Added %s to upload queue" %filepath)
-            except Exception, e:
-                self.logger.log(str(e))
-                self.logger.log("FAILED: Creating Backup for %s" %(datetimestamp))
-                split_file = bf_instance.get_current_split()
-                if split_file:
-                    self._remove_file(split_file)
-                self.exit(1)
-
-        checkpoints.sort()
         if len(checkpoints):
             if last_backup_checkpoint > 0:
                 if last_backup_checkpoint + 1 != checkpoints[0]:
