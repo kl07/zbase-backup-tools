@@ -62,6 +62,9 @@ class BackupProcess:
                 self.logger.log("FAILED: There should be atleast 1 tmpfs buffer")
                 self.exit(1)
 
+            if not os.path.exists(self.config.localsnapshot_path):
+                os.makedirs(self.config.localsnapshot_path)
+
             if len(buffer_list) != len(raw_buffer_list):
                 self.logger.log("FAILED: Duplicate buffer list found in the config")
                 self.exit(1)
