@@ -261,7 +261,7 @@ class DailyMerge:
 
             line = fd.readline()
             while line:
-                os.system ("rm -f %s" %line)
+                os.system ("rm -f %s" %os.path.join(location, os.path.basename(line)))
                 line = fd.readline()
 
             fd.close()
@@ -289,7 +289,7 @@ class DailyMerge:
 
                 for line in listmbb:
                     try:
-                        fd.write(line)
+                        fd.write(os.path.basename(line))
                     except:
                         self.logger.log(" Failed: I/O Error %s " %manifest_file)
                         return -1
