@@ -172,7 +172,7 @@ def zruntime_readkey(user, passwd, namespace, gameid, key):
     Read a key from zRuntime
     """
 
-    cmd = "curl %s/%s/%s/current --insecure -u %s:%s" %(consts.ZRT_URL, gameid,
+    cmd = "curl --retry %d %s/%s/%s/current --insecure -u %s:%s" %(consts.ZRT_RETRIES, consts.ZRT_URL, gameid,
             namespace, user, passwd)
 
     p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
