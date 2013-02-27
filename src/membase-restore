@@ -263,7 +263,7 @@ class Restore:
                 if status == 0:
                     return 
             self.logger.log("FAILED: Unable to remove s3 incremental directory lock")
-            self.exit(1)
+            os._exit(1)
 
     def verify_split_index(self, base_s3_path, files):
         backup_index_list = self._list_s3_files(base_s3_path, True, True)
@@ -309,6 +309,7 @@ class Restore:
         status, output = self.getstatusoutput(lock_cmd)
         if status > 0:
             self.logger.log("FAILED: Unable to put incremental backup directory lock in s3")
+            self.s3_lock_file = None
             self.exit(1)
         else:
             self.logger.log("Locked incremental backup directory in s3")
