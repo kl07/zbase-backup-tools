@@ -299,19 +299,19 @@ class Restore:
         if not incremental_backup_list:
             self.logger.log("Could not find any incremental backups")
             incremental_backup_list = []
+
+        self.verify_split_index(incremental_backup_s3path, incremental_backup_list)
+        hostname = gethostname()
+        f = open('/tmp/lock-%s' %hostname,'w')
+        f.close()
+        self.s3_lock_file = "%slock-%s" %(incremental_backup_s3path, hostname)
+        lock_cmd = "%s put /tmp/lock-%s %s" %(consts.PATH_S3CMD_EXEC, hostname, incremental_backup_s3path)
+        status, output = self.getstatusoutput(lock_cmd)
+        if status > 0:
+            self.logger.log("FAILED: Unable to put incremental backup directory lock in s3")
+            self.exit(1)
         else:
-            self.verify_split_index(incremental_backup_s3path, incremental_backup_list)
-            hostname = gethostname()
-            f = open('/tmp/lock-%s' %hostname,'w')
-            f.close()
-            self.s3_lock_file = "%slock-%s" %(incremental_backup_s3path, hostname)
-            lock_cmd = "%s put /tmp/lock-%s %s" %(consts.PATH_S3CMD_EXEC, hostname, incremental_backup_s3path)
-            status, output = self.getstatusoutput(lock_cmd)
-            if status > 0:
-                self.logger.log("FAILED: Unable to put incremental backup directory lock in s3")
-                self.exit(1)
-            else:
-                self.logger.log("Locked incremental backup directory in s3")
+            self.logger.log("Locked incremental backup directory in s3")
 
         master_backup_epoch = epoch
         self.logger.log("Searching for master backup")

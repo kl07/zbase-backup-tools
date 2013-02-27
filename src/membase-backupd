@@ -487,9 +487,9 @@ class BackupProcess:
                 f.close()
 
                 self.backup_lock.acquire()
+                self._rotate_local_backups()
                 status = self._take_backup(backup_filepath, datetimestamp,
                                                         full_backup, dot_done)
-                self._rotate_local_backups()
                 self.backup_lock.release()
 
                 os.unlink(consts.NAGIOS_BACKUP_TIME)
