@@ -106,7 +106,7 @@ class DailyMerge:
             self.logger.log("Warning: We should have count(backups) > %d to process. Skipping daily merge" %consts.MIN_INCR_BACKUPS_COUNT)
             return 3
 
-        listfiles = "\n".join(lines)
+        listfiles = lines
         #check for existence of done file
         done_file = "%s/done-%s" %(incr_location, self.date)
         if os.path.isfile(done_file) :
@@ -289,7 +289,7 @@ class DailyMerge:
 
                 for line in listmbb:
                     try:
-                        fd.write(os.path.basename(line))
+                        fd.write("%s\n" %os.path.basename(line))
                     except:
                         self.logger.log(" Failed: I/O Error %s " %manifest_file)
                         return -1
