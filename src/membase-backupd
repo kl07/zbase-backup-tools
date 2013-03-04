@@ -697,6 +697,13 @@ class BackupProcess:
         self.logger.log("==== START BACKUP ====")
         self.logger.log("Creating %s Backup for %s " %(btype, datetimestamp))
 
+        if os.path.exists(consts.LAST_CHECKPOINT_FILE) and not full_backup:
+            f = open(consts.LAST_CHECKPOINT_FILE)
+            last_backup_checkpoint = int(f.read())
+            f.close()
+        else:
+            last_backup_checkpoint = 0
+
         for r in range(consts.CONNECT_RETRIES):
             retry = False
             try:
@@ -762,13 +769,6 @@ class BackupProcess:
             self.exit(1)
 
         checkpoints.sort()
-
-        if os.path.exists(consts.LAST_CHECKPOINT_FILE) and not full_backup:
-            f = open(consts.LAST_CHECKPOINT_FILE)
-            last_backup_checkpoint = int(f.read())
-            f.close()
-        else:
-            last_backup_checkpoint = 0
 
         if len(checkpoints):
             if last_backup_checkpoint > 0:
