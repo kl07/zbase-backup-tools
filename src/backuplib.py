@@ -333,8 +333,12 @@ class BackupFactory:
                 checkpointStartExists = False
                 self.current_checkpoint_id = checkpoint_id[0]
 
+                # While backfill, if it receives START, it indiciates backup is complete.
                 if self.backfill_chk_start:
-                    del self.vbmap[vbucketId]
+                    if self.update_count > 0:
+                        db.commit()
+                    self.complete = True
+                    return filepath
                 elif last_checkpoint_id > 0 and last_checkpoint_id == checkpoint_id[0] - 1:
                     del self.vbmap[vbucketId]
                 elif last_checkpoint_id > 0 and last_checkpoint_id != checkpoint_id[0]:
