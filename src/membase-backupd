@@ -103,11 +103,16 @@ class BackupProcess:
         """
         Update mapping server env variable
         """
-        mapping_server = zruntime_readkey(self.config.zruntime_user,
-        self.config.zruntime_passwd,
-        self.config.zruntime_namespace,
-        self.config.game_id,
-        self.config.zruntime_mapperkey)
+        for r in range(consts.ZRT_RETRIES):
+            mapping_server = zruntime_readkey(self.config.zruntime_user,
+                self.config.zruntime_passwd,
+                self.config.zruntime_namespace,
+                self.config.game_id,
+                self.config.zruntime_mapperkey)
+            if r > 1:
+                self.logger.log("Retrying (%d) to ZRuntime read ..." %r)
+            if mapping_server:
+                break
 
         if not mapping_server:
             self.logger.log("FAILED: Unable to read from zRuntime")
