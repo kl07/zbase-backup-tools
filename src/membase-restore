@@ -91,10 +91,13 @@ class Restore:
                 self.config.zruntime_namespace,
                 self.config.game_id,
                 self.config.zruntime_mapperkey)
-            if r > 1:
+            if r > 0:
                 self.logger.log("Retrying (%d) to ZRuntime read ..." %r)
+
             if mapping_server:
                 break
+
+            time.sleep(1)
 
         if not mapping_server:
             self.logger.log("FAILED: Unable to read from zRuntime")
