@@ -167,6 +167,12 @@ class Restore:
                         self.exit(1)
                 time.sleep(1)
 
+        self.logger.log("Setting min_data_age to 0")
+        status, output = self.getstatusoutput("python26 %s 0:11211 set min_data_age 0" %consts.PATH_MBFLUSHCTL)
+        if status > 0:
+            self.logger.log("FAILED: Unable to set min_data_age to 0 (%s)" %output)
+            self.exit(1)
+
         register_tap_cmd = "python26 %s -h 0:11211 -r %s -c" \
                 %(consts.PATH_MBTAP_REGISTER_EXEC, consts.BACKUP_TAPNAME)
         self.logger.log("Registering Backup TAP Cursor")
@@ -518,11 +524,20 @@ class Restore:
             if 'restore_mode' in p:
                 sysconfig.remove(p)
 
+            if 'min_data_age' in p:
+                x,dataage = p.split('=')
+                self.logger.log("Resetting min_data_age to %s" %dataage)
+                status, output = self.getstatusoutput("python26 %s 0:11211 set min_data_age %s" %(consts.PATH_MBFLUSHCTL, dataage))
+                if status > 0:
+                    self.logger.log("FAILED: Unable to set min_data_age to %s (%s)" %(dataage, output))
+                    self.exit(1)
+
         sysconfig_str = ";".join(sysconfig)
         sysconfig_str += "'%s" %endlimiter
         f = open(consts.MEMCACHED_SYSCONFIG_FILE, 'w')
         f.write(sysconfig_str)
         f.close()
+
         self.logger.log("Restore completed successfully in %d seconds" %(end_time-start_time))
         self.exit(0)
 
