@@ -517,7 +517,7 @@ class Restore:
         f.write(sysconfig_str)
         f.close()
         self.logger.log("Restore completed successfully in %d seconds" %(end_time-start_time))
-
+        self.exit(0)
 
 if __name__ == '__main__':
     if os.getuid() != 0:
