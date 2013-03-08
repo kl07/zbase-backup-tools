@@ -26,6 +26,11 @@ def write_list(filename, l):
 
 
 def diff_list(l1, l2):
+    # If a manifest.del appears, always add to list
+    for f in l1[:]:
+        if "manifest.del" in f:
+            l1.remove(f)
+
     new, removed = list(set(l2) - set(l1)), list(set(l1) - set(l2))
     newlist = []
     for ftype in [".mbb", ".split", "merged-", "done", "complete", "done-", "manifest.del"]:
