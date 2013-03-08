@@ -64,7 +64,7 @@ class DailyMerge:
                     self.logger.log("Clearing invalid files which are older than timestamp in manifest.del")
 
                 for line in invalid_files:
-                    os.system ("rm -f %s" %line)
+                    os.system("rm -f %s" %os.path.join(incr_location, os.path.basename(line)))
 
             fd.close()
 

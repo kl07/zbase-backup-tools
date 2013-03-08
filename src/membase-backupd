@@ -162,7 +162,7 @@ class BackupProcess:
 
             dot_done_backup = master_files[-1]
 
-        incr_files = filter(lambda x: consts.INCR_DIRNAME in x,
+        incr_files = filter(lambda x: x.endswith(".mbb") and consts.INCR_DIRNAME in x,
                                                 backup_files.keys())
         for f in incr_files:
             prefix = "-".join(os.path.basename(f).split('-')[:-1])
