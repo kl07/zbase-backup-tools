@@ -8,6 +8,7 @@ import os
 import select
 import datetime
 import consts
+import time
 
 MBB_VERSION = "2"
 TIMEOUT = 0
@@ -154,6 +155,7 @@ class BackupFactory:
             self.full_backup = True
             mc = mc_bin_client.MemcachedClient(host,port)
             mc.deregister_tap_client(tapname)
+            time.sleep(10);
             ext, val = encodeTAPConnectOpts({
             memcacheConstants.TAP_FLAG_CHECKPOINT: (1, 0, 0),
             memcacheConstants.TAP_FLAG_SUPPORT_ACK: '',
