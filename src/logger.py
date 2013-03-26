@@ -13,9 +13,14 @@ class Logger:
         self.pid = os.getpid()
         self.meta = meta
         syslog.openlog(tag)
+        self.silent = False
+
+    def set_silent(self):
+        self.silent = True
 
     def log(self, msg):
-        print str(msg)
+        if not self.silent:
+            print str(msg)
 
         syslogmsg = "PID=%d " %self.pid
         if self.meta:

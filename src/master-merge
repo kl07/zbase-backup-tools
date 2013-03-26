@@ -26,13 +26,15 @@ import subprocess
 
 class MasterMerge:
 
-    def __init__(self, source_path, date, disk_id):
+    def __init__(self, source_path, date, disk_id, silent = False):
         self.source_path = source_path
         self.date = date
         self.timestamp = "%s_00:00:00" %date
         self.disk_id = disk_id
         meta_data = "MasterMerge:DISK_%d" %disk_id
         self.logger = Logger(tag = consts.SYSLOG_TAG, meta = meta_data)
+        if silent:
+            self.logger.set_silent()
 
     def run(self):
         status = self.start_merge()
@@ -166,20 +168,21 @@ class MasterMerge:
         return True
 
 def usage(msg):
-    print "Usage: master-merge -p backup_hostpath -d date"
+    print "Usage: master-merge -p backup_hostpath -d date [-s]"
     print msg
     sys.exit(1)
 
 if __name__ == '__main__':
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'p:d:')
+        opts, args = getopt.getopt(sys.argv[1:], 'p:d:s')
     except getopt.GetoptError, e:
         usage(e.msg)
         sys.exit(1)
 
     date = None
     path = None
+    silent = False
 
     try:
         c = 0
@@ -190,6 +193,8 @@ if __name__ == '__main__':
             elif o == "-d":
                 date = a
                 c+=1
+            elif o == '-s':
+                silent = True
 
         if c != 2:
             usage("")
@@ -220,7 +225,7 @@ if __name__ == '__main__':
         os.unlink(pidfile)
 
     signal.signal(signal.SIGINT, rmpid)
-    merge = MasterMerge(path, date, disk_id)
+    merge = MasterMerge(path, date, disk_id, silent)
     rv = merge.run()
     rmpid()
     sys.exit(rv)
