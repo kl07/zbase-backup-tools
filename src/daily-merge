@@ -305,21 +305,21 @@ class DailyMerge:
 
 
 def usage(msg):
-    print "Usage: daily-merge -p backup_hostpath -d date [-s]"
+    print "Usage: daily-merge -p backup_hostpath -d date [-v]"
     print msg
     sys.exit(1)
 
 if __name__ == '__main__':
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'p:d:s')
+        opts, args = getopt.getopt(sys.argv[1:], 'p:d:v')
     except getopt.GetoptError, e:
         usage(e.msg)
         sys.exit(1)
 
     date = None
     path = None
-    silent = False
+    silent = True
 
     try:
         c = 0
@@ -330,8 +330,8 @@ if __name__ == '__main__':
             elif o == "-d":
                 date = a
                 c+=1
-            elif o == '-s':
-                silent = True
+            elif o == '-v':
+                silent = False
 
         if c != 2:
             usage("")

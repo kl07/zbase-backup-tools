@@ -68,7 +68,7 @@ class MergeJob:
         else:
             cmd = consts.PATH_MASTER_MERGE
 
-        return shlex.split("%s -p %s -d %s -s" %(cmd, self.location, self.date))
+        return shlex.split("%s -p %s -d %s" %(cmd, self.location, self.date))
 
     def markComplete(self):
         """
