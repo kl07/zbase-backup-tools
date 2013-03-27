@@ -32,7 +32,9 @@ class MasterMerge:
         self.timestamp = "%s_00:00:00" %date
         self.disk_id = disk_id
         meta_data = "MasterMerge:DISK_%d" %disk_id
-        self.logger = Logger(tag = consts.SYSLOG_TAG, meta = meta_data)
+        self.config = Config(consts.CONFIG_FILE)
+        self.config.read()
+        self.logger = Logger(tag = self.config.syslog_tag, meta = meta_data)
         if silent:
             self.logger.set_silent()
 

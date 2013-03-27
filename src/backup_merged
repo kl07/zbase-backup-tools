@@ -74,7 +74,7 @@ def processLoop():
 
     config = Config(consts.CONFIG_FILE)
     config.read()
-    logger = Logger(tag = consts.SYSLOG_TAG, meta = "SCHEDULER")
+    logger = Logger(tag = config.syslog_tag, meta = "SCHEDULER")
     daily_scheduler = DailyMergeScheduler(config, logger)
     master_scheduler = MasterMergeScheduler(config, logger)
 
