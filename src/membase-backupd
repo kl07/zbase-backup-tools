@@ -16,8 +16,7 @@ import json
 from config import Config
 from logger import Logger
 from mc_bin_client import MemcachedClient
-from util import setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
-from util import natural_sortkey, zruntime_readkey, gethostname, parse_backupname, split_by_lines
+from util import *
 from backuplib import BackupFactory, ConnectException
 
 # Setup the sqlite3 LD_LIBRARY_PATH before importing sqlite3
@@ -462,18 +461,26 @@ class BackupProcess:
                     self.first_master_backup = False
                     full_backup = True
                     dot_done = True
-                    ls_cmd = "%s ls s3://%s/" %(consts.PATH_S3CMD_EXEC, backup_dir)
-                    s,o = self.getstatusoutput(ls_cmd)
-                    if s > 0:
-                        self.logger.log("FAILED: Execution %s" %ls_cmd)
-                        self.exit(1)
 
-                    files = filter(lambda x: x.strip()!='', o.split('\n'))
-                    if files != []:
-                        self.logger.log("FAILED: Master s3 directory s3://%s not empty" %backup_dir)
-                        self.logger.log("FAILED: Please clear the directory and retry full backup")
-                        self.exit(1)
+                    daily_dir = os.path.join(self.config.game_id,
+                            gethostname(), self.config.cloud,
+                            consts.PERIODIC_DIRNAME, "%s"
+                            %(time.strftime('%Y-%m-%d', now)))
 
+                    incr_dir = os.path.join(self.config.game_id,
+                            gethostname(), self.config.cloud,
+                            consts.INCR_DIRNAME)
+
+                    # For full backup, clear existing directories
+                    clear_location(backup_dir)
+                    clear_location(daily_dir)
+                    clear_location(incr_dir)
+
+                    for loc in [backup_dir, daily_dir, incr_dir]:
+                        st, msg = is_location_empty(loc)
+                        if st > 0:
+                            self.logger.log(msg)
+                            self.exit(1)
                 else:
                     last_checkpoint = 0
                     if os.path.exists(consts.LAST_CHECKPOINT_FILE):

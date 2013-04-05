@@ -203,3 +203,30 @@ def split_by_lines(data):
     d = filter(lambda x: x != "", d)
     return d
 
+def is_location_empty(location):
+    """
+    Check if an s3 location is empty
+    """
+
+    ls_cmd = "%s ls s3://%s/" %(consts.PATH_S3CMD_EXEC, location)
+    st, out = getcommandoutput(ls_cmd)
+    if st > 0:
+        return st, "FAILED: Execution %s" %ls_cmd
+
+    files = filter(lambda x: x.strip() != '', out.split('\n'))
+    if len(files) > 0:
+        return len(files), "FAILED: Location %s is not empty"
+
+    return 0, ""
+
+def clear_location(location):
+    """
+    Remove contents of s3 location
+    """
+
+    del_cmd = "%s del s3://%s/" %(consts.PATH_S3CMD_EXEC, location)
+    st, out = getcommandoutput(del_cmd)
+
+    return st
+
+
