@@ -169,7 +169,7 @@ class Verifier:
         path = os.path.join(self.backup_root, hostname, self.cloud, consts.INCR_DIRNAME)
         manifest_file = os.path.join(path, 'manifest.del')
         if os.path.exists(manifest_file):
-            exclude_list = map(lambda x: x.strip(), open(manifest_file).readlines())
+            exclude_list = map(lambda x: os.path.join(path, x.strip()), open(manifest_file).readlines())
 
         backup_list = list(set(glob.glob("%s/*.mbb" %path)) - set(exclude_list))
         backup_list.sort()
