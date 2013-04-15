@@ -62,3 +62,4 @@ DISKMAPPER_HOSTCONFIG = '/var/tmp/diskmapper_hostconfig'
 DEL_MANIFEST = 'manifest.del'
 PROMOTE_MANIFEST = '.promoting'
 CONNECT_RETRIES = 20
+PATH_MBFLUSHCTL = "/opt/membase/lib/python/mbflushctl"

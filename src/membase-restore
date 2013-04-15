@@ -64,7 +64,7 @@ class Restore:
 
         sys.stderr = stderrlog(backup_process)
 
-        sys.stderr = stderrlog(self.logger) 
+        sys.stderr = stderrlog(self.logger)
         for b in buffer_list:
             os.system("mkdir -p %s" %b)
             rm_buffer_cmd = "find %s -type f -delete" %b
@@ -167,6 +167,12 @@ class Restore:
                         self.exit(1)
                 time.sleep(1)
 
+        self.logger.log("setting inconsistent slave check to True")
+        status, output = self.getstatusoutput("python26 %s 0:11211 set inconsistent_slave_chk true" %consts.PATH_MBFLUSHCTL)
+        if status > 0:
+            self.logger.log("FAILED: Unable to set inconsistent slave check to true (%s)" %output)
+            self.exit(1)
+
         self.logger.log("Setting min_data_age to 0")
         status, output = self.getstatusoutput("python26 %s 0:11211 set min_data_age 0" %consts.PATH_MBFLUSHCTL)
         if status > 0:
@@ -217,7 +223,7 @@ class Restore:
 
             if only_index:
                 mbb_files = filter(lambda x: x.endswith('.split'), files)
-                #Remove the -00001.mbb from exclude list files and create uniq .split filenames 
+                #Remove the -00001.mbb from exclude list files and create uniq .split filenames
                 exclude_list = set(map(lambda x: "%s.split" %"-".join(x.split('-')[:-1]), exclude_list))
                 mbb_files = list(set(mbb_files) - set(exclude_list))
             else:
@@ -281,7 +287,7 @@ class Restore:
                         return False
 
                 if status == 0:
-                    return 
+                    return
             self.logger.log("FAILED: Unable to remove s3 incremental directory lock")
             return False
 

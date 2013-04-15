@@ -133,9 +133,10 @@ class BackupProcess:
         dot_done_backup = None
 
         for b in list(self.free_buffer_list.queue):
-            for path, dirname, filename in os.walk(os.path.join(b, dirpath_suffix)):
-                if dirname == [] and filename != []:
-                    backup_files[os.path.join(path, filename[0])] = b
+            for path, dirs, files in os.walk(os.path.join(b, dirpath_suffix)):
+                if dirs == [] and files != []:
+                    for f in files:
+                        backup_files[os.path.join(path, f)] = b
 
         master_files = filter(lambda x: consts.MASTER_DIRNAME in x,
                                                 backup_files.keys())
