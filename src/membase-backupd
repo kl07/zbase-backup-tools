@@ -788,11 +788,12 @@ class BackupProcess:
 
         if len(checkpoints):
             if last_backup_checkpoint > 0:
-                if last_backup_checkpoint + 1 != checkpoints[0]:
+                if last_backup_checkpoint + 1 == checkpoints[0] or last_backup_checkpoint == checkpoints[0]:
+                    self.logger.log("Last backup_checkpoint: %d Current backup checkpoints: %s" %(last_backup_checkpoint, str(checkpoints)))
+                else:
                     self.logger.log("FAILED: Invalid backup. Last backup checkpoint = %d, New backup checkpoint = %s" %(last_backup_checkpoint, checkpoints[0]))
                     self.exit(1)
-                else:
-                    self.logger.log("Last backup_checkpoint: %d Current backup checkpoints: %s" %(last_backup_checkpoint, str(checkpoints)))
+
 
             f = open(consts.LAST_CHECKPOINT_FILE, 'w')
             f.write(str(checkpoints[-1]))
