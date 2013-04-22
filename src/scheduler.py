@@ -41,11 +41,11 @@ class MergeJob:
         return obj.btype == self.btype and obj.location == self.location \
                 and obj.date == self.date
 
-    def getHost(self):
+    def getVBucket(self):
         """
-        Return the hostname of the backups for the current merge job
+        Return the vb of the backups for the current merge job
         """
-        return self.location.split('/')[-2]
+        return self.location.split('/')[-1]
 
     def getLocation(self):
         """
@@ -212,15 +212,15 @@ class BaseScheduler:
         Iterate though the directory tree and find out the jobs to be processed
         from the given list of disks
         """
-        hosts = []
+        vbuckets = []
         disks = self.getDisks()
         for d in disks:
-            st, out = getcommandoutput("find %s/primary -maxdepth 2 -mindepth 2 -type d" %d)
+            st, out = getcommandoutput("find %s/primary/ -maxdepth 3 -mindepth 3 -type d" %d)
             if st == 0:
-                for h in out.split():
-                    hosts.append((d,h))
+                for vb in out.split():
+                    vbuckets.append((d,vb))
 
-        return hosts
+        return vbuckets
 
     def isDiskBusy(self, disk):
         """
@@ -233,6 +233,10 @@ class BaseScheduler:
 
         if os.system('ps -eo comm | grep "aria2c" | grep "%s" > /dev/null 2>&1' %disk) == 0:
             return True
+
+        for j in self.current_execjobs:
+            if disk == j.getDisk():
+                return True
 
         return False
 
@@ -260,10 +264,11 @@ class BaseScheduler:
 
         slotfree=False
         while True:
+            print len(self.current_execjobs)
             for j in self.current_execjobs:
                 if j.isProcessComplete():
                     j.postExecutionSteps()
-                    self.logger.info("(%s) Completed execution of job [ DISK:%s HOST:%s STATUS:%s ]" %(self.type, j.getDisk(), j.getHost(), j.getStatus()))
+                    self.logger.info("(%s) Completed execution of job [ DISK:%s VBUCKET:%s STATUS:%s ]" %(self.type, j.getDisk(), j.getVBucket(), j.getStatus()))
                     self.current_execjobs.remove(j)
                     slotfree=True
 
@@ -312,7 +317,7 @@ class BaseScheduler:
         self.logger.info("==== Executing job processor for %s ====" %self.type)
         self.jobs = self.findJobs(date)
         if len(self.jobs):
-            self.logger.info("(%s) Merge jobs to be processed: %s" %(self.type, ", ".join(["DISK:%s HOST:%s" %(x.getDisk(), x.getHost()) for x in self.jobs])))
+            self.logger.info("(%s) Merge jobs to be processed: %s" %(self.type, ", ".join(["DISK:%s VBUCKET:%s" %(x.getDisk(), x.getVBucket()) for x in self.jobs])))
         else:
             self.logger.info("(%s) No merge jobs found to be processed" %self.type)
             ignore = True
@@ -325,26 +330,26 @@ class BaseScheduler:
                 job = self.jobs.pop()
 
                 resp = self.canSchedule(job)
-                if job.getHost() not in job_states:
-                    job_states[job.getHost()] = resp
+                if job.getVBucket() not in job_states:
+                    job_states[job.getVBucket()] = resp
                     last_resp = None
                 else:
-                    last_resp = job_states[job.getHost()]
+                    last_resp = job_states[job.getVBucket()]
 
                 if resp == BaseScheduler.PROCEED:
-                    self.logger.info("(%s) Executing merge job [ DISK:%s HOST:%s ]" %(self.type, job.getDisk(), job.getHost()))
+                    self.logger.info("(%s) Executing merge job [ DISK:%s VBUCKET:%s ]" %(self.type, job.getDisk(), job.getVBucket()))
                     job.startExecution()
                     self.current_execjobs.append(job)
                 elif resp == BaseScheduler.IGNORE:
                     if last_resp != resp:
-                        self.logger.info("(%s) Ignoring merge job [ DISK:%s HOST:%s ] - Disk busy" %(self.type, job.getDisk(), job.getHost()))
+                        self.logger.info("(%s) Ignoring merge job [ DISK:%s VBUCKET:%s ] - Disk busy" %(self.type, job.getDisk(), job.getVBucket()))
 
                     self.jobs.insert(0, job)
                     self.waitForProcessSlot(None)
                     time.sleep(1)
                 elif resp == BaseScheduler.WAIT:
                     if last_resp != resp:
-                        self.logger.info("(%s) Ignoring merge job [ DISK:%s HOST:%s ] - No process slot available" %(self.type, job.getDisk(), job.getHost()))
+                        self.logger.info("(%s) Ignoring merge job [ DISK:%s VBUCKET:%s ] - No process slot available" %(self.type, job.getDisk(), job.getVBucket()))
 
                     self.jobs.append(job)
                     self.waitForProcessSlot()
@@ -353,18 +358,18 @@ class BaseScheduler:
                     break
                 elif resp == BaseScheduler.NOMEMORY:
                     if last_resp != resp:
-                        self.logger.info("(%s) Ignoring merge job [ DISK:%s HOST:%s ] - Not enough memory available" %(self.type, job.getDisk(), job.getHost()))
+                        self.logger.info("(%s) Ignoring merge job [ DISK:%s VBUCKET:%s ] - Not enough memory available" %(self.type, job.getDisk(), job.getVBucket()))
 
                     time.sleep(1)
                     self.jobs.append(job)
                     self.waitForProcessSlot()
 
-                job_states[job.getHost()] = resp
+                job_states[job.getVBucket()] = resp
 
             newjobs = self.findJobs(date)
             if len(newjobs) != len(self.jobs):
                 self.jobs = newjobs
-                self.logger.info("(%s) Merge jobs to be processed: %s" %(self.type, ", ".join(["DISK:%s HOST:%s" %(x.getDisk(), x.getHost()) for x in self.jobs])))
+                self.logger.info("(%s) Merge jobs to be processed: %s" %(self.type, ", ".join(["DISK:%s VBUCKET:%s" %(x.getDisk(), x.getVBucket()) for x in self.jobs])))
                 job_states = {}
 
             self.waitForProcessSlot(None)
@@ -378,7 +383,7 @@ class BaseScheduler:
         if skipped == True:
             ret = False
             self.logger.info("Pre-emiting merge job processor")
-            self.logger.info("Remaining jobs to be processed: %s" %", ".join(["DISK:%s HOST:%s" %(x.getDisk(), x.getHost()) for x in self.jobs]))
+            self.logger.info("Remaining jobs to be processed: %s" %", ".join(["DISK:%s VBUCKET:%s" %(x.getDisk(), x.getVBucket()) for x in self.jobs]))
         elif not ignore:
             self.logger.info("Completed all %s jobs for the date:%s" %(self.type, date))
 
