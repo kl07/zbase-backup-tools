@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-import commands
 import os
 import sys
+from util import getcommandoutput
 
 def list_files(dirname):
-    status, output = commands.getstatusoutput('find %s -type f \( -name "*.mbb" -o -name "*.split" -o -name "manifest.del" -o -name "done" -o -name "complete" -o -name "done-*" -o -name "merged-*" \)' %dirname)
+    status, output = getcommandoutput('find %s -type f \( -name "*.mbb" -o -name "*.split" -o -name "manifest.del" -o -name "done" -o -name "complete" -o -name "done-*" -o -name "merged-*" \)' %dirname)
     if status == 0:
         return [ x for x in output.split('\n') if x != '']
     else:

@@ -8,7 +8,6 @@ import re
 import datetime
 import pickle
 import sqlite3
-import commands
 import signal
 import logging
 import random
@@ -71,7 +70,7 @@ class BackupServer:
             ls_cmd = "/usr/bin/find /%s -path %s -type f 2> /dev/null && /usr/bin/find /%s -path %s -type f 2> /dev/null" \
                     %(self.disk, backup_dir, self.disk, backup_dir_reshard)
 
-            status, output = commands.getstatusoutput(ls_cmd)
+            status, output = getcommandoutput(ls_cmd)
             if status != 0:
                 output = ''
             lines = filter(lambda x: x.strip()!='', output.split('\n'))
@@ -106,7 +105,7 @@ class BackupServer:
                 ls_cmd = "/usr/bin/find /%s -path %s -type f 2> /dev/null && /usr/bin/find /%s -path %s -type f 2> /dev/null" \
                         %(self.disk, backup_dir, self.disk, backup_dir_reshard)
 
-                status, output = commands.getstatusoutput(ls_cmd)
+                status, output = getcommandoutput(ls_cmd)
                 if btype == consts.MASTER_DIRNAME and status == 0:
                     master_backup_exists = True
 

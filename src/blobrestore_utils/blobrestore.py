@@ -7,7 +7,6 @@ import getopt
 import random
 import pickle
 import os
-import commands
 import signal
 import logging
 import tempfile
@@ -126,7 +125,9 @@ def remote_filecopy(src_file, dest_file):
 def remote_cmd(server, cmd):
     cmd = 'ssh -i %s -o PasswordAuthentication=no -o StrictHostKeyChecking=no storageserver@%s "%s"' \
             %(SSH_KEY_PATH, server, cmd)
-    return commands.getstatusoutput(cmd)
+    status, output = getcommandoutput(cmd)
+
+    return output
 
 def get_storageserver_map(mapping_server):
     """

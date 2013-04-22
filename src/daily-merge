@@ -5,7 +5,6 @@ import time
 import signal
 import os
 import consts
-import commands
 from logger import Logger
 from config import Config
 import Queue
@@ -73,7 +72,7 @@ class DailyMerge:
             fd.close()
 
     	# Get all *.splits.
-        status, output = commands.getstatusoutput("ls %s/*.split" %incr_location)
+        status, output = getcommandoutput("ls %s/*.split" %incr_location)
         if status != 0:
             self.logger.log(" Warning: .split files not found at %s" %incr_location)
             return 3
@@ -83,7 +82,7 @@ class DailyMerge:
 
     	# Get list of incremental backups to check if files mentioned in .split exists.
 
-        status, output = commands.getstatusoutput("ls %s/*.mbb" %incr_location)
+        status, output = getcommandoutput("ls %s/*.mbb" %incr_location)
         if status != 0:
             self.logger.log(" Warning: Invalid location %s or no backup files found" %incr_location)
             return 3
@@ -225,7 +224,7 @@ class DailyMerge:
         # of split files that the restore script needs to verify
         manifest_split = "%s/backup-%s.split" %(output_location, self.timestamp)
 
-        status,output = commands.getstatusoutput("ls %s/*.mbb" %output_location)
+        status,output = getcommandoutput("ls %s/*.mbb" %output_location)
         if status != 0:
             self.logger.log(" Failed: Cannot find any files in path %s" %output_location)
             return False

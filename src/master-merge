@@ -5,7 +5,6 @@ import time
 import signal
 import os
 import consts
-import commands
 from logger import Logger
 from config import Config
 import Queue
@@ -137,7 +136,7 @@ class MasterMerge:
         # of split files that the restore script needs to verify
         manifest_split = "%s/backup-%s.split" %(master_directory, self.timestamp)
 
-        status,output = commands.getstatusoutput("ls %s/*.mbb" %master_directory)
+        status,output = getcommandoutput("ls %s/*.mbb" %master_directory)
         if status != 0:
             self.logger.log(" Failed: Cannot find any files in path %s" %master_directory)
             return False
