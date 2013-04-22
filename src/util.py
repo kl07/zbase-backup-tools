@@ -25,11 +25,17 @@ def setup_sqlite_lib():
 def getcommandoutput(cmd, queue=None):
     """Return (status, output) of executing cmd in a shell."""
     """Add the process object to the queue"""
-    import subprocess
-    cmd = str(cmd)
-    args = shlex.split(cmd)
-    p = subprocess.Popen(args, shell=False, universal_newlines=True,
+
+    shell = True
+    args = str(cmd)
+
+    if queue:
+        shell = False
+        args = shlex.split(args)
+
+    p = subprocess.Popen(args, shell=shell, universal_newlines=True,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
     if queue != None:
         queue.put(p)
 
@@ -40,6 +46,10 @@ def getcommandoutput(cmd, queue=None):
 
     if sts is None:
         sts = 0
+
+    if output.endswith('\n'):
+        output = output[:-1]
+
     return sts, output
 
 def get_checkpoints_frombackup(backup_filepath):
