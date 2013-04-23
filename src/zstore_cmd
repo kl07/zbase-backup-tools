@@ -4,10 +4,7 @@
 main () {
 
     STORAGE_SERVER=""
-    DEBUG=false
-    
-    CURL_PARAM=""
-    [[ $DEBUG == false ]] && CURL_PARAM="-sf" 
+    CURL_PARAM=" -fsS"
     # Route to function depending on command. Defaults to usage.
     case "$1" in
         get)
@@ -110,7 +107,17 @@ download () {
     # Create directory if directory does not exist.
     [ -d "$dir_path" ] || mkdir -p "$dir_path"
 
-    remote_hash=$(curl $CURL_PARAM -iL --connect-timeout 15 --max-time 120 "$url?action=list" | grep Etag | sed 's/Etag: //' | tr -d \\r)
+    cmd_out=$(curl $CURL_PARAM -iL --connect-timeout 15 --max-time 120 "$url?action=list" 2>&1)
+    if [ $? -ne 0 ];
+    then
+        if [[ $cmd_out =~ "error: 412" ]];
+        then
+            echo "Both primary and secondary disks are bad"
+            exit 1
+        fi
+    fi
+
+    remote_hash=$(echo "$cmd_out" | grep Etag | sed 's/Etag: //' | tr -d \\r)
     [[ -z $remote_hash ]] && exit 1
 
 
@@ -164,7 +171,17 @@ upload () {
     # If remote path does not have file name, append file name to remote path
     [[ ${url: -1} = "/" ]] && file_name=$(basename $file_path) && url="$url$file_name"
 
-    remote_hash=$(curl $CURL_PARAM -iL --connect-timeout 15 --max-time 120 "$url?action=list" | grep Etag | sed 's/Etag: //' | tr -d \\r)
+    cmd_out=$(curl $CURL_PARAM -iL --connect-timeout 15 --max-time 120 "$url?action=list" 2>&1)
+    if [ $? -ne 0 ];
+    then
+        if [[ $cmd_out =~ "error: 412" ]];
+        then
+            echo "Both primary and secondary disks are bad"
+            exit 1
+        fi
+    fi
+
+    remote_hash=$(echo "$cmd_out" | grep Etag | sed 's/Etag: //' | tr -d \\r)
 
     # If local file exists and md5hash of local and remote file match do not upload again.
     [[ $remote_hash != '' ]] && verified=$(verifyFile "$remote_hash" $file_path) 
