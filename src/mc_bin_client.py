@@ -177,7 +177,6 @@ class MemcachedClient(object):
             parts=self._doCmd(0xa0, '', '')
             return True
         except MemcachedError, e: 
-            print "option command failed due to error %d" % e.status
             return False
 
     def getl(self, key, d = 0):
