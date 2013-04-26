@@ -66,7 +66,7 @@ def usage(e=0):
 
     print "\nUsage: %s addjob -k keylist_file -n shard_count -t '2012-01-02 07:00:03'" \
             " -g game_id -p hostname_prefix [ -f force_find_days ]" \
-            " [ -c ] [ -m ] [ -d hostconfig.json ]\n" %(sys.argv[0])
+            " [ -c ] [ -m ]\n" %(sys.argv[0])
     print "%s status restore_ID.job\n" %(sys.argv[0])
     print "%s fetchlog restore_ID.job\n" %(sys.argv[0])
     print "%s restore-server restore_ID.job -l target_server_list [ -r ]\n" %(sys.argv[0])
@@ -145,21 +145,6 @@ def get_storageserver_map(mapping_server):
         sys.exit("ERROR: Failed to download host to storage server map from server:%s" \
                 %(mapping_server))
 
-def get_storageserver_map_fromconfig(config):
-    """
-    Read config file to get the map
-    """
-    
-    try:
-        f = open(config)
-        c = json.load(f)
-        f.close()
-        return c
-    except Exception, e:
-        sys.exit("ERROR: Unable to parse host to storage server map (%s)" \
-                %str(e))
-
-
 def parse_args(args):
     """
     Parse the command-line arguments into a class
@@ -178,14 +163,13 @@ def parse_args(args):
         usage("ERROR: wrong command or command not specified")
 
     if options['command'] == 'addjob':
-        if ('-d' not in args) and len(args) < 11:
+        if len(args) < 11:
             usage("ERROR: Not enough arguments")
 
         options['validate_blob'] = False
         options['check_master_backup'] = False
-        options['host_config'] = None
         try:
-            opts, args = getopt.getopt(args[2:], 'k:n:t:g:p:f:cmhd:')
+            opts, args = getopt.getopt(args[2:], 'k:n:t:g:p:f:cmh')
         except getopt.GetoptError, e:
             usage(e.msg)
 
@@ -195,8 +179,6 @@ def parse_args(args):
                     options['key_file'] = a
                 elif o == '-n':
                     options['shard_count'] = int(a)
-                elif o == '-d':
-                    options['host_config'] = a
                 elif o == '-t':
                     options['restore_date'] = a
                     try:
@@ -461,11 +443,7 @@ class BlobrestoreDispatcher:
         job_id = random.randint(0,10000000000)
         self.options['job_id'] = job_id
         #TODO: Dynamic scaling array
-        if self.options["host_config"]:
-            storageserver_map = get_storageserver_map_fromconfig(self.options["host_config"])
-        else:
-            storageserver_map = get_storageserver_map(self.options['mapping_server'])
-
+        storageserver_map = get_storageserver_map(self.options['mapping_server'])
         grouped_keys = group_keys(self.options['key_file'], self.options['shard_count'])
         for host_shard in grouped_keys:
             shard = str(host_shard+1).rjust(consts.PADDING_ZEROS, '0')

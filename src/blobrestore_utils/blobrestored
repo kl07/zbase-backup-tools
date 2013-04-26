@@ -60,17 +60,10 @@ class BackupServer:
         if " " in start_datetime:
             start_date, start_time = start_datetime.split(' ')
             compare_epoch, ts = backup_filename_to_epoch("backup-%s_%s-00000.mbb" %(start_date, start_time))
-
             backup_dir = '/%s/*/%s/%s/%s/*.mbb' %(self.disk,
                     self.hostname, self.cloud, consts.INCR_DIRNAME)
-
-            backup_dir_reshard = '/%s/*/.%s/%s/%s/*.mbb' %(self.disk,
-                    self.hostname, self.cloud, consts.INCR_DIRNAME)
-
-            ls_cmd = "/usr/bin/find /%s -path '%s' -type f 2> /dev/null && /usr/bin/find /%s -path '%s' -type f 2> /dev/null" \
-                    %(self.disk, backup_dir, self.disk, backup_dir_reshard)
-
-            status, output = getcommandoutput(ls_cmd)
+            ls_cmd = "/usr/bin/find /%s -path %s -type f" %(self.disk, backup_dir)
+            status, output = getcommandoutput(ls_cmd, None)
             if status != 0:
                 output = ''
             lines = filter(lambda x: x.strip()!='', output.split('\n'))
@@ -99,13 +92,8 @@ class BackupServer:
                 master_backup_exists = False
                 backup_dir = '/%s/*/%s/%s/%s/%s/*.mbb' %(self.disk,
                         self.hostname, self.cloud, btype, datestamp)
-
-                backup_dir_reshard = '/%s/*/.%s/%s/%s/%s/*.mbb' %(self.disk,
-                        self.hostname, self.cloud, btype, datestamp)
-                ls_cmd = "/usr/bin/find /%s -path '%s' -type f 2> /dev/null && /usr/bin/find /%s -path '%s' -type f 2> /dev/null" \
-                        %(self.disk, backup_dir, self.disk, backup_dir_reshard)
-
-                status, output = getcommandoutput(ls_cmd)
+                ls_cmd = "/usr/bin/find /%s -path %s -type f" %(self.disk, backup_dir)
+                status, output = getcommandoutput(ls_cmd, None)
                 if btype == consts.MASTER_DIRNAME and status == 0:
                     master_backup_exists = True
 
