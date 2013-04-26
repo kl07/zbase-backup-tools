@@ -67,7 +67,7 @@ class BackupServer:
             backup_dir_reshard = '/%s/*/.%s/%s/%s/*.mbb' %(self.disk,
                     self.hostname, self.cloud, consts.INCR_DIRNAME)
 
-            ls_cmd = "/usr/bin/find /%s -path %s -type f 2> /dev/null && /usr/bin/find /%s -path %s -type f 2> /dev/null" \
+            ls_cmd = "/usr/bin/find /%s -path '%s' -type f 2> /dev/null && /usr/bin/find /%s -path '%s' -type f 2> /dev/null" \
                     %(self.disk, backup_dir, self.disk, backup_dir_reshard)
 
             status, output = getcommandoutput(ls_cmd)
@@ -102,7 +102,7 @@ class BackupServer:
 
                 backup_dir_reshard = '/%s/*/.%s/%s/%s/%s/*.mbb' %(self.disk,
                         self.hostname, self.cloud, btype, datestamp)
-                ls_cmd = "/usr/bin/find /%s -path %s -type f 2> /dev/null && /usr/bin/find /%s -path %s -type f 2> /dev/null" \
+                ls_cmd = "/usr/bin/find /%s -path '%s' -type f 2> /dev/null && /usr/bin/find /%s -path '%s' -type f 2> /dev/null" \
                         %(self.disk, backup_dir, self.disk, backup_dir_reshard)
 
                 status, output = getcommandoutput(ls_cmd)

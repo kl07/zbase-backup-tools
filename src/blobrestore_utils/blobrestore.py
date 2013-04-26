@@ -125,9 +125,8 @@ def remote_filecopy(src_file, dest_file):
 def remote_cmd(server, cmd):
     cmd = 'ssh -i %s -o PasswordAuthentication=no -o StrictHostKeyChecking=no storageserver@%s "%s"' \
             %(SSH_KEY_PATH, server, cmd)
-    status, output = getcommandoutput(cmd)
 
-    return output
+    return getcommandoutput(cmd)
 
 def get_storageserver_map(mapping_server):
     """
