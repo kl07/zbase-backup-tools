@@ -64,12 +64,12 @@ def usage(e=0):
     Print usage
     """
 
-    print "\nUsage: %s addjob -k keylist_file -n shard_count -t '2012-01-02 07:00:03'" \
-            " -g game_id -p hostname_prefix [ -f force_find_days ]" \
+    print "\nUsage: %s addjob -k keylist_file -t '2012-01-02 07:00:03'" \
+            " -g game_id [ -f force_find_days ]" \
             " [ -c ] [ -m ]\n" %(sys.argv[0])
     print "%s status restore_ID.job\n" %(sys.argv[0])
     print "%s fetchlog restore_ID.job\n" %(sys.argv[0])
-    print "%s restore-server restore_ID.job -l target_server_list [ -r ]\n" %(sys.argv[0])
+    print "%s restore-server restore_ID.job -v vbs_id [ -r ]\n" %(sys.argv[0])
 
     sys.exit(e)
 
@@ -83,9 +83,15 @@ def keyhash(key):
     else:
         return 1
 
-def group_keys(key_file, shard_count):
+def get_vbucket(key, nvbuckets):
     """
-    Group keys into shard no groups
+    Find out the vbucket_id from key
+    """
+    return keyhash(key) & (nvbuckets-1)
+
+def group_keys(key_file, nvbuckets):
+    """
+    Group keys into vbucket groups
     """
     groups = {}
     try:
@@ -97,10 +103,10 @@ def group_keys(key_file, shard_count):
         key = key.strip()
         if key =='':
             continue
-        index = keyhash(key) % shard_count
-        if not groups.has_key(index):
-            groups[index] = []
-        groups[index].append(key)
+        vb = "vb_%d" %get_vbucket(key, nvbuckets)
+        if not groups.has_key(vb):
+            groups[vb] = []
+        groups[vb].append(key)
 
     if not len(groups.keys()):
         sys.exit("No keys found in the keylist file")
@@ -163,7 +169,7 @@ def parse_args(args):
         usage("ERROR: wrong command or command not specified")
 
     if options['command'] == 'addjob':
-        if len(args) < 11:
+        if len(args) < 8:
             usage("ERROR: Not enough arguments")
 
         options['validate_blob'] = False
@@ -177,8 +183,6 @@ def parse_args(args):
             for (o,a) in opts:
                 if o == '-k':
                     options['key_file'] = a
-                elif o == '-n':
-                    options['shard_count'] = int(a)
                 elif o == '-t':
                     options['restore_date'] = a
                     try:
@@ -210,8 +214,6 @@ def parse_args(args):
                     if len(a.split('-')) < 2:
                         usage("ERROR: game_id should be in the format cloud-gameid")
 
-                elif o == '-p':
-                    options['hostname_prefix'] = a
                 elif o == '-f':
                     options['force_find_days'] = int(a)
                 elif o == '-c':
@@ -223,13 +225,8 @@ def parse_args(args):
         except Exception, e:
             usage("Invalid arguments (%s)" %str(e))
 
-        options['mapping_server'] = zruntime_readkey(config.zruntime_user,
-                config.zruntime_passwd,
-                config.zruntime_namespace,
-                "-".join(options['game_id'].split('-')[1:]),
-                config.zruntime_mapperkey)
-        if not options['mapping_server']:
-            sys.exit("ERROR: Unable to obtain Mapping server address from zruntime")
+        gameid = "-".join(options['game_id'].split('-')[1:])
+        options['mapping_server'] = "%s.%s" %(gameid, consts.SS_URL_SUFFIX)
 
     elif options['command'] == 'restore-server':
         if len(args) < 4:
@@ -238,14 +235,14 @@ def parse_args(args):
         options['job_config'] = args[2]
         options['repair_mode'] = False
         try:
-            opts, args = getopt.getopt(args[3:], 'l:r')
+            opts, args = getopt.getopt(args[3:], 'v:r')
         except getopt.GetoptError, e:
             usage(e.msg)
 
 
         for (o,a) in opts:
-            if o == '-l':
-                options['target_server_list'] = a
+            if o == '-v':
+                options['vbs_id'] = a
             elif o == '-r':
                 options['repair_mode'] = True
 
@@ -254,32 +251,30 @@ def parse_args(args):
 
     return options
 
-class MembasePool:
-    def __init__(self):
-        self.servers = []
-
-    def addServer(self, ipaddr):
-        try:
-            mc = MemcachedClient(host=ipaddr, port=11211)
-            self.servers.append(mc)
-            return True
-        except Exception,e:
-            log("Unable to add server %s (%s)" %(ipaddr, str(e)))
+class VBCluster:
+    def __init__(self, vbs_server):
+        cmd = "curl -s -L http://%s/%s" %(vbs_server, consts.VBS_API_PATH)
+        status, output = getcommandoutput(cmd)
+        if status > 0:
+            log("ERROR: Unable to contact VBS: %s" %(vbs_server))
             sys.exit(1)
-            return False
 
-    def set_key(self, key, flg, exp, val, date, cksum):
-        server = None
+        j = json.loads(output)
+        vbsmap = j['buckets'][0]['vBucketServerMap']['vBucketMap']
+        srvlist = j['buckets'][0]['vBucketServerMap']['serverList']
+        self.vbmap = {}
+
+        for i,v in enumerate(vbsmap):
+            ip, port = srvlist[v[0]].split(':')
+            mc = MemcachedClient(host=ip, port=int(port))
+            self.vbmap[i] = mc
+
+    def set_key(self, vbid, key, flg, exp, val, date, cksum):
         try:
-            count = len(self.servers)
-            if count == 0:
-                log("No servers added to server list")
-                sys.exit(1)
-            server = self.servers[keyhash(key) % count]
-            if not server.options_supported():
-                cksum = None
+            server = self.vbmap[vbid]
+            server.vbucketId = vbid
             server.set(key, exp, flg, val, cksum)
-            log("Successfully set key:%s to server:%s date:%s" %(key,
+            log("Successfully set vbid:%d key:%s to server:%s date:%s" %(vbid, key,
                 server.host, date))
         except Exception, e:
             if server:
@@ -334,7 +329,6 @@ class NodeJob:
         self.node_job_file = None
         self.ipaddr = ipaddr
         self.job_id = options['job_id']
-        self.hostname_prefix = options['hostname_prefix']
         self.game_id = options['game_id']
         self.validate_blob = options['validate_blob']
         self.restore_date = options['restore_date']
@@ -347,7 +341,7 @@ class NodeJob:
 
         self.jobs = {}
 
-    def add_hostdata(self, shard, keys, disk):
+    def add_bucketdata(self, shard, keys, disk):
         self.jobs[shard] = keys, disk
 
     def write_to_file(self):
@@ -442,25 +436,21 @@ class BlobrestoreDispatcher:
 
         job_id = random.randint(0,10000000000)
         self.options['job_id'] = job_id
-        #TODO: Dynamic scaling array
         storageserver_map = get_storageserver_map(self.options['mapping_server'])
-        grouped_keys = group_keys(self.options['key_file'], self.options['shard_count'])
-        for host_shard in grouped_keys:
-            shard = str(host_shard+1).rjust(consts.PADDING_ZEROS, '0')
-            hostname = "%s-%s" %(self.options['hostname_prefix'], shard)
-
-            if storageserver_map.has_key(hostname):
-                data = storageserver_map[hostname]
+        grouped_keys = group_keys(self.options['key_file'], len(storageserver_map))
+        for vb in grouped_keys:
+            if storageserver_map.has_key(vb):
+                data = storageserver_map[vb]
             else:
-                sys.exit("ERROR: Unable to find %s in storage server map" %hostname)
+                sys.exit("ERROR: Unable to find %s in storage server map" %vb)
 
-            if self.node_job.has_key(hostname):
-                self.node_job[data['storage_server']].add_hostdata(host_shard,
-                        grouped_keys[host_shard], data['disk'])
+            if self.node_job.has_key(vb):
+                self.node_job[data['storage_server']].add_bucketdata(vb,
+                        grouped_keys[vb], data['disk'])
             else:
                 ipaddr = data['storage_server']
                 job = NodeJob(self.options, ipaddr)
-                job.add_hostdata(host_shard, grouped_keys[host_shard], data['disk'])
+                job.add_bucketdata(vb, grouped_keys[vb], data['disk'])
                 self.node_job[ipaddr] = job
 
     def _create_batchjob_file(self):
@@ -579,21 +569,12 @@ class BlobrestoreDispatcher:
         for node_job_item in self.node_job.values():
             node_job_item.download_restored_keys(tmpdir)
 
-        membasepool = MembasePool()
-        try:
-            server_list = open(self.options['target_server_list'], 'r')
-        except:
-            log("Invalid target server list")
-            sys.exit(1)
-
-        for s in server_list:
-            server = s.strip()
-            if server == '':
-                continue
-            membasepool.addServer(server)
+        vbs_server = "%s.%s" %(self.options['vbs_id'], consts.VBS_URL_SUFFIX)
+        membasepool = VBCluster(vbs_server)
 
         for f in os.listdir(tmpdir):
-            log("Reading keys from host %s" %f)
+            log("Reading keys from vbucket %s" %f)
+            vbid = int(f.split('_')[1])
             fpath = os.path.join(tmpdir, f)
             ks = KeyStore(fpath)
             restored_key = ks.read()
@@ -603,7 +584,7 @@ class BlobrestoreDispatcher:
                     cksum = str(cksum)
                 if self.options['repair_mode']:
                     key += '_r'
-                membasepool.set_key(str(key), socket.ntohl(flg), exp, str(val), date, cksum)
+                membasepool.set_key(vbid, str(key), socket.ntohl(flg), exp, str(val), date, cksum)
                 restored_key = ks.read()
 
 if __name__ == '__main__':

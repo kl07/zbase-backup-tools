@@ -48,11 +48,11 @@ def backup_filename_to_epoch(filename):
     return time.mktime(time.strptime(dt,'%Y-%m-%d_%H:%M:%S')), dt
 
 class BackupServer:
-    def __init__(self, cloud_game_id, hostname, disk):
+    def __init__(self, cloud_game_id, vbucket, disk):
         s = cloud_game_id.split('-')
         self.cloud = s[0]
         self.game_id = "-".join(s[1:])
-        self.hostname = hostname
+        self.vbucket = vbucket
         self.disk = disk
 
     def list_backups(self, start_datetime, days=0, master_backup=False):
@@ -60,9 +60,9 @@ class BackupServer:
         if " " in start_datetime:
             start_date, start_time = start_datetime.split(' ')
             compare_epoch, ts = backup_filename_to_epoch("backup-%s_%s-00000.mbb" %(start_date, start_time))
-            backup_dir = '/%s/*/%s/%s/%s/*.mbb' %(self.disk,
-                    self.hostname, self.cloud, consts.INCR_DIRNAME)
-            ls_cmd = "/usr/bin/find /%s -path %s -type f" %(self.disk, backup_dir)
+            backup_dir = '/%s/*/*/%s/%s/%s/*.mbb' %(self.disk,
+                    self.vbucket, self.cloud, consts.INCR_DIRNAME)
+            ls_cmd = "/usr/bin/find /%s -path '%s' -type f" %(self.disk, backup_dir)
             status, output = getcommandoutput(ls_cmd, None)
             if status != 0:
                 output = ''
@@ -90,9 +90,9 @@ class BackupServer:
 
             for btype in backup_types:
                 master_backup_exists = False
-                backup_dir = '/%s/*/%s/%s/%s/%s/*.mbb' %(self.disk,
-                        self.hostname, self.cloud, btype, datestamp)
-                ls_cmd = "/usr/bin/find /%s -path %s -type f" %(self.disk, backup_dir)
+                backup_dir = '/%s/*/*/%s/%s/%s/%s/*.mbb' %(self.disk,
+                        self.vbucket, self.cloud, btype, datestamp)
+                ls_cmd = "/usr/bin/find /%s -path '%s' -type f" %(self.disk, backup_dir)
                 status, output = getcommandoutput(ls_cmd, None)
                 if btype == consts.MASTER_DIRNAME and status == 0:
                     master_backup_exists = True
@@ -280,22 +280,22 @@ class Job:
         self.complete = False
         self.download_onprogress = False
 
-    def parse_nodejob(self, i, nodejob, njt):
+    def parse_nodejob(self, vb, nodejob, njt):
         self.nodejob_tracker = njt
         self.node_jobid = nodejob.job_id
-        self.hostname = '%s-%03d' %(nodejob.hostname_prefix, i+1)
+        self.vbucket = vb
         self.game_id = nodejob.game_id
         self.validate_blob = nodejob.validate_blob
         self.restore_date = nodejob.restore_date
         self.force_find_days = nodejob.force_find_days
         self.check_master_backup = nodejob.check_master_backup
-        self.keylist = nodejob.jobs[i][0]
-        self.disk = nodejob.jobs[i][1]
+        self.keylist = nodejob.jobs[vb][0]
+        self.disk = nodejob.jobs[vb][1]
         self.total_keys_count = len(self.keylist)
 
     def activate(self):
-        msg = "Starting blobrestore job #%s_ID%d hostname:%s" %(self.game_id,
-            self.node_jobid, self.hostname)
+        msg = "Starting blobrestore job #%s_ID%d vbucket:%s" %(self.game_id,
+            self.node_jobid, self.vbucket)
         self.dirpath = os.path.join(consts.BLOBRESTORE_PROCESSED_JOBS_DIR,
         '%s_ID%d' %(self.game_id, self.node_jobid))
         try:
@@ -307,11 +307,11 @@ class Job:
         self.log(msg)
 
     def log(self, msg):
-        self.nodejob_tracker.log("%s : %s" %(self.hostname, msg))
+        self.nodejob_tracker.log("%s : %s" %(self.vbucket, msg))
 
     def process(self):
         try:
-            bs = BackupServer(self.game_id, self.hostname, self.disk)
+            bs = BackupServer(self.game_id, self.vbucket, self.disk)
             self.log("Searching for backups")
             backup_search_list = bs.list_backups(self.restore_date,
                     self.force_find_days, self.check_master_backup)
@@ -334,8 +334,8 @@ class Job:
             self.log("Failed blobrestore process (ERROR: %s)" %str(e))
             self.exit_status = 1
 
-        log("Completed blobrestore job #%s_ID%d hostname:%s" %(self.game_id,
-            self.node_jobid, self.hostname))
+        log("Completed blobrestore job #%s_ID%d vbucket:%s" %(self.game_id,
+            self.node_jobid, self.vbucket))
         self.complete = True
 
     def remove_from_keylist(self, keys):
@@ -344,8 +344,8 @@ class Job:
         
     def restore_process(self):
         try:
-            keystore = KeyStore(os.path.join(self.dirpath, 'output',self.hostname))
-            self.log("Starting restore process for Job #%s" %(self.hostname))
+            keystore = KeyStore(os.path.join(self.dirpath, 'output',self.vbucket))
+            self.log("Starting restore process for Job #%s" %(self.vbucket))
             while (len(self.download_queue.queue) or len(self.restore_queue.queue)
                     or self.download_onprogress) and len(self.keylist) and not self.exit_status:
                 if len(self.restore_queue.queue):
@@ -365,7 +365,7 @@ class Job:
                 self.log("KEY: %s STATUS:NOT-FOUND" %k)
 
             if not self.exit_status:
-                self.log("Completed restore process for Job #%s" %(self.hostname))
+                self.log("Completed restore process for Job #%s" %(self.vbucket))
         except Exception, e:
             self.log("Failed restore process (ERROR: %s)" %str(e))
             self.exit_status = 1

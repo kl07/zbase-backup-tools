@@ -52,7 +52,7 @@ MAX_DAILYJOBS = 5
 DAILYJOB_MEM_THRESHOLD = 10240
 MASTERJOB_MEM_THRESHOLD = 15360
 ZRT_URL = 'https://api.runtime.zynga.com:8994'
-BLOBRESTORE_API_PATH = 'api?action=get_host_config'
+BLOBRESTORE_API_PATH = 'api?action=get_vb_mapping'
 PADDING_ZEROS = 3
 ZRT_MAPPER_KEY = 'ACTIVE_MCS'
 ZRT_RETRIES = 300
@@ -63,3 +63,6 @@ DEL_MANIFEST = 'manifest.del'
 PROMOTE_MANIFEST = '.promoting'
 CONNECT_RETRIES = 20
 PATH_MBFLUSHCTL = "/opt/membase/lib/python/mbflushctl"
+SS_URL_SUFFIX = 'mbbackup.zynga.com'
+VBS_API_PATH = 'vbucketMap'
+VBS_URL_SUFFIX = 'vbucketserver.zynga.com'
