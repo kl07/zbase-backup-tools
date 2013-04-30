@@ -213,12 +213,26 @@ class BaseScheduler:
         from the given list of disks
         """
         vbuckets = []
-        disks = self.getDisks()
-        for d in disks:
-            st, out = getcommandoutput("find %s/primary/ -maxdepth 3 -mindepth 3 -type d" %d)
-            if st == 0:
-                for vb in out.split():
-                    vbuckets.append((d,vb))
+        mapping_server = "%s.%s" %(self.config.game_id, consts.SS_URL_SUFFIX)
+        self.ipaddr = socket.gethostbyname(socket.getfqdn())
+        cmd = "curl -s -L http://%s/%s" %(mapping_server, consts.SS_API_PATH %self.ipaddr)
+        status, output = getcommandoutput(cmd)
+        disk_config = None
+        if status == 0:
+            try:
+                disk_config = json.loads(str(output))
+            except Exception, e:
+                self.logger.error("Unable to obtain valid config from disk mapper (%s)" %(str(e)))
+        else:
+                self.logger.error("Unable to contact disk mapper (%s)" %(str(e)))
+
+        if disk_config == None:
+            return None
+
+        for vb,conf in disk_config.items():
+            if conf["type"] == "primary":
+                diskpath = "/%s" %conf["disk"]
+                vbuckets.append((diskpath, vb))
 
         return vbuckets
 
@@ -316,6 +330,9 @@ class BaseScheduler:
         ret = True
         self.logger.info("==== Executing job processor for %s ====" %self.type)
         self.jobs = self.findJobs(date)
+        if self.jobs == None:
+            return False
+
         if len(self.jobs):
             self.logger.info("(%s) Merge jobs to be processed: %s" %(self.type, ", ".join(["DISK:%s VBUCKET:%s" %(x.getDisk(), x.getVBucket()) for x in self.jobs])))
         else:
@@ -403,7 +420,11 @@ class DailyMergeScheduler(BaseScheduler):
 
     def findJobs(self, date):
         jobs = []
-        for d,h in self.getLocations():
+        locations = self.getLocations()
+        if locations == None:
+            return None
+
+        for d,h in locations:
             path = os.path.join(h, consts.PERIODIC_DIRNAME, date)
             addhost = False
             if os.path.exists(path):
@@ -448,7 +469,11 @@ class MasterMergeScheduler(BaseScheduler):
 
     def findJobs(self, date):
         jobs = []
-        for d,h in self.getLocations():
+        locations = self.getLocations()
+        if locations == None:
+            return None
+
+        for d,h in locations:
             path = os.path.join(h, consts.MASTER_DIRNAME, date)
             addhost = False
             if os.path.exists(path):

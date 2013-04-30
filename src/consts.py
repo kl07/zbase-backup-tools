@@ -66,3 +66,4 @@ PATH_MBFLUSHCTL = "/opt/membase/lib/python/mbflushctl"
 SS_URL_SUFFIX = 'mbbackup.zynga.com'
 VBS_API_PATH = 'vbucketMap'
 VBS_URL_SUFFIX = 'vbucketserver.zynga.com'
+SS_API_PATH = 'api?action=get_ss_mapping&storage_server=%s'
