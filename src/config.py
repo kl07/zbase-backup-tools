@@ -39,9 +39,7 @@ class Config:
             self.log_level = log_level
 
         self.syslog_tag = self.config.get('log', 'syslog_tag')
-        self.cloud = self.config.get('general', 'cloud')
         self.game_id = self.config.get('general', 'game_id')
-        self.buffer_list = self.config.get('general', 'buffer_list')
         if self.config.has_option("general", "membase_db_paths"):
             self.membase_db_paths = self.config.get('general', 'membase_db_paths').split(',')
 

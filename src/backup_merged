@@ -85,10 +85,13 @@ def processLoop():
         dobj = datetime.date.today() - datetime.timedelta(days=weekday)
         master_date = datetime.date.strftime(dobj, "%Y-%m-%d")
 
-        daily_scheduler.execute(daily_date)
-        master_scheduler.execute(master_date)
-        curr_date = datetime.date.strftime(datetime.date.today(), "%Y-%m-%d")
+        if daily_scheduler.execute(daily_date) == False:
+            continue
 
+        if master_scheduler.execute(master_date) == False:
+            continue
+
+        curr_date = datetime.date.strftime(datetime.date.today(), "%Y-%m-%d")
         while curr_date == daily_date:
             status, hosts = getcommandoutput("ls /data_*/primary/")
             if lasthostlist != None:

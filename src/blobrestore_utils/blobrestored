@@ -48,10 +48,8 @@ def backup_filename_to_epoch(filename):
     return time.mktime(time.strptime(dt,'%Y-%m-%d_%H:%M:%S')), dt
 
 class BackupServer:
-    def __init__(self, cloud_game_id, vbucket, disk):
-        s = cloud_game_id.split('-')
-        self.cloud = s[0]
-        self.game_id = "-".join(s[1:])
+    def __init__(self, game_id, vbucket, disk):
+        self.game_id = game_id
         self.vbucket = vbucket
         self.disk = disk
 
@@ -60,8 +58,8 @@ class BackupServer:
         if " " in start_datetime:
             start_date, start_time = start_datetime.split(' ')
             compare_epoch, ts = backup_filename_to_epoch("backup-%s_%s-00000.mbb" %(start_date, start_time))
-            backup_dir = '/%s/*/*/%s/%s/%s/*.mbb' %(self.disk,
-                    self.vbucket, self.cloud, consts.INCR_DIRNAME)
+            backup_dir = '/%s/*/*/%s/%s/*.mbb' %(self.disk,
+                    self.vbucket, consts.INCR_DIRNAME)
             ls_cmd = "/usr/bin/find /%s -path '%s' -type f" %(self.disk, backup_dir)
             status, output = getcommandoutput(ls_cmd, None)
             if status != 0:
@@ -90,8 +88,8 @@ class BackupServer:
 
             for btype in backup_types:
                 master_backup_exists = False
-                backup_dir = '/%s/*/*/%s/%s/%s/%s/*.mbb' %(self.disk,
-                        self.vbucket, self.cloud, btype, datestamp)
+                backup_dir = '/%s/*/*/%s/%s/%s/*.mbb' %(self.disk,
+                        self.vbucket, btype, datestamp)
                 ls_cmd = "/usr/bin/find /%s -path '%s' -type f" %(self.disk, backup_dir)
                 status, output = getcommandoutput(ls_cmd, None)
                 if btype == consts.MASTER_DIRNAME and status == 0:

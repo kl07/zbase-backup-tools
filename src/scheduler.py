@@ -220,7 +220,7 @@ class BaseScheduler:
         disk_config = None
         if status == 0:
             try:
-                disk_config = json.loads(str(output))
+                disk_config = json.loads(str(output))[self.ipaddr]
             except Exception, e:
                 self.logger.error("Unable to obtain valid config from disk mapper (%s)" %(str(e)))
         else:
@@ -232,7 +232,7 @@ class BaseScheduler:
         for vb,conf in disk_config.items():
             if conf["type"] == "primary":
                 diskpath = "/%s" %conf["disk"]
-                vbuckets.append((diskpath, vb))
+                vbuckets.append((diskpath, str(conf['path_name'])))
 
         return vbuckets
 

@@ -211,9 +211,6 @@ def parse_args(args):
 
                 elif o == '-g':
                     options['game_id'] = a
-                    if len(a.split('-')) < 2:
-                        usage("ERROR: game_id should be in the format cloud-gameid")
-
                 elif o == '-f':
                     options['force_find_days'] = int(a)
                 elif o == '-c':
@@ -225,8 +222,7 @@ def parse_args(args):
         except Exception, e:
             usage("Invalid arguments (%s)" %str(e))
 
-        gameid = "-".join(options['game_id'].split('-')[1:])
-        options['mapping_server'] = "%s.%s" %(gameid, consts.SS_URL_SUFFIX)
+        options['mapping_server'] = "%s.%s" %(options['game_id'], consts.SS_URL_SUFFIX)
 
     elif options['command'] == 'restore-server':
         if len(args) < 4:
