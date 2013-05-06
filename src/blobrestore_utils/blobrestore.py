@@ -65,11 +65,11 @@ def usage(e=0):
     """
 
     print "\nUsage: %s addjob -k keylist_file -t '2012-01-02 07:00:03'" \
-            " -g game_id [ -f force_find_days ]" \
+            " -d disk_mapper_server [ -f force_find_days ]" \
             " [ -c ] [ -m ]\n" %(sys.argv[0])
     print "%s status restore_ID.job\n" %(sys.argv[0])
     print "%s fetchlog restore_ID.job\n" %(sys.argv[0])
-    print "%s restore-server restore_ID.job -v vbs_id [ -r ]\n" %(sys.argv[0])
+    print "%s restore-server restore_ID.job [-v vbs_server | -s server ] [ -r ]\n" %(sys.argv[0])
 
     sys.exit(e)
 
@@ -175,7 +175,7 @@ def parse_args(args):
         options['validate_blob'] = False
         options['check_master_backup'] = False
         try:
-            opts, args = getopt.getopt(args[2:], 'k:n:t:g:p:f:cmh')
+            opts, args = getopt.getopt(args[2:], 'k:n:t:d:p:f:cmh')
         except getopt.GetoptError, e:
             usage(e.msg)
 
@@ -209,8 +209,14 @@ def parse_args(args):
                     except Exception, e:
                         usage("ERROR: Invalid date specified")
 
-                elif o == '-g':
-                    options['game_id'] = a
+                elif o == '-d':
+                    options['disk_mapper_server'] = a
+
+                    if options['disk_mapper_server'][0].isdigit():
+                        options['game_id'] = options['disk_mapper_server']
+                    else:
+                        options['game_id'] = options['disk_mapper_server'].split('.')[0]
+
                 elif o == '-f':
                     options['force_find_days'] = int(a)
                 elif o == '-c':
@@ -222,8 +228,6 @@ def parse_args(args):
         except Exception, e:
             usage("Invalid arguments (%s)" %str(e))
 
-        options['mapping_server'] = "%s.%s" %(options['game_id'], consts.SS_URL_SUFFIX)
-
     elif options['command'] == 'restore-server':
         if len(args) < 4:
             usage("ERROR: Not enough arguments")
@@ -231,21 +235,57 @@ def parse_args(args):
         options['job_config'] = args[2]
         options['repair_mode'] = False
         try:
-            opts, args = getopt.getopt(args[3:], 'v:r')
+            opts, args = getopt.getopt(args[3:], 's:v:r')
         except getopt.GetoptError, e:
             usage(e.msg)
 
 
         for (o,a) in opts:
             if o == '-v':
-                options['vbs_id'] = a
+                options['vbs_server'] = a
             elif o == '-r':
                 options['repair_mode'] = True
+            elif o == '-s':
+                options['server_addr'] = a
 
     else:
         options['job_config'] = args[2]
 
     return options
+
+class MembasePool:
+    def __init__(self):
+        self.servers = []
+
+    def addServer(self, ipaddr):
+        try:
+            mc = MemcachedClient(host=ipaddr, port=11211)
+            self.servers.append(mc)
+            return True
+        except Exception,e:
+            log("Unable to add server %s (%s)" %(ipaddr, str(e)))
+            sys.exit(1)
+            return False
+
+    def set_key(self, vbid, key, flg, exp, val, date, cksum):
+        server = None
+        try:
+            count = len(self.servers)
+            if count == 0:
+                log("No servers added to server list")
+                sys.exit(1)
+            server = self.servers[keyhash(key) % count]
+            if not server.options_supported():
+                cksum = None
+            server.set(key, exp, flg, val, cksum)
+            log("Successfully set vbid:%d key:%s to server:%s date:%s" %(vbid, key,
+                server.host, date))
+        except Exception, e:
+            if server:
+                log("Unable to set key:%s to server:%s (%s)" %(key,
+                    server.host, str(e)))
+            else:
+                log("Unable to set key:%s to server (%s)" %(key, str(e)))
 
 class VBCluster:
     def __init__(self, vbs_server):
@@ -432,7 +472,7 @@ class BlobrestoreDispatcher:
 
         job_id = random.randint(0,10000000000)
         self.options['job_id'] = job_id
-        storageserver_map = get_storageserver_map(self.options['mapping_server'])
+        storageserver_map = get_storageserver_map(self.options['disk_mapper_server'])
         grouped_keys = group_keys(self.options['key_file'], len(storageserver_map))
         for vb in grouped_keys:
             if storageserver_map.has_key(vb):
@@ -565,8 +605,12 @@ class BlobrestoreDispatcher:
         for node_job_item in self.node_job.values():
             node_job_item.download_restored_keys(tmpdir)
 
-        vbs_server = "%s.%s" %(self.options['vbs_id'], consts.VBS_URL_SUFFIX)
-        membasepool = VBCluster(vbs_server)
+        if self.options.has_key('server_addr'):
+            membasepool = MembasePool()
+            membasepool.addServer(options['server_addr'])
+        else:
+            vbs_server = "%s.%s" %(self.options['vbs_server'])
+            membasepool = VBCluster(vbs_server)
 
         for f in os.listdir(tmpdir):
             log("Reading keys from vbucket %s" %f)
