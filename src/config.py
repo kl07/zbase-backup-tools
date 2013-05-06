@@ -39,7 +39,12 @@ class Config:
             self.log_level = log_level
 
         self.syslog_tag = self.config.get('log', 'syslog_tag')
-        self.game_id = self.config.get('general', 'game_id')
+        if self.config.has_option('general', 'disk_mapper_server'):
+
+            self.disk_mapper_server = self.config.get('general', 'disk_mapper_server')
+        else:
+            self.disk_mapper_server = 'UNKNOWN'
+
         if self.config.has_option("general", "membase_db_paths"):
             self.membase_db_paths = self.config.get('general', 'membase_db_paths').split(',')
 

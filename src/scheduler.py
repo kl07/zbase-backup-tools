@@ -213,7 +213,7 @@ class BaseScheduler:
         from the given list of disks
         """
         vbuckets = []
-        mapping_server = "%s.%s" %(self.config.game_id, consts.SS_URL_SUFFIX)
+        mapping_server = self.config.disk_mapper_server
         self.ipaddr = socket.gethostbyname(socket.getfqdn())
         cmd = "curl -s -L http://%s/%s" %(mapping_server, consts.SS_API_PATH %self.ipaddr)
         status, output = getcommandoutput(cmd)
