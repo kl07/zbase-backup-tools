@@ -22,6 +22,8 @@ mkdir -p $RPM_BUILD_ROOT/etc/init.d/
 mkdir -p $RPM_BUILD_ROOT/etc/membase-backup/
 
 cp src/backup-merge/merge-incremental $RPM_BUILD_ROOT/opt/membase/membase-backup/
+cp src/vbs_agent/_vbs_agent.so $RPM_BUILD_ROOT/opt/membase/membase-backup/
+cp src/vbs_agent/vbs_agent.py $RPM_BUILD_ROOT/opt/membase/membase-backup/
 cp src/backuplib.py \
 src/config.py \
 src/consts.py \
@@ -29,8 +31,13 @@ src/daily-merge \
 src/logger.py \
 src/master-merge \
 src/mc_bin_client.py \
-src/membase-backupd \
 src/membase-restore \
+src/backupd.py \
+src/download_client.py \
+src/file_server.py \
+src/initdaemon.py \
+src/vbs_agent/_vbs_agent.so \
+src/sendfile.so \
 src/memcacheConstants.py \
 src/util.py \
 src/diffdisk.py \
