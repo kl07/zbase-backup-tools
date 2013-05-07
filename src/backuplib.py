@@ -8,6 +8,7 @@ import os
 import select
 import datetime
 import consts
+import pdb
 import time
 
 MBB_VERSION = "2"
@@ -54,12 +55,22 @@ def encodeTAPConnectOpts(opts, backfill=False):
         if op in memcacheConstants.TAP_FLAG_TYPES:
             val.append(struct.pack(memcacheConstants.TAP_FLAG_TYPES[op],
                                    opts[op]))
+        elif op == memcacheConstants.TAP_FLAG_LIST_VBUCKETS:
+            val.append(_encodeVBucketList(opts[op]))
         elif backfill and op == memcacheConstants.TAP_FLAG_CHECKPOINT:
             if opts[op][2] >= 0:
                 val.append(struct.pack(">HHQ", opts[op][0], opts[op][1], opts[op][2]))
         else:
             val.append(opts[op])
     return struct.pack(">I", header), ''.join(val)
+
+def _encodeVBucketList(vbl):
+    l = list(vbl) # in case it's a generator
+    vals = [struct.pack("!H", len(l))]
+    for v in vbl:
+        vals.append(struct.pack("!H", v))
+    return ''.join(vals)
+
 
 def parseTapExt(ext):
     if len(ext) == 8:
@@ -129,7 +140,7 @@ class BackupFactory:
     Backup class to generate backup split on demand
     """
 
-    def __init__(self, base_filepath, backup_type, tapname,logger, host, port,
+    def __init__(self, base_filepath, backup_type, tapname, vbid_list, logger, host, port,
             txn_size=None):
         self.base_filepath = base_filepath
         self.backup_type = backup_type
@@ -151,18 +162,26 @@ class BackupFactory:
         else:
             self.txn_size = TXN_SIZE
 
+        if vbid_list == None or vbid_list == []:
+            vbid_list = []
+            vbid_list.append(0)
+
         if backup_type == "full":
             self.full_backup = True
             mc = mc_bin_client.MemcachedClient(host,port)
             mc.deregister_tap_client(tapname)
-            time.sleep(10);
+            time.sleep(10)  # handle special case when membase takes a few seconds to deregister tap name
             ext, val = encodeTAPConnectOpts({
             memcacheConstants.TAP_FLAG_CHECKPOINT: (1, 0, 0),
             memcacheConstants.TAP_FLAG_SUPPORT_ACK: '',
             memcacheConstants.TAP_FLAG_REGISTERED_CLIENT: 0x01, # "value > 0" means "closed checkpoints only"
             memcacheConstants.TAP_FLAG_BACKFILL: 0x00000000,
+            memcacheConstants.TAP_FLAG_CKSUM: '',
+            memcacheConstants.TAP_FLAG_LIST_VBUCKETS: vbid_list,
             memcacheConstants.TAP_FLAG_CKSUM: ''
             }, True)
+
+            self.logger.log("Type of backup is full !!! ")
 
             mc._sendCmd(memcacheConstants.CMD_TAP_CONNECT, tapname, val, 0, ext)
             cmd, opaque, cas, vbucketId, key, ext, val = readTap(mc)
@@ -171,7 +190,8 @@ class BackupFactory:
             mc.close()
 
             sclient = mc_bin_client.MemcachedClient(self.host, self.port)
-            self.max_cpoint_id = int(sclient.stats('checkpoint')['vb_0:open_checkpoint_id'])
+            stats_str = "vb_" + str(vbid_list[0]) + ":open_checkpoint_id"
+            self.max_cpoint_id = int(sclient.stats('checkpoint')[stats_str])
             sclient.close()
 
         self.mc = mc_bin_client.MemcachedClient(host, port)
@@ -180,6 +200,8 @@ class BackupFactory:
           memcacheConstants.TAP_FLAG_SUPPORT_ACK: '',
           memcacheConstants.TAP_FLAG_REGISTERED_CLIENT: 0x01, # "value > 0" means "closed checkpoints only"
           memcacheConstants.TAP_FLAG_BACKFILL: 0xffffffff,
+          memcacheConstants.TAP_FLAG_CKSUM: '',
+          memcacheConstants.TAP_FLAG_LIST_VBUCKETS: vbid_list,
           memcacheConstants.TAP_FLAG_CKSUM: ''
         })
 
@@ -206,7 +228,7 @@ class BackupFactory:
 
     def get_current_split(self):
         return self.current_split
-       
+
     def create_next_split(self, buffer_path):
         if self.complete:
             return None

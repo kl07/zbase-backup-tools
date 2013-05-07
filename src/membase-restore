@@ -13,9 +13,15 @@ from threading import Thread
 from mc_bin_client import MemcachedClient
 from logger import Logger
 from config import Config
-from util import natural_sortkey, zruntime_readkey, getcommandoutput, get_checkpoints_frombackup, gethostname
+from util import natural_sortkey, setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup, gethostname
+import pdb
+from download_client import download_client
+import getopt
 
 DAY_EPOCH = 60*60*24
+
+# Setup the sqlite3 LD_LIBRARY_PATH before importing sqlite3
+setup_sqlite_lib()
 
 def epoch2date(epoch):
     lt = time.gmtime(epoch)
@@ -23,11 +29,15 @@ def epoch2date(epoch):
 
 class Restore:
 
-    def __init__(self, hostname=None):
+    def __init__(self, vb_id, host, storage_server, ss_port):
         self.processlist = Queue.Queue()
         self.s3_lock_file = None
         self.exit_status = 0
         self.restore_complete = False
+        self.vb_id = vb_id
+        self.host = host
+        self.storage_server = storage_server
+        self.ss_port = ss_port
         try:
             self.config = Config(consts.CONFIG_FILE)
             self.config.read()
@@ -42,12 +52,12 @@ class Restore:
 
         self.cloud = self.config.cloud
         self.game_id = self.config.game_id
-        if hostname == None:
-            self.hostname = self.config.hostname
-        else:
-            self.hostname = hostname
 
         buffer_list = self.config.buffer_list.split(',')
+        #append vb_id to the buffer list so that we can run restores in parallel
+        for i in range(len(buffer_list)):
+            buffer_list[i] = buffer_list[i] + '/' + 'vb_' + self.vb_id
+
         self.thread_count = len(buffer_list)
         self.free_buffer_list = Queue.Queue()
         self.download_queue = Queue.Queue()
@@ -75,43 +85,23 @@ class Restore:
                 self.exit(1)
             self.free_buffer_list.put(b)
 
-        if not self.update_mappingserver():
-            self.exit(1)
-
         self.restore_queue = Queue.Queue()
         signal.signal(signal.SIGINT, self.graceful_exit)
         signal.signal(signal.SIGQUIT, self.graceful_exit)
         signal.signal(signal.SIGTERM, self.graceful_exit)
 
-    def update_mappingserver(self):
-        """
-        Update mapping server env variable
-        """
-        for r in range(consts.ZRT_RETRIES):
-            mapping_server = zruntime_readkey(self.config.zruntime_user,
-                self.config.zruntime_passwd,
-                self.config.zruntime_namespace,
-                self.config.game_id,
-                self.config.zruntime_mapperkey)
-            if r > 0:
-                self.logger.log("Retrying (%d) to ZRuntime read ..." %r)
-
-            if mapping_server:
-                break
-
-            time.sleep(1)
-
-        if not mapping_server:
-            self.logger.log("FAILED: Unable to read from zRuntime")
-            return False
-        else:
-            os.environ["MAPPING_SERVER"] = mapping_server
-            return True
-
     def setup_restore_env(self):
         self.logger.log("Setting up restore environment for membase server")
-        if os.path.exists(consts.MEMCACHED_PID_FILE):
-            memcached_pid = int(open(consts.MEMCACHED_PID_FILE).read())
+
+        hostname, port = self.host.split(':')
+
+        if port == None or port == 0:
+            self.logger.log("Invalid hostname or invalid port")
+            sys.exit(1)
+
+        """
+                memcached_pid = int(open(consts.MEMCACHED_PID_FILE).read())
+
             try:
                 os.kill(memcached_pid, 0)
                 self.logger.log("Found running membase instance. Terminating" \
@@ -120,142 +110,185 @@ class Restore:
             except:
                 pass
 
-        self.logger.log("Cleaning up membase db directory")
-        for dbpath in self.config.membase_db_paths:
-            rm_db_cmd = "find %s -type f -delete" %dbpath
-            status, output = self.getstatusoutput(rm_db_cmd)
-            if status > 0:
-                self.logger.log("FAILED: Failed to clean membase db directory" \
-                        " (%s)" %output)
-                self.exit(1)
-
-        self.logger.log("Updating membase config file to start as restore mode")
-        f = open(consts.MEMCACHED_SYSCONFIG_FILE)
-        sysconfig = f.read().split(';')
-        param, endlimiter = sysconfig[-1].split("'")
-        sysconfig = sysconfig[:-1]
-        sysconfig.append(param)
-        restore_param = 'restore_mode=true'
-        for p in sysconfig:
-            if 'restore_mode' in p:
-                sysconfig.remove(p)
-
-        sysconfig.append(restore_param)
-        sysconfig_str = ";".join(sysconfig)
-        sysconfig_str += "'%s" %endlimiter
-        f = open(consts.MEMCACHED_SYSCONFIG_FILE, 'w')
-        f.write(sysconfig_str)
-        f.close()
-        self.logger.log("Starting membase")
-        start_membase_cmd = "/sbin/service memcached start"
-        status = os.system(start_membase_cmd)
-        if status > 0:
-            self.logger.log("Unable to start membase")
-            self.exit(1)
-
-        for i in range(120):
-            try:
-                mb = MemcachedClient(host='127.0.0.1', port=11211)
-                mb.stats('')
-                break
-            except:
-                if i == 119:
-                    start_membase_cmd = "/sbin/service memcached restart"
-                    status = os.system(start_membase_cmd)
-                    if status > 0:
-                        self.logger.log("Unable to start membase")
-                        self.exit(1)
-                time.sleep(1)
-
-        self.logger.log("setting inconsistent slave check to True")
-        status, output = self.getstatusoutput("python26 %s 0:11211 set inconsistent_slave_chk true" %consts.PATH_MBFLUSHCTL)
-        if status > 0:
-            self.logger.log("FAILED: Unable to set inconsistent slave check to true (%s)" %output)
-            self.exit(1)
+        """
 
         self.logger.log("Setting min_data_age to 0")
-        status, output = self.getstatusoutput("python26 %s 0:11211 set min_data_age 0" %consts.PATH_MBFLUSHCTL)
+        status, output = self.getstatusoutput("python26 %s %s set min_data_age 0" %(consts.PATH_MBFLUSHCTL, self.host))
         if status > 0:
             self.logger.log("FAILED: Unable to set min_data_age to 0 (%s)" %output)
             self.exit(1)
 
-        register_tap_cmd = "python26 %s -h 0:11211 -r %s -c" \
-                %(consts.PATH_MBTAP_REGISTER_EXEC, consts.BACKUP_TAPNAME)
-        self.logger.log("Registering Backup TAP Cursor")
-        status, output = self.getstatusoutput(register_tap_cmd)
+
+        #set the vbucket state in restore more
+        status, outout = self.getstatusoutput("python26 %s %s set start_restore_vb %s" %(consts.PATH_MBFLUSHCTL, self.host, self.vb_id))
+
         if status > 0:
-            self.logger.log("FAILED: Backup tap registration (%s)" %output)
+            self.loggher.log("FAILED: Unable to set vbucket in restore mode, check if vbucket is activated")
             self.exit(1)
 
-    def _list_s3_files(self, s3path, complete=True, only_index=False):
+
+    def _list_s3_files(self, s3path=None, complete=True, only_index=False):
         exclude_list = []
         found_dot_done = False
         ls_cmd = "%s ls %s" %(consts.PATH_S3CMD_EXEC, s3path)
         if not only_index:
             self.logger.log("Executing command %s" %ls_cmd)
-        status, output = self.getstatusoutput(ls_cmd)
-	if status !=0:
+
+        status, output = self.execute_command(ls_cmd)
+        if status !=0:
             self.logger.log("FAILED: Listing files failed for %s (%s)" %(s3path, output))
             return False
-	else:
-            lines = output.split('\n')
-            files = map(lambda x: 's3://'+x.split('s3://')[-1], lines)
+        else:
+            files = output.split('\n')
+                #files = map(lambda x: 's3://'+x.split('s3://')[-1], lines)
 
-            for f in files:
-                if f.endswith('done'):
-                    found_dot_done = True
+        i = 0
+        for f in files:
+            f = files[i] = f.strip('\r')
+            i = i + 1
+            if f.endswith('done'):
+                found_dot_done = True
 
-                if f.endswith(consts.DEL_MANIFEST):
-                    self.logger.log("Downloading delete manifest file")
-                    dlmanifest_cmd = '%s get %s /tmp/manifest.del' \
-                            %(consts.PATH_S3CMD_EXEC, f)
-                    status, output = self.getstatusoutput(dlmanifest_cmd)
-                    if status > 0:
-                        self.logger.log("WARNING: Unable to download" \
-                                "delete manifest file (%s)" %output)
-                    else:
-                        exclude_lines = open('/tmp/manifest.del').readlines()
-                        for l in exclude_lines:
-                            exclude_list.append("%s%s" %(s3path, os.path.basename(l.strip())))
+            if f.endswith('manifest.del'):
+                self.logger.log("Downloading delete manifest file")
+                dlmanifest_cmd = '%s get %s /tmp/manifest.del' \
+                        %(consts.PATH_S3CMD_EXEC, f)
+                status, output = self.execute_command(dlmanifest_cmd)
+                if status > 0:
+                    self.logger.log("WARNING: Unable to download" \
+                            "delete manifest file (%s)" %output)
+                else:
+                    exclude_lines = open('/tmp/manifest.del').readlines()
+                    for l in exclude_lines:
+                        exclude_list.append("%s%s" %(s3path, os.path.basename(l.strip())))
 
-            if complete == False:
-                complete = found_dot_done
+        if complete == False:
+            complete = found_dot_done
 
-            if only_index:
-                mbb_files = filter(lambda x: x.endswith('.split'), files)
-                #Remove the -00001.mbb from exclude list files and create uniq .split filenames
-                exclude_list = set(map(lambda x: "%s.split" %"-".join(x.split('-')[:-1]), exclude_list))
-                mbb_files = list(set(mbb_files) - set(exclude_list))
-            else:
-                mbb_files = filter(lambda x: x.endswith('.mbb'), files)
-                mbb_files = list(set(mbb_files) - set(exclude_list))
+        if only_index:
+            mbb_files = filter(lambda x: x.endswith('.split'), files)
+            #Remove the -00001.mbb from exclude list files and create uniq .split filenames
+            exclude_list = set(map(lambda x: "%s.split" %"-".join(x.split('-')[:-1]), exclude_list))
+            mbb_files = list(set(mbb_files) - set(exclude_list))
+        else:
+            mbb_files = filter(lambda x: x.endswith('.mbb'), files)
+            mbb_files = list(set(mbb_files) - set(exclude_list))
 
-            if complete == False:
-                return []
+        if complete == False:
+            return []
 
-            return mbb_files
+        return mbb_files
 
-    def _download_file(self, s3path, filepath):
-        get_cmd = "%s sync %s %s" %(consts.PATH_S3CMD_EXEC, s3path, filepath)
+    def _download_file(self, vb_id, path, filepath=None):
+        download_instance = download_client(self.storage_server, self.ss_port)
         retries = self.config.download_retries
-        self.logger.log("Executing command %s" %get_cmd)
+        self.logger.log("Info: Downloading file %s" %path)
         for i in range(retries):
             if i > 0:
-                self.logger.log("Retrying download for %s" %s3path)
-                if not self.update_mappingserver():
-                    self.exit(1)
+                self.logger.log("Info: Retrying download for file %s" %path)
 
-            status, output = self.getstatusoutput(get_cmd)
-            self.logger.log("Downloading file %s to %s" %(s3path, filepath))
+            status, buffer = download_instance.download(vb_id, path, filepath)
+            if len(buffer) > 0:
+                break
+
+        if filepath != None:
+            if os.path.getsize(filepath) > 0:
+                self.logger.log("SUCCESS: Completed downloading file %s  (retries=%d)" %(path, i))
+                return 0, None
+            else:
+                self.logger.log("FAILED: Downloading file %s failed " %(path))
+                return -1, None
+
+        else:
+            if len(buffer) == 0:
+                self.logger.log("FAILED: Downloading file %s failed " %(path))
+                return -1, None
+            else:
+                self.logger.log("SUCCESS: Completed downloading file %s  (retries=%d)" %(path, i))
+                return 0, buffer
+
+
+    def _list_path(self, vb_id, path=None):
+        download_instance = download_client(self.storage_server, self.ss_port)
+        retries = self.config.download_retries
+        self.logger.log("Info: Listing path %s" %path)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Info: Retrying listing for path %s" %path)
+
+            status, buffer = download_instance.list(vb_id, path)
             if status == 0:
                 break
 
-	if status > 0:
-            self.logger.log("FAILED: Downloading file %s failed (%s)" %(s3path, output))
-            return False
+        if status != 0:
+            self.logger.log("FAILED: Listing for path %s failed " %(path))
+            return -1, None
         else:
-            self.logger.log("SUCCESS: Completed downloading file %s to %s (retries=%d)" %(s3path, filepath, i))
-            return True
+            self.logger.log("SUCCESS: Completed listing file  %s  (retries=%d)" %(path, i))
+            return 0, buffer
+
+
+    def _delete_file(self, vb_id, path):
+        download_instance = download_client(self.storage_server, self.ss_port)
+        retries = self.config.download_retries
+        self.logger.log("Info: deleting file %s" %path)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Info: retrying delete for path %s" %path)
+
+            status = download_instance.remove(vb_id, path)
+            if status == True:
+                break
+
+        if status == False:
+            self.logger.log("FAILED: Deleting file %s failed " %(path))
+            return -1, None
+        else:
+            self.logger.log("SUCCESS: Completed deleting file  %s  (retries=%d)" %(path, i))
+            return 0, True
+
+
+    def _add_lock(self, vb_id, path):
+        download_instance = download_client(self.storage_server, self.ss_port)
+        retries = self.config.download_retries
+        self.logger.log("Info: Adding lock %s" %path)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Info: retrying adding lock for file %s" %path)
+
+            status = download_instance.add_lock(vb_id, path)
+            if status == True:
+                break
+
+        if status == False:
+            self.logger.log("FAILED: adding lock failed %s failed " %(path))
+            return -1, None
+        else:
+            self.logger.log("SUCCESS: Completed adding lock  %s  (retries=%d)" %(path, i))
+            return 0, True
+
+
+    #convert s3 like command to download client command
+    # s3cmd_zynga get path download_path ==> download_client._download(vb_id, path, download_path)
+    def execute_command(self, command, filepath=None):
+
+        command_tokens = command.split()
+
+        if "get" in command_tokens[1]:
+            return self._download_file( self.vb_id, command_tokens[2], filepath)
+        elif "ls" in command_tokens[1]:
+            if len(command_tokens) > 2:
+                return self._list_path(self.vb_id, command_tokens[2])
+            else:
+                return self._list_path(self.vb_id)
+        elif "rm" in command_tokens[1] or "del" in command_tokens[1]:
+            return self._delete_file(self.vb_id, command_tokens[2])
+        elif "addlock" in command_tokens[1]:
+            return self._add_lock(self.vb_id, command_tokens[2])
+        else:
+            self.logger.log("FAILED: Invaid command %s" %command)
+            return -1, None
+
 
     def graceful_exit(self, signum=None, frame=None):
         for process in self.processlist.queue:
@@ -280,25 +313,21 @@ class Restore:
         if self.s3_lock_file:
             rm_cmd = "%s del %s" %(consts.PATH_S3CMD_EXEC, self.s3_lock_file)
             for i in range(self.config.upload_retries):
-                status, output = self.getstatusoutput(rm_cmd)
+                status, output = self.execute_command(rm_cmd)
                 if i > 0:
                     self.logger.log("Retrying to remove incremental backup directory lock in s3")
-                    if not self.update_mappingserver():
-                        return False
-
                 if status == 0:
                     return
             self.logger.log("FAILED: Unable to remove s3 incremental directory lock")
-            return False
-
-        return True
+            os._exit(1)
 
     def verify_split_index(self, base_s3_path, files):
         backup_index_list = self._list_s3_files(base_s3_path, True, True)
         tmp = files[:]
         for index_file in backup_index_list:
             tmpfile = tempfile.mktemp()
-            if not self._download_file(index_file, tmpfile):
+            files_in_index = []
+            if not self._download_file(self.vb_id, index_file, tmpfile):
                 self.logger.log("FAILED: Unable to download split_index file, %s" %index_file)
                 self.exit(1)
             files_in_index = map(lambda x: "%s%s" %(base_s3_path, x.strip()), open(tmpfile).readlines())
@@ -322,31 +351,33 @@ class Restore:
         self.logger.log("Fetching Backup list from S3")
         epoch = time.time()
         self.logger.log("Fetching list of incremental backups")
-        incremental_backup_s3path = 's3://%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.INCR_DIRNAME)
-        incremental_backup_list = self._list_s3_files(incremental_backup_s3path)
+        #incremental_backup_s3path = 's3://%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.INCR_DIRNAME)
+        # code for integrating with the disk mapper goes here. given a vbucket id, get the storage server that owns the
+        # vbucket TODO
+        incremental_backup_s3_path = "incremental/"
+
+        incremental_backup_list = self._list_s3_files(incremental_backup_s3_path)
         if not incremental_backup_list:
             self.logger.log("Could not find any incremental backups")
             incremental_backup_list = []
-
-        self.verify_split_index(incremental_backup_s3path, incremental_backup_list)
-        hostname = gethostname()
-        f = open('/tmp/lock-%s' %hostname,'w')
-        f.close()
-        self.s3_lock_file = "%slock-%s" %(incremental_backup_s3path, hostname)
-        lock_cmd = "%s put /tmp/lock-%s %s" %(consts.PATH_S3CMD_EXEC, hostname, incremental_backup_s3path)
-        status, output = self.getstatusoutput(lock_cmd)
-        if status > 0:
-            self.logger.log("FAILED: Unable to put incremental backup directory lock in s3")
-            self.s3_lock_file = None
-            self.exit(1)
         else:
-            self.logger.log("Locked incremental backup directory in s3")
+            self.verify_split_index(incremental_backup_s3_path, incremental_backup_list)
+            hostname = gethostname()
+            self.s3_lock_file = "%s.lock-%s" %(incremental_backup_s3_path, hostname)
+            lock_cmd = "%s addlock %s" %(consts.PATH_S3CMD_EXEC, self.s3_lock_file)
+            status, output = self.execute_command(lock_cmd)
+            if status > 0:
+                self.logger.log("FAILED: Unable to put incremental backup directory lock in s3")
+                self.s3_lock_file = None
+                self.exit(1)
+            else:
+                self.logger.log("Locked incremental backup directory in s3")
 
         master_backup_epoch = epoch
         self.logger.log("Searching for master backup")
         for attempt in xrange(consts.MAX_BACKUP_SEARCH_TRIES):
             date = epoch2date(master_backup_epoch)
-            master_s3_path = 's3://%s/%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.MASTER_DIRNAME, date)
+            master_s3_path = '%s/%s/' %(consts.MASTER_DIRNAME, date)
             master_backup_list = self._list_s3_files(master_s3_path, False)
             if len(master_backup_list):
                 self.logger.log("Found master backup for date, %s" %epoch2date(master_backup_epoch))
@@ -357,14 +388,13 @@ class Restore:
                 master_backup_epoch -= DAY_EPOCH
                 if attempt == consts.MAX_BACKUP_SEARCH_TRIES - 1:
                     self.logger.log("Could not find master backup. Maximum tries exceeded")
-                    self.exit(1)
                     master_backup_list = []
 
         self.logger.log("Fetching list of periodic backups")
         periodic_backup_list = []
         for date_epoch in xrange(int(master_backup_epoch), int(epoch) + DAY_EPOCH, DAY_EPOCH):
             date = epoch2date(date_epoch)
-            periodic_s3_path = 's3://%s/%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.PERIODIC_DIRNAME, date)
+            periodic_s3_path = '%s/%s/' %(consts.PERIODIC_DIRNAME, date)
             periodic_file_list = self._list_s3_files(periodic_s3_path, False)
             self.verify_split_index(periodic_s3_path, periodic_file_list)
             if not periodic_file_list:
@@ -399,9 +429,9 @@ class Restore:
     def _do_online_restore(self, backup_file, complete=False):
         self.logger.log("Performing restore from %s" %backup_file)
         if complete:
-            restore_cmd = "python26 %s -h 127.0.0.1:11211 -c %s" %(consts.PATH_MBRESTORE_EXEC, backup_file)
+            restore_cmd = "python26 %s -h %s -c %s" %(consts.PATH_MBRESTORE_EXEC, self.host, backup_file)
         else:
-            restore_cmd = "python26 %s -h 127.0.0.1:11211 %s" %(consts.PATH_MBRESTORE_EXEC, backup_file)
+            restore_cmd = "python26 %s -h %s %s" %(consts.PATH_MBRESTORE_EXEC, self.host, backup_file)
 
         self.logger.log("Executing command %s" %restore_cmd)
         status, output = self.getstatusoutput(restore_cmd)
@@ -481,10 +511,11 @@ class Restore:
             self.logger.log("SUCCESS: Attempt to obtain a file for download %s" %str(backup))
             buffer_path = self.free_buffer_list.get()
             self.logger.log("Obtained buffer %s" %buffer_path)
-            status = self._download_file(backup[1], '%s/%s' %(buffer_path, backup[2]))
-            if status:
+            status,output = self._download_file(self.vb_id, backup[1], '%s/%s' %(buffer_path, backup[2]))
+            if status == 0:
                 self.restore_queue.put((backup[0], '%s/%s' %(buffer_path, backup[2]), buffer_path))
             else:
+                self.logger.log("Failure, could not add buffer to queue ")
                 self.exit(1)
 
             self.download_queue.task_done()
@@ -520,6 +551,11 @@ class Restore:
             time.sleep(10)
 
         end_time = int(time.time())
+        self.clean_s3_lock()
+        status, outout = self.getstatusoutput("python26 %s %s set complete_restore_vb %s" %(consts.PATH_MBFLUSHCTL, self.host, self.vb_id))
+
+        if status > 0:
+            self.logger.log("FAILED: complete_restore command failed")
 
         f = open(consts.MEMCACHED_SYSCONFIG_FILE)
         sysconfig = f.read().split(';')
@@ -531,7 +567,7 @@ class Restore:
                 sysconfig.remove(p)
 
             if 'min_data_age' in p:
-                x,dataage = p.split('=')
+                dataage = p.split('=')[-1]
                 self.logger.log("Resetting min_data_age to %s" %dataage)
                 status, output = self.getstatusoutput("python26 %s 0:11211 set min_data_age %s" %(consts.PATH_MBFLUSHCTL, dataage))
                 if status > 0:
@@ -562,15 +598,32 @@ if __name__ == '__main__':
         except:
             pass
 
-    args = sys.argv[1:]
-    hostname = None
-    if len(args) > 0:
-        if args[0] == '-h' and len(args) == 2:
-            hostname = args[1]
-        else:
-	    print "Usage: %s -h slave-hostname" %(sys.argv[0])
-	    sys.exit(0)
 
-    restore = Restore(hostname)
+    options, remainder = getopt.getopt(sys.argv[1:], 'v:p:', ['vb_id=',
+                                                              'port=',
+                                                             ])
+    vb_id = -1
+    port = 0
+    for opt, arg in options:
+        if opt in ('-v', '--vb_id'):
+            vb_id = arg
+        elif opt in ('-h', '--host'):
+            host = arg
+
+    if vb_id == -1:
+        print ("Please specify vb_id");
+        print "Usage membase-restore -v <vb_id> [-p port]"
+        sys.exit(1)
+
+    if port == 0:
+        port = "11211"
+
+    host="127.0.0.1:" + port
+    ## diskmapper integration TODO get storage server ip corresponding to this vb_id
+    storage_server = "localhost"
+    ss_port = 22122
+
+    vb_id =  str(vb_id).zfill(2)
+    restore = Restore(vb_id, host, storage_server, ss_port)
     restore.setup_restore_env()
     restore.main()

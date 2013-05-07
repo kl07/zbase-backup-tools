@@ -65,3 +65,6 @@ CONNECT_RETRIES = 20
 PATH_MBFLUSHCTL = "/opt/membase/lib/python/mbflushctl"
 VBS_API_PATH = 'vbucketMap'
 SS_API_PATH = 'api?action=get_ss_mapping&storage_server=%s'
+PATH_MBVBUCKET_CTL = '/opt/membase/lib/python/mbvbucketctl'
+BACKUP_RETRIES = 10
+BACKUP_INTERVAL = 3600
