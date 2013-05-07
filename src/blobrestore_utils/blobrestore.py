@@ -242,6 +242,8 @@ def parse_args(args):
 
         for (o,a) in opts:
             if o == '-v':
+                if ':' not in a:
+                    a = "%s:14000" %a
                 options['vbs_server'] = a
             elif o == '-r':
                 options['repair_mode'] = True
