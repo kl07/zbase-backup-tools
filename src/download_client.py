@@ -172,6 +172,9 @@ class download_client:
                 file.close()
             except Exception, e:
                 print ("failed to write", str(e))
+        else:
+            return -1, None
+
 
         #if the output file is specified then dont return the buffer
         if output_file != None and os.path.getsize(output_file) > 0:
@@ -182,14 +185,14 @@ class download_client:
 
 if __name__ == '__main__':
 
-    download_instance = download_client("localhost", 22122)
+    download_instance = download_client("172.21.13.73", 22122)
     buffer = download_instance.list(1, "incremental")
     print len(buffer)
-    pdb.set_trace()
     buffer = download_instance.list(1, "woohah")
     print len(buffer)
     status, buffer = download_instance.download(1, "incremental/vb_1_backup-2013-04-04_13:43:10-00000.mbb", "myfile.txt")
-    print len(buffer)
+    if status == 0:
+        print len(buffer)
     status = download_instance.add_lock(1, "incremental/somefile.lock")
     print status
     status = download_instance.remove(1, "incremental/somefile.lock")

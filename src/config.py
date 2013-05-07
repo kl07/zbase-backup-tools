@@ -45,6 +45,7 @@ class Config:
         else:
             self.disk_mapper_server = 'UNKNOWN'
 
+        self.buffer_list = self.config.get('general', 'buffer_list')
         if self.config.has_option("general", "membase_db_paths"):
             self.membase_db_paths = self.config.get('general', 'membase_db_paths').split(',')
 

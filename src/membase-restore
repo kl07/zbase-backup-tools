@@ -17,6 +17,8 @@ from util import natural_sortkey, setup_sqlite_lib, getcommandoutput, get_checkp
 import pdb
 from download_client import download_client
 import getopt
+import commands
+import json
 
 DAY_EPOCH = 60*60*24
 
@@ -50,8 +52,8 @@ class Restore:
 
         self.logger.log("=== Starting Membase Restore ===")
 
-        self.cloud = self.config.cloud
-        self.game_id = self.config.game_id
+        #self.cloud = self.config.cloud
+        #self.game_id = self.config.game_id
 
         buffer_list = self.config.buffer_list.split(',')
         #append vb_id to the buffer list so that we can run restores in parallel
@@ -304,7 +306,13 @@ class Restore:
 
     def exit(self, status):
         self.exit_status = status
-        self.graceful_exit()
+        if status != 0:
+            self.graceful_exit()
+        else:
+            if os.path.exists(consts.MBRESTORE_PID_FILE):
+                os.unlink(consts.MBRESTORE_PID_FILE)
+            os._exit(self.exit_status)
+
 
     def getstatusoutput(self, cmd):
         return getcommandoutput(cmd, self.processlist)
@@ -351,9 +359,6 @@ class Restore:
         self.logger.log("Fetching Backup list from S3")
         epoch = time.time()
         self.logger.log("Fetching list of incremental backups")
-        #incremental_backup_s3path = 's3://%s/%s/%s/%s/' %(self.game_id, self.hostname, self.cloud, consts.INCR_DIRNAME)
-        # code for integrating with the disk mapper goes here. given a vbucket id, get the storage server that owns the
-        # vbucket TODO
         incremental_backup_s3_path = "incremental/"
 
         incremental_backup_list = self._list_s3_files(incremental_backup_s3_path)
@@ -599,28 +604,59 @@ if __name__ == '__main__':
             pass
 
 
-    options, remainder = getopt.getopt(sys.argv[1:], 'v:p:', ['vb_id=',
-                                                              'port=',
+    options, remainder = getopt.getopt(sys.argv[1:], 'v:d:p:', ['vb_id=',
+                                                                'disk_mapper=',
+                                                                'port=',
                                                              ])
     vb_id = -1
     port = 0
+    disk_mapper = ''
     for opt, arg in options:
         if opt in ('-v', '--vb_id'):
             vb_id = arg
-        elif opt in ('-h', '--host'):
-            host = arg
+        elif opt in ('-p', '--port'):
+            port = arg
+        elif opt in ('-d', '--disk_mapper'):
+            disk_mapper = arg
 
-    if vb_id == -1:
-        print ("Please specify vb_id");
-        print "Usage membase-restore -v <vb_id> [-p port]"
+    if vb_id == -1 or disk_mapper == '':
+        print ("Please specify vb_id and disk_mapper host");
+        print "Usage membase-restore -v <vb_id> -d <disk_mapper> [-p port]"
         sys.exit(1)
 
     if port == 0:
         port = "11211"
 
     host="127.0.0.1:" + port
-    ## diskmapper integration TODO get storage server ip corresponding to this vb_id
-    storage_server = "localhost"
+    ## diskmapper integration get storage server ip corresponding to this vb_id
+    map_available = False
+    for i in range(consts.CONNECT_RETRIES):
+        vb_query_cmd = "curl -s \"http://" + disk_mapper + "/api?action=get_vb_mapping&&vbucket=vb_" + str(vb_id) + "\""
+        status, output = commands.getstatusoutput(vb_query_cmd)
+
+        if status > 0:
+            print "Failure: Unable to fetch disk mapping. Command %s output %s" %(fetch_map_cmd, output)
+            if i >= consts.CONNECT_RETRIES:
+                break
+            continue
+        elif status == 0:
+            try:
+                current_map = json.loads(output)
+                map_available = True
+                storage_server = current_map['storage_server']
+                break
+            except Exception, e:
+                print"Unable to parse output %s" %str(e)
+                break
+
+
+    if map_available == False:
+        # Failure no map available :(
+        sys.exit(1)
+
+    print "Storage server %s" %storage_server
+
+
     ss_port = 22122
 
     vb_id =  str(vb_id).zfill(2)
