@@ -1,6 +1,6 @@
-Summary: Membase 1.7.3 backup and restore tools
+Summary: Membase 1.9 backup and restore tools
 Name: membase-backup-tools
-Version: 2.0
+Version: 3.0.test
 Release: 1
 Group: General
 License: Proprietary
