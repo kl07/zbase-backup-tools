@@ -9,6 +9,7 @@ import socket
 from sendfile import sendfile
 import commands
 import json
+import consts
 
 #globals
 
@@ -104,21 +105,31 @@ class FileServer:
 
 
     #LIST vb_id filename
-    def handle_download(self, connection=None, data=None):
+    def handle_download(self, connection=None, data=None, checkpoint_only=False):
 
         data = data.split()
 
-        if len(data) != 3:
-            return connection.send(INVALID_SYNTAX)
+        if checkpoint_only == False:
+            if len(data) != 3:
+                return connection.send(INVALID_SYNTAX)
+            filename = data[2]
+        else:
+            if len(data) != 2:
+                return connection.send(INVALID_SYNTAX)
 
         vb_id = str(data[1]).zfill(2)
-        filename = data[2]
 
         base_path = self.get_disk_path(vb_id)
         if base_path == None:
             return connection.send(INTERROR)
 
-        file_path = base_path + filename
+        if checkpoint_only == True:
+            vb_id = vb_id.lstrip('0')
+            if vb_id == "":
+                vb_id = '0'
+            file_path = base_path + "/vbid_" + vb_id + consts.LAST_CHECKPOINT_FILE
+        else:
+            file_path = base_path + filename
 
         if os.path.exists(file_path) == False:
             return connection.send(ENOEXIST)
@@ -250,6 +261,7 @@ class FileServer:
         # success
         return connection.send("0\r\n")
 
+
     def handle_cmd(self, connection=None, data=None):
 
         if data == None:
@@ -262,6 +274,8 @@ class FileServer:
             return self.handle_download(connection, data)
         elif "ADDLOCK" in data:
             return self.handle_lock(connection, data)
+        elif "GETCHECKPOINT" in data:
+            return self.handle_download(connection, data, True)
         else:
             return connection.send(INVALID_COMMAND)
 
@@ -269,7 +283,7 @@ class FileServer:
 if __name__ == '__main__':
 
     if len(sys.argv) != 2:
-        print ("Usage file_server.py storage_server")
+        print ("Usage file_server.py disk_mapper")
         sys.exit(1)
     else:
         disk_mapper = sys.argv[1]

@@ -21,7 +21,6 @@ from multiprocessing import Process, Queue
 
 class Backupd:
 
-
     """
         main backupd class.
         Initialize the backupd, which will connect to vbs and diskmapper
@@ -174,6 +173,11 @@ class backup_thread(multiprocessing.Process) :
         self.logger.log("Creating %s Backup for %s and vbucket %d " %(self.backup_type, self.backup_name, vb_backup_task['vb_id']))
         self.vb_id = []
         self.vb_id.append(vb_backup_task['vb_id'])
+        dirty_file_list = []
+
+        dirty_little_tokens = vb_backup_task['path'].split('/')
+        disk_id = dirty_little_tokens[1]
+        dirty_file_path = "/" + disk_id + "/" + consts.DIRTY_DISK_FILE
 
         if self.backup_type == "full":
             now = time.gmtime(time.time())
@@ -248,7 +252,8 @@ class backup_thread(multiprocessing.Process) :
             return False
 
         checkpoints.sort()
-        last_checkpoint_file = vb_backup_task['path'] + "/vbid_" + str(vb_backup_task['vb_id']) + "last_cpoint"
+        last_checkpoint_file = vb_backup_task['path'] + "/vbid_" + str(vb_backup_task['vb_id']) + consts.LAST_CHECKPOINT_FILE
+        dirty_file_list.append(last_checkpoint_file)
         if os.path.exists(last_checkpoint_file) and self.backup_type != 'full':
             f = open(last_checkpoint_file)
             last_backup_checkpoint = int(f.read())
@@ -272,7 +277,10 @@ class backup_thread(multiprocessing.Process) :
             fd = open(split_index_path, 'w')
             for split_file in split_files:
                 fd.write("%s\n" %split_file)
+                dirty_file_list.append(split_file)
             fd.close()
+
+            #finally append the split file to the dirty file list
 
             #if the type of backup is full, then add a done file
             if self.backup_type == "full":
@@ -280,7 +288,13 @@ class backup_thread(multiprocessing.Process) :
                 fd = open(done_file, 'w')
                 fd.write("0")
                 fd.close()
+                dirty_file_list.append(done_file)
 
+            #update the list of files that have been created
+            self.logger.log("Info: updating dirty file %s" %dirty_file_path)
+            status = util.appendToFile_Locked(dirty_file_path, dirty_file_list)
+            if status == False:
+                self.logger.log("Warning: failed to update dirty file %s" %dirty_file_path)
 
         else:
             self.logger.log("FAILED: Current backup contains zero checkpoints backup path %s" %vb_backup_task['path'])

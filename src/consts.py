@@ -68,3 +68,4 @@ SS_API_PATH = 'api?action=get_ss_mapping&storage_server=%s'
 PATH_MBVBUCKET_CTL = '/opt/membase/lib/python/mbvbucketctl'
 BACKUP_RETRIES = 10
 BACKUP_INTERVAL = 3600
+LAST_CHECKPOINT_FILE = 'last_cpoint'

@@ -175,13 +175,32 @@ class download_client:
         else:
             return -1, None
 
-
         #if the output file is specified then dont return the buffer
         if output_file != None and os.path.getsize(output_file) > 0:
             return 0, "download successful"
         else:
             return 0, buffer
 
+    def get_checkpoint(self, vb_id):
+
+        status = self.connect()
+        if status == False:
+            return -1, None
+
+        send_cmd = "GETCHECKPOINT " + str(vb_id)
+
+        try:
+            self.sock.sendall(send_cmd)
+        except Exception, e:
+            print >> sys.stderr, "problem happen", str(e)
+
+        buffer = self.read_data()
+        self.sock.close()
+
+        if len(buffer) > 0:
+            return 0, buffer
+        else:
+            return -1, None
 
 if __name__ == '__main__':
 
@@ -197,3 +216,11 @@ if __name__ == '__main__':
     print status
     status = download_instance.remove(1, "incremental/somefile.lock")
     print status
+
+    status, buffer = download_instance.get_checkpoint(1)
+    if status == 0:
+        print "checkpoint id %s " %buffer
+
+    status, buffer = download_instance.get_checkpoint(100)
+    print status
+
