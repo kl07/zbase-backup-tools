@@ -225,7 +225,7 @@ def is_location_empty(location):
 
     files = filter(lambda x: x.strip() != '', out.split('\n'))
     if len(files) > 0:
-        return len(files), "FAILED: Location %s is not empty"
+        return len(files), "FAILED: Location %s is not empty" %location
 
     return 0, ""
 

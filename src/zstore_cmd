@@ -69,7 +69,7 @@ list () {
     [[ $RECURSIVE = "true" ]] && url="$url&recursive=true"
 
     # Execute curl
-    curl_out=$(curl $CURL_PARAM -L --connect-timeout 15 --max-time 120 "$url" )
+    curl_out=$(curl $CURL_PARAM -L --connect-timeout 15 --max-time 120 "$url" 2> /dev/null)
     curl_status=$?
     echo "$curl_out" | grep "s3://"
     [[ $curl_status -eq 22 ]] && exit 0
