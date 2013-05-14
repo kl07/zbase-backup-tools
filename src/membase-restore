@@ -64,7 +64,6 @@ class Restore:
 
         sys.stderr = stderrlog(backup_process)
 
-        sys.stderr = stderrlog(self.logger)
         for b in buffer_list:
             os.system("mkdir -p %s" %b)
             rm_buffer_cmd = "find %s -type f -delete" %b
@@ -131,18 +130,16 @@ class Restore:
 
         self.logger.log("Updating membase config file to start as restore mode")
         f = open(consts.MEMCACHED_SYSCONFIG_FILE)
-        sysconfig = f.read().split(';')
-        param, endlimiter = sysconfig[-1].split("'")
-        sysconfig = sysconfig[:-1]
-        sysconfig.append(param)
+        prefix, sysconfig, suffix = f.read().split("'")
+        sysconfig = sysconfig.split(';')
         restore_param = 'restore_mode=true'
         for p in sysconfig:
             if 'restore_mode' in p:
                 sysconfig.remove(p)
 
         sysconfig.append(restore_param)
-        sysconfig_str = ";".join(sysconfig)
-        sysconfig_str += "'%s" %endlimiter
+        sysconfig = ";".join(sysconfig)
+        sysconfig_str = "%s'%s'%s" %(prefix, sysconfig, suffix)
         f = open(consts.MEMCACHED_SYSCONFIG_FILE, 'w')
         f.write(sysconfig_str)
         f.close()
@@ -522,10 +519,9 @@ class Restore:
         end_time = int(time.time())
 
         f = open(consts.MEMCACHED_SYSCONFIG_FILE)
-        sysconfig = f.read().split(';')
-        param, endlimiter = sysconfig[-1].split("'")
-        sysconfig = sysconfig[:-1]
-        sysconfig.append(param)
+        prefix, sysconfig, suffix = f.read().split("'")
+        sysconfig = sysconfig.split(';')
+         
         for p in sysconfig:
             if 'restore_mode' in p:
                 sysconfig.remove(p)
@@ -538,8 +534,8 @@ class Restore:
                     self.logger.log("FAILED: Unable to set min_data_age to %s (%s)" %(dataage, output))
                     self.exit(1)
 
-        sysconfig_str = ";".join(sysconfig)
-        sysconfig_str += "'%s" %endlimiter
+        sysconfig = ";".join(sysconfig)
+        sysconfig_str = "%s'%s'%s" %(prefix, sysconfig, suffix)
         f = open(consts.MEMCACHED_SYSCONFIG_FILE, 'w')
         f.write(sysconfig_str)
         f.close()
