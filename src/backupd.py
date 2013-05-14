@@ -158,6 +158,13 @@ class backup_thread(multiprocessing.Process) :
 
             status = self.take_backup(vb_backup_task, datetimestamp)
 
+    def mkdir_p(self, path):
+        try:
+            os.makedirs(path)
+        except OSError as exc: # Python >2.5
+            if exc.errno == errno.EEXIST and os.path.isdir(path):
+                pass
+
 
     def take_backup(self, vb_backup_task, datetimestamp):
 
@@ -186,7 +193,8 @@ class backup_thread(multiprocessing.Process) :
 
             if os.path.exists(backup_path) == False:
                 try:
-                    os.mkdir(backup_path)
+                    # equivalent of mkdir -p SEG-11168
+                    self.mkdir_p(backup_path)
                 except Exception, e:
                     self.logger.log("Failed: Unable to create directory %s " %backup_path)
                     return False
