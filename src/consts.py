@@ -69,3 +69,5 @@ PATH_MBVBUCKET_CTL = '/opt/membase/lib/python/mbvbucketctl'
 BACKUP_RETRIES = 10
 BACKUP_INTERVAL = 3600
 LAST_CHECKPOINT_FILE = 'last_cpoint'
+SS_PORT = 22122
+RESTORE_CMD = "membase-restore"

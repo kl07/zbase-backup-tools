@@ -137,8 +137,8 @@ class Restore:
             self.logger.log("Executing command %s" %ls_cmd)
 
         status, output = self.execute_command(ls_cmd)
-        if status !=0:
-            self.logger.log("FAILED: Listing files failed for %s (%s)" %(s3path, output))
+        if status !=0 or output == None:
+            self.logger.log("FAILED: Listing files failed for %s (%s) or no files found" %(s3path, output))
             return False
         else:
             files = output.split('\n')
@@ -593,7 +593,6 @@ if __name__ == '__main__':
         print "Please run as root"
         sys.exit(1)
 
-
     if os.path.exists(consts.MBRESTORE_PID_FILE):
         pid = int(open(consts.MBRESTORE_PID_FILE).read())
         try:
@@ -655,7 +654,6 @@ if __name__ == '__main__':
         sys.exit(1)
 
     print "Storage server %s" %storage_server
-
 
     ss_port = 22122
 
