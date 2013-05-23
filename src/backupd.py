@@ -285,7 +285,7 @@ class backup_thread(multiprocessing.Process) :
             fd = open(split_index_path, 'w')
             for split_file in split_files:
                 fd.write("%s\n" %split_file)
-                dirty_file_list.append(split_file)
+                dirty_file_list.append(os.path.join(backup_path, split_file))
             fd.close()
 
             #finally append the split file to the dirty file list
