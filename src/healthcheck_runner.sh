@@ -2,7 +2,6 @@
 #Description: Run health check and send mail if any criticals
 
 game_id=`grep 'game_id =' /etc/membase-backup/default.ini | awk '{ print $NF }'`
-cloud_id=`grep 'cloud =' /etc/membase-backup/default.ini | awk '{ print $NF }'`
 rep_dir='/var/www/html/health_reports/'
 count=""
 
@@ -34,7 +33,7 @@ then
 fi
 
 mkdir -p $rep_dir
-/opt/membase/membase-backup/backup_healthcheck -g $game_id -c $cloud_id -o $rep_dir $count &> /tmp/rep-$$
+/opt/membase/membase-backup/backup_healthcheck -g $game_id -o $rep_dir $count &> /tmp/rep-$$
 
 grep -q CRITICAL /tmp/rep-$$;
 if [ $? -eq 0 ];
