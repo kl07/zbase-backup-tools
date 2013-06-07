@@ -115,11 +115,14 @@ class InitBackupDaemon:
 
         for vb_id in dm_map.keys():
             global currentVbsMap
-            vb_record = {}
-            vb_record['vb_id'] = vb_id
-            vb_record['path'] = dm_map[vb_id]
-            vb_record['server'] = currentVbsMap[vb_id]
-            vb_disk_map.append(vb_record)
+            try:
+                vb_record = {}
+                vb_record['vb_id'] = vb_id
+                vb_record['path'] = dm_map[vb_id]
+                vb_record['server'] = currentVbsMap[vb_id]
+                vb_disk_map.append(vb_record)
+            except:
+                continue
 
         mapLock.release()
         return vb_disk_map
@@ -156,6 +159,7 @@ class vbs_thread(threading.Thread):
         try:
             host, port = self.vbs_host.split(':')
         except:
+            host = self.vbs_host
             port = 14000 #default VBS port
 
         vbs_agent.vbs_config_ptr = vbs_agent.create_vbs_config(host, int(port))

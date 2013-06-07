@@ -13,7 +13,7 @@ import time
 
 MBB_VERSION = "2"
 TIMEOUT = 0
-TXN_SIZE = 100
+TXN_SIZE = 32768
 EXT_LEN_WITHOUT_QTIME = 16
 
 class ConnectException(Exception):
@@ -166,6 +166,8 @@ class BackupFactory:
             vbid_list = []
             vbid_list.append(0)
 
+        self.vbucketId = vbid_list[0]
+
         if backup_type == "full":
             self.full_backup = True
             mc = mc_bin_client.MemcachedClient(host,port)
@@ -255,9 +257,9 @@ class BackupFactory:
             t = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
             if self.full_backup:
                 for i in range(1, self.max_cpoint_id):
-                    result = add_record(c, chkpoint_stmt, (0, i, -1, self.source, t))
+                    result = add_record(c, chkpoint_stmt, (self.vbucketId, i, -1, self.source, t))
             else:
-                add_record(c, chkpoint_stmt, (0, self.current_checkpoint_id, -1, self.source, t))
+                add_record(c, chkpoint_stmt, (self.vbucketId, self.current_checkpoint_id, -1, self.source, t))
 
             db.commit()
 

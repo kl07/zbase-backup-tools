@@ -199,6 +199,13 @@ class backup_thread(multiprocessing.Process) :
                     self.logger.log("Failed: Unable to create directory %s " %backup_path)
                     return False
 
+            #check if done file exists, if so then skip master backup
+            done_file = backup_path + "done"
+            if os.path.exists(done_file) == True:
+                self.logger.log("Failed: Done file exists, please clear master backup directory %s" %backup_path)
+                return False
+
+
         else:
             backup_path =  vb_backup_task['path'] + "/incremental/"
 
