@@ -239,4 +239,63 @@ def clear_location(location):
 
     return st
 
+def get_value_pid_file(file):
+    try:
+        if os.path.exists(file):
+            f = open(file, "r")
+            return f.read().strip()
+    except:
+        return False
+    else:
+        return False
+
+def pause_coalescer(logger, path):
+
+    disk_id = path.split("_")[1]
+    daily_merge_pfile = "/var/run/daily-merge-disk-" + disk_id + ".pid"
+    master_merge_pfile = "/var/run/master-merge-disk-" + disk_id + ".pid"
+    daily_pid = get_value_pid_file(daily_merge_pfile)
+    master_pid = get_value_pid_file(master_merge_pfile)
+
+    logger.log("Info: pausing coalescer for disk %s" %path)
+
+    try:
+        if daily_pid != False:
+            if subprocess.call('[[ $(ps ax | grep ' + str(daily_pid) + ' | grep -v grep | awk \'{print $3}\') == "T" ]]', shell=True) != 0:
+                os.system("sudo kill -SIGSTOP -" + str(daily_pid))
+                logger.log("Info: Paused daily merge, pid : " + str(daily_pid))
+        if master_pid != False:
+            if subprocess.call('[[ $(ps ax | grep ' + str(master_pid) + ' | grep -v grep | awk \'{print $3}\') == "T" ]]', shell=True) != 0:
+                os.system("sudo kill -SIGSTOP -" + str(master_pid))
+                logger.log("Info: Paused master merge, pid : " + str(master_pid))
+    except Exception, e:
+        subprocess.call("sudo kill -SIGCONT -" + str(daily_pid) , shell=True)
+        subprocess.call("sudo kill -SIGCONT -" + str(master_pid) , shell=True)
+        logger.log("Warning: Failed to pause the master or daily coalescer: Error")
+        logger.log(str(e))
+
+def resume_coalescer(logger, path):
+    disk = path.split("_")[1]
+    dirty_file = os.path.join("/", disk, "dirty")
+
+    logger.log("Info: resuming coalescer for disk %s" %path)
+
+    if os.path.exists(dirty_file):
+        for line in open(os.path.join("/", disk, "dirty")):
+            if disk in line:
+                logger.log("Info: Disk in dirty file, skipping resume.")
+                return True
+
+    disk_id = disk[-1:]
+    daily_merge_pfile = "/var/run/daily-merge-disk-" + disk_id + ".pid"
+    master_merge_pfile = "/var/run/master-merge-disk-" + disk_id + ".pid"
+    daily_pid = get_value_pid_file(daily_merge_pfile)
+    master_pid = get_value_pid_file(master_merge_pfile)
+
+    if os.path.exists(daily_merge_pfile):
+        os.system("sudo kill -SIGCONT -" + str(daily_pid))
+        logger.log("Info: Resumed daily merge, pid : " + str(daily_pid))
+    if os.path.exists(master_merge_pfile):
+        os.system("sudo kill -SIGCONT -" + str(master_pid))
+        logger.log("Info: Resumed master merge, pid : " + str(master_pid))
 

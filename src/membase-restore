@@ -269,6 +269,44 @@ class Restore:
             self.logger.log("SUCCESS: Completed adding lock  %s  (retries=%d)" %(path, i))
             return 0, True
 
+    def _pause_coalescer(self, vb_id):
+        download_instance = download_client(self.storage_server, self.ss_port)
+        retries = self.config.download_retries
+        self.logger.log("Info: Sending pause coalescer command for vb_id %s" %vb_id)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Info: retrying sending pause command vb_id %s" %vb_id)
+
+            status = download_instance.pause_coalescer(vb_id)
+            if status == True:
+                break
+
+        if status == False:
+            self.logger.log("WARNING: pausing coalescer failed for vb_id %s" %vb_id)
+            return -1, None
+        else:
+            self.logger.log("SUCCESS: Paused coalescer for  vb_id %s  (retries=%d)" %(vb_id, i))
+            return 0, True
+
+    def _resume_coalescer(self, vb_id):
+        download_instance = download_client(self.storage_server, self.ss_port)
+        retries = self.config.download_retries
+        self.logger.log("Info: Sending resume coalescer command for vb_id %s" %vb_id)
+        for i in range(retries):
+            if i > 0:
+                self.logger.log("Info: retrying sending resume command vb_id %s" %vb_id)
+
+            status = download_instance.resume_coalescer(vb_id)
+            if status == True:
+                break
+
+        if status == False:
+            self.logger.log("WARNING: resuming coalescer failed for vb_id %s" %vb_id)
+            return -1, None
+        else:
+            self.logger.log("SUCCESS: resumed coalescer for  vb_id %s  (retries=%d)" %(vb_id, i))
+            return 0, True
+
 
     #convert s3 like command to download client command
     # s3cmd_zynga get path download_path ==> download_client._download(vb_id, path, download_path)
@@ -299,6 +337,7 @@ class Restore:
             except:
                 pass
         self.clean_s3_lock()
+        self.resume_coalescer(self.vb_id)
         if os.path.exists(consts.MBRESTORE_PID_FILE):
             os.unlink(consts.MBRESTORE_PID_FILE)
         self.logger.log("Restore process terminated")
@@ -377,6 +416,8 @@ class Restore:
                 self.exit(1)
             else:
                 self.logger.log("Locked incremental backup directory in s3")
+            #attempt to pause coalescer on the storage server
+            self.pause_coalescer(self.vb_id)
 
         master_backup_epoch = epoch
         self.logger.log("Searching for master backup")
@@ -557,6 +598,7 @@ class Restore:
 
         end_time = int(time.time())
         self.clean_s3_lock()
+        self.resume_coalescer(self.vb_id)
         status, outout = self.getstatusoutput("python26 %s %s set complete_restore_vb %s" %(consts.PATH_MBFLUSHCTL, self.host, self.vb_id))
 
         if status > 0:

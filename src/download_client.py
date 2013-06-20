@@ -98,7 +98,7 @@ class download_client:
         try:
             self.sock.sendall(send_cmd)
         except Exception, e:
-            print >> sys.stderr, "problem happen", str(e)
+            print >> sys.stderr, "exception occured", str(e)
 
         buffer = self.read_data()
         self.sock.close()
@@ -120,7 +120,7 @@ class download_client:
         try:
             self.sock.sendall(send_cmd)
         except Exception, e:
-            print >> sys.stderr, "problem happen", str(e)
+            print >> sys.stderr, "exception occured", str(e)
 
         buffer = self.read_data()
         self.sock.close()
@@ -140,7 +140,47 @@ class download_client:
         try:
             self.sock.sendall(send_cmd)
         except Exception, e:
-            print >> sys.stderr, "problem happen", str(e)
+            print >> sys.stderr, "exception occured", str(e)
+
+        buffer = self.read_data()
+        self.sock.close()
+        if "Success" in buffer:
+            return True
+        else:
+            return False
+
+    def pause_coalescer(self, vb_id):
+
+        status = self.connect()
+        if status == False:
+            return -1
+
+        send_cmd = "PAUSECOALESCER " + str(vb_id) + " "
+
+        try:
+            self.sock.sendall(send_cmd)
+        except Exception, e:
+            print >> sys.stderr, "exception occured", str(e)
+
+        buffer = self.read_data()
+        self.sock.close()
+        if "Success" in buffer:
+            return True
+        else:
+            return False
+
+    def resume_coalescer(self, vb_id):
+
+        status = self.connect()
+        if status == False:
+            return -1
+
+        send_cmd = "RESUMECOALESCER " + str(vb_id) + " "
+
+        try:
+            self.sock.sendall(send_cmd)
+        except Exception, e:
+            print >> sys.stderr, "exception occured", str(e)
 
         buffer = self.read_data()
         self.sock.close()
@@ -160,7 +200,7 @@ class download_client:
         try:
             self.sock.sendall(send_cmd)
         except Exception, e:
-            print >> sys.stderr, "problem happen", str(e)
+            print >> sys.stderr, "exception occured", str(e)
 
         buffer = self.read_data()
         self.sock.close()
@@ -192,7 +232,7 @@ class download_client:
         try:
             self.sock.sendall(send_cmd)
         except Exception, e:
-            print >> sys.stderr, "problem happen", str(e)
+            print >> sys.stderr, "exception occured", str(e)
 
         buffer = self.read_data()
         self.sock.close()
@@ -217,10 +257,15 @@ if __name__ == '__main__':
     status = download_instance.remove(1, "incremental/somefile.lock")
     print status
 
+    status = download_instance.pause_coalescer(11)
+    print status
+    status = download_instance.resume_coalescer(11)
+    print status
+
     status, buffer = download_instance.get_checkpoint(1)
     if status == 0:
         print "checkpoint id %s " %buffer
 
-    status, buffer = download_instance.get_checkpoint(100)
-    print status
+    status, buffer = download_instance.get_checkpoint(11)
+    print status, buffer
 

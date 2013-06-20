@@ -11,13 +11,15 @@ from backuplib import BackupFactory, ConnectException
 import commands
 import util
 from util import setup_sqlite_lib, getcommandoutput, get_checkpoints_frombackup
-from util import natural_sortkey, gethostname
+from util import natural_sortkey, gethostname, pause_coalescer, resume_coalescer
 import pdb
 import sqlite3
 import getopt
 import consts
 import multiprocessing
 from multiprocessing import Process, Queue
+import subprocess
+from file_server import FileServer
 
 class Backupd:
 
@@ -42,9 +44,19 @@ class Backupd:
             self.logger.log("Critical: Failed to init backup daemon. Exiting... ")
             sys.exit(1)
 
-        #backup daemon initialized. We are all set to go
+        #spawn a process for the restore daemon
+        fs = Process(target=self.start_restore_daemon, args=(dm_host,))
+        fs.start()
 
+        #backup daemon initialized. We are all set to go
         self.main_loop()
+        fs.join()
+
+
+    def start_restore_daemon(self, dm_host):
+
+        file_server = FileServer(dm_host,"0.0.0.0", 22122)
+        file_server.start()
 
 
     def main_loop (self):
@@ -123,7 +135,7 @@ class Backupd:
         return workqueue
 
 
-#one running thread per disk.
+#one backup process per disk
 class backup_thread(multiprocessing.Process) :
 
     def __init__ (self, task_queue, logger, disk_id):
@@ -140,11 +152,18 @@ class backup_thread(multiprocessing.Process) :
     def run(self):
 
         self.logger.log ("Info: Starting backup thread for disk_id %s" %self.disk_id)
-        #block and wait until items are added to the queue
+        self.coalescer_paused = False
         while 1:
 
-            #this will block if the task queue is empty
+            if self.task_queue.empty() == True and self.coalescer_paused == True:
+                #resume the coalescer
+                util.resume_coalescer(self.logger, self.disk_id)
+                self.coalescer_paused = False
+
             vb_backup_task = self.task_queue.get(True, None)
+            # suspend coalescing operation
+            util.pause_coalescer(self.logger, self.disk_id)
+            self.coalescer_paused = True
 
             #schedule backup task for this process
             print ("\ngot backup task ", vb_backup_task)
@@ -373,7 +392,6 @@ class backup_thread(multiprocessing.Process) :
             self.backup_type = "incremental"
 
         return True
-
 
     def exit(self, status):
         os._exit(status)
