@@ -1,7 +1,8 @@
-Membase 1.7.3 Backup Tools
-==========================
-This repo contains membase 1.7.3 backup and restore Tools
+ZBase 1.9 Backup Tools
+======================
 
+This repo contains zbase 1.9 multi-vbuckets mode incremental backup, restore
+and blobrestore tools.
 
 ## Backup Daemon
 
@@ -14,13 +15,3 @@ This repo contains membase 1.7.3 backup and restore Tools
 
     python26 file_server.py (default port 22122)
 
-## TODO
-
-1. Integrate both backup daemon and Restore daemon in a single process
-2. When a restore is in progress it should pause the backup creation for that disk
-3. Update dirty index when when backups are created (done)
-4. If the backup creation fails rollback the checkpoint id of the backup cursor
-5. Pause coalescers when backup or restore is in progress
-6. Multiprocessing backup daemon, use multiple cores (done)
-7. Change commands.getstatusoutput to use util.getcommandoutput
-8. change vbs_agent.c to use to use pythong vbs agent from VBA
