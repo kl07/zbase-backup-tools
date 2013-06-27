@@ -10,6 +10,8 @@ from sendfile import sendfile
 import commands
 import json
 import consts
+import util
+#from util import pause_coalscer, resume_coalescer
 
 #globals
 
@@ -47,6 +49,8 @@ class FileServer:
         server_address = (self.host, self.port)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(server_address)
+        self.logger = Logger("RestoreDaemon", "INFO")
+        self.logger.log("Info: ===== Starting restore daemon ====== ")
 
     def request_thread(self, connection, client_address):
 
@@ -69,7 +73,7 @@ class FileServer:
                 return
 
 
-    def get_disk_path(self, vb_id):
+    def query_dm(self, vb_id):
 
         vb_id = vb_id.lstrip('0')
         #query the disk_mapper and get the disk path
@@ -84,12 +88,27 @@ class FileServer:
 
         try:
             response = json.loads(output)
+            return response
         except Exception, e:
             print >> sys.stderr, " Could not json parse output", str(e)
             return None
 
-        disk_path = "/"+ response["disk"] + "/" + response["type"] + "/" + response["vb_group"] + "/" + "vb_" + vb_id + "/"
+    def get_disk_path(self, vb_id):
 
+        response = self.query_dm(vb_id)
+        if response == None:
+            return None
+
+        disk_path = "/"+ response["disk"] + "/" + response["type"] + "/" + response["vb_group"] + "/" + "vb_" + vb_id + "/"
+        return disk_path
+
+    def get_disk_basepath(self, vb_id):
+
+        response = self.query_dm(vb_id)
+        if response == None:
+            return None
+
+        disk_path = "/"+ response["disk"]
         return disk_path
 
 
@@ -170,13 +189,41 @@ class FileServer:
         print (" adding lock %s" %file_path)
         file = open(file_path, "w+")
         size = os.stat(file_path).st_size
-        response_line = str(size) + '\r\n'
-        sent = connection.send(response_line)
-        sent += connection.send('\r\n')
+        sent = connection.send("0\r\n")
         file.close()
 
         return sent
 
+    def handle_pause(self, connection=None, data=None):
+
+        data = data.split()
+        if len(data) != 2:
+            return connection.send(INVALID_SYNTAX)
+
+        vb_id = str(data[1]).zfill(2)
+        base_path = self.get_disk_basepath(vb_id)
+        if base_path == None:
+            return connection.send(INTERROR)
+
+        util.pause_coalescer(self.logger, base_path)
+        sent = connection.send("0\r\n")
+        return sent
+
+    def handle_resume(self, connection=None, data=None):
+
+        data = data.split()
+        if len(data) != 2:
+            return connection.send(INVALID_SYNTAX)
+
+        vb_id = str(data[1]).zfill(2)
+
+        base_path = self.get_disk_basepath(vb_id)
+        if base_path == None:
+            return connection.send(INTERROR)
+
+        util.resume_coalescer(self.logger, base_path)
+        sent = connection.send("0\r\n")
+        return sent
 
     #LIST vb_id volume type date_string
     def handle_list(self, connection=None, data=None):
@@ -276,6 +323,10 @@ class FileServer:
             return self.handle_lock(connection, data)
         elif "GETCHECKPOINT" in data:
             return self.handle_download(connection, data, True)
+        elif "PAUSECOALESCER" in data:
+            return self.handle_pause(connection, data)
+        elif "RESUMECOALESCER" in data:
+            return self.handle_resume(connection, data)
         else:
             return connection.send(INVALID_COMMAND)
 
