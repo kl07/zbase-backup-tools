@@ -183,13 +183,23 @@ class backup_thread(multiprocessing.Process) :
             print ("\ngot backup task ", vb_backup_task)
 
             status = self.init_backup(vb_backup_task)
+            self.last_checkpoint_file = vb_backup_task['path'] + "/vbid_" + str(vb_backup_task['vb_id']) + "_" + consts.LAST_CHECKPOINT_FILE
             if status == False:
                 continue
             now = time.gmtime(time.time())
             datetimestamp = time.strftime('%Y-%m-%d %H:%M:%S', now)
             self.backup_name = time.strftime('backup-%Y-%m-%d_%H:%M:%S-%.mbb',now)
 
+            status = self.attach_checkpoint_cursor(vb_backup_task)
+            if status == False:
+                self.logger.log("Failure: could not create temporary backup cursor. skipping backup for vb %d" %vb_backup_task[vb_id])
+                continue
+
             status = self.take_backup(vb_backup_task, datetimestamp)
+
+            status = self.cleanup_checkpoint_cursor(vb_backup_task, status)
+            if status == False:
+                self.logger.log("Failure: Failed to cleanup temporary backup cursor or restore cursor. Manual intervention required")
 
     def mkdir_p(self, path):
         try:
@@ -197,6 +207,67 @@ class backup_thread(multiprocessing.Process) :
         except OSError as exc: # Python >2.5
             if exc.errno == errno.EEXIST and os.path.isdir(path):
                 pass
+
+    ## add a temporary backup cursor to the last backed up checkpoint,
+    ## if the backup is successful we will delete this cursor so that the
+    ## so that the backed up checkpoints can be deleted.
+    def attach_checkpoint_cursor(self, vb_backup_task):
+
+        if os.path.exists(self.last_checkpoint_file) and self.backup_type != 'full':
+            f = open(self.last_checkpoint_file)
+            self.last_backup_checkpoint = int(f.read())
+            f.close()
+        else:
+            self.last_backup_checkpoint = str(1)
+
+        self.temporary_checkpoint_cursor = "temporary_backup_cursor_vb_" + str(vb_backup_task['vb_id'])
+        checkpoint_add_cmd = "python26 mbadm-tap-registration -h " + self.host + ":" + str(self.port) + " -r " + \
+        self.temporary_checkpoint_cursor + " -l " + self.last_backup_checkpoint + " -v " + str(vb_backup_task['vb_id'])
+
+        status, output = commands.getstatusoutput(checkpoint_add_cmd)
+        if status > 0:
+            self.logger.log("Critical: Failed to register temporary backup cursor \nCommand: %s Output %s" %(checkpoint_add_cmd, output))
+            return False
+
+        return True
+
+    # on successful backup, delete the temporary cursor.
+    # if the backup has failed, delete the current cursor and reregister to the last backup cursor
+    # and then delete the temporary cursor
+    def cleanup_checkpoint_cursor(self, vb_backup_task, backup_status):
+
+        delete_tmp_cursor_cmd = "python26 mbadm-tap-registration -h " + self.host +":" + str(self.port) + " -d " + self.temporary_checkpoint_cursor
+
+        if backup_status == True:
+            status, output = commands.getstatusoutput(delete_tmp_cursor_cmd)
+            if status > 0:
+                self.logger.log("Failure: Unable to delete temporary backup cursor \nCommand: %s Output %s" %(delete_tmp_cursor_cmd, output))
+                return False
+            return True
+        else:
+            #failed backup
+            delete_tap_cursor_cmd = "python26 mbadm-tap-registration -h " + self.host + ":" + str(self.port) + " -d " + self.tapname
+            status, output = commands.getstatusoutput(delete_tap_cursor_cmd)
+            if status > 0:
+                self.logger.log("Failure: Unable to delete backup cursor. \n Command: %s Output %s" %(delete_tap_cursor_cmd, output))
+                return False
+
+            #reattach the tap cursor to the original checkpoint id
+            checkpoint_add_cmd = "python26 mbadm-tap-registration -h " + self.host + ":" \
+            + str(self.port) + " -r " + self.tapname + " -l " + str(self.last_backup_checkpoint) \
+            + " -v " + str(vb_backup_task['vb_id'])
+
+            status, output = commands.getstatusoutput(checkpoint_add_cmd)
+            if status > 0:
+                self.logger.log("Failure: Unable to restore backup cursor. \n Command: %s Output %s" %(checkpoint_add_cmd, output))
+                return False
+
+            #yank the temporary backup cursor
+            status, output = commands.getstatusoutput(delete_tmp_cursor_cmd)
+            if status > 0:
+                self.logger.log("Failure: Unable to delete temporary backup cursor \nCommand: %s Output %s" %(delete_tmp_cursor_cmd, output))
+                return False
+            return True
 
 
     def take_backup(self, vb_backup_task, datetimestamp):
@@ -282,12 +353,6 @@ class backup_thread(multiprocessing.Process) :
                     if split_file:
                         self._remove_file(split_file)
 
-                    #if type is full backup then delete the backup cursor
-                    if self.backup_type == "full":
-                        delete_command = consts.PATH_MBTAP_REGISTER_EXEC + " -h " +self.host + ":" + self.port + " -d " + self.tapname
-                        status,output = commands.getstatusoutput(delete_command)
-                        if status > 0:
-                            self.logger.log ("Failure: Failed to delete tapname %s, backup path %s" %(self.tapname, vb_backup_task['path']))
                     return False
 
             if retry:
@@ -300,10 +365,9 @@ class backup_thread(multiprocessing.Process) :
             return False
 
         checkpoints.sort()
-        last_checkpoint_file = vb_backup_task['path'] + "/vbid_" + str(vb_backup_task['vb_id']) + consts.LAST_CHECKPOINT_FILE
-        dirty_file_list.append(last_checkpoint_file)
-        if os.path.exists(last_checkpoint_file) and self.backup_type != 'full':
-            f = open(last_checkpoint_file)
+        dirty_file_list.append(self.last_checkpoint_file)
+        if os.path.exists(self.last_checkpoint_file) and self.backup_type != 'full':
+            f = open(self.last_checkpoint_file)
             last_backup_checkpoint = int(f.read())
             f.close()
         else:
@@ -317,7 +381,7 @@ class backup_thread(multiprocessing.Process) :
                 else:
                     self.logger.log("Last backup_checkpoint: %d Current backup checkpoints: %s" %(last_backup_checkpoint, str(checkpoints)))
 
-            f = open(last_checkpoint_file, 'w')
+            f = open(self.last_checkpoint_file, 'w')
             f.write(str(checkpoints[-1]))
             f.close()
             split_files = map(lambda x: os.path.basename(x), map(lambda y: y[-1], bf_instance.list_splits()))
@@ -408,7 +472,7 @@ class backup_thread(multiprocessing.Process) :
         return True
 
     def exit(self, status):
-        os._exit(status)
+        sys.exit(status)
 
     def queue_task(self, vb_backup_task):
 
@@ -437,7 +501,7 @@ if __name__ == '__main__':
     if vbs_host == "" or disk_mapper == "":
         print "Need to specify vbs server and disk_mapper server"
         print "Usage: backupd.py -v <vbs server:port> -d <disk mapper>"
-        os._exit(1)
+        sys.exit(1)
 
     backupd_process = Backupd(vbs_host, disk_mapper)
 
