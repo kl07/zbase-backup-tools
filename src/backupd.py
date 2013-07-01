@@ -221,7 +221,7 @@ class backup_thread(multiprocessing.Process) :
             self.last_backup_checkpoint = str(1)
 
         self.temporary_checkpoint_cursor = "temporary_backup_cursor_vb_" + str(vb_backup_task['vb_id'])
-        checkpoint_add_cmd = "python26 mbadm-tap-registration -h " + self.host + ":" + str(self.port) + " -r " + \
+        checkpoint_add_cmd = consts.PATH_MBTAP_REGISTER_EXEC + " -h " + self.host + ":" + str(self.port) + " -r " + \
         self.temporary_checkpoint_cursor + " -l " + self.last_backup_checkpoint + " -v " + str(vb_backup_task['vb_id'])
 
         status, output = commands.getstatusoutput(checkpoint_add_cmd)
@@ -236,7 +236,7 @@ class backup_thread(multiprocessing.Process) :
     # and then delete the temporary cursor
     def cleanup_checkpoint_cursor(self, vb_backup_task, backup_status):
 
-        delete_tmp_cursor_cmd = "python26 mbadm-tap-registration -h " + self.host +":" + str(self.port) + " -d " + self.temporary_checkpoint_cursor
+        delete_tmp_cursor_cmd = consts.PATH_MBTAP_REGISTER_EXEC + " -h " + self.host +":" + str(self.port) + " -d " + self.temporary_checkpoint_cursor
 
         if backup_status == True:
             status, output = commands.getstatusoutput(delete_tmp_cursor_cmd)
@@ -246,14 +246,14 @@ class backup_thread(multiprocessing.Process) :
             return True
         else:
             #failed backup
-            delete_tap_cursor_cmd = "python26 mbadm-tap-registration -h " + self.host + ":" + str(self.port) + " -d " + self.tapname
+            delete_tap_cursor_cmd = consts.PATH_MBTAP_REGISTER_EXEC + " -h " + self.host + ":" + str(self.port) + " -d " + self.tapname
             status, output = commands.getstatusoutput(delete_tap_cursor_cmd)
             if status > 0:
                 self.logger.log("Failure: Unable to delete backup cursor. \n Command: %s Output %s" %(delete_tap_cursor_cmd, output))
                 return False
 
             #reattach the tap cursor to the original checkpoint id
-            checkpoint_add_cmd = "python26 mbadm-tap-registration -h " + self.host + ":" \
+            checkpoint_add_cmd = consts.PATH_MBTAP_REGISTER_EXEC + " -h " + self.host + ":" \
             + str(self.port) + " -r " + self.tapname + " -l " + str(self.last_backup_checkpoint) \
             + " -v " + str(vb_backup_task['vb_id'])
 

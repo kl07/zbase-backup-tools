@@ -45,6 +45,7 @@ src/backup_healthcheck \
 src/count_backup_keys.sh \
 src/healthcheck_runner.sh \
 src/scheduler.py \
+src/mbadm-tap-registration \
 src/backup_merged \
 src/zstore_cmd \
 src/zstore_cmd_helper $RPM_BUILD_ROOT/opt/membase/membase-backup/
