@@ -15,18 +15,10 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-if [ $1 = "release" ];
-then
-    specfile=specs/membase-backup-tools-HEAD.spec
-    VERSION=`grep Version $specfile | awk '{ print $NF }'`
-    RELEASE=`grep Release $specfile | awk '{ print $NF }'`
-    COMMIT="$VERSION-$RELEASE"
-else
-    specfile=specs/membase-backup-tools-template.spec
-    VERSION=`git tag | head -1`
-    RELEASE=`git log --oneline $VERSION.. | wc -l`
-    COMMIT=`git describe`
-fi
+specfile=specs/membase-backup-tools-HEAD.spec
+VERSION=`grep Version $specfile | awk '{ print $NF }'`
+RELEASE=`grep Release $specfile | awk '{ print $NF }'`
+COMMIT="$VERSION-$RELEASE"
 
 RPM_SOURCE_DIR=`rpm --eval '%{_sourcedir}'`
 SOURCE="membase-backup-tools-$VERSION.tar.gz"

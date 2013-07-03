@@ -1,7 +1,7 @@
 Summary: Membase 1.9 backup and restore tools
 Name: membase-backup-tools
 Version: 3.0.test
-Release: 1
+Release: 2
 Group: General
 License: Proprietary
 Source0: _SOURCE
@@ -10,7 +10,7 @@ AutoReqProv: no
 Requires: jemalloc
 
 %description
-Membase 1.7.3 backup and restore tools
+Membase 1.9 backup and restore tools
 
 %prep
 %define _rpmfilename %%{NAME}-_COMMIT.%%{ARCH}.rpm
@@ -44,14 +44,13 @@ src/diffdisk.py \
 src/backup_healthcheck \
 src/count_backup_keys.sh \
 src/healthcheck_runner.sh \
-src/synctos3.sh \
 src/scheduler.py \
+src/mbadm-tap-registration \
 src/backup_merged \
 src/zstore_cmd \
 src/zstore_cmd_helper $RPM_BUILD_ROOT/opt/membase/membase-backup/
 cp src/blobrestore_utils/* $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/
 cp conf/clean_blobrestore_jobs.cron $RPM_BUILD_ROOT/opt/membase/membase-backup/
-cp conf/init.d/membase-backupd $RPM_BUILD_ROOT/etc/init.d/
 cp conf/init.d/blobrestored $RPM_BUILD_ROOT/etc/init.d/
 cp conf/init.d/backup_merged $RPM_BUILD_ROOT/etc/init.d/
 cp conf/default.ini $RPM_BUILD_ROOT/etc/membase-backup/
@@ -60,7 +59,6 @@ chmod 700 $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobresto
 
 %files
 /etc/membase-backup/*
-/etc/init.d/membase-backupd
 /etc/init.d/blobrestored
 /etc/init.d/backup_merged
 /opt/membase/membase-backup/*
