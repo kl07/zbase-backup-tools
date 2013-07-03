@@ -14,10 +14,11 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-import sys, os, time
+import sys, os, time, atexit
 import thread, threading
 import backuplib
 from logger import Logger
+from config import Config
 from initdaemon import InitBackupDaemon
 #import Queue
 import backuplib
@@ -34,6 +35,8 @@ import multiprocessing
 from multiprocessing import Process, Queue
 import subprocess
 from file_server import FileServer
+#from signal import SIGTERM
+import signal
 
 class Backupd:
 
@@ -46,25 +49,38 @@ class Backupd:
 
     """
 
-    def __init__(self, vbs_host, dm_host):
+    def __init__(self):
 
         self.logger = Logger("vBucketBackupd", "INFO")
         self.logger.log("Info: ===== Starting vbucket backup daemon ====== ")
-        self.initbackupd = InitBackupDaemon(dm_host, vbs_host)
+        try:
+            self.config = Config(consts.CONFIG_FILE)
+            self.config.read()
+            #get disk_mapper and vbs server settings from config
+            dm_host = self.config.disk_mapper
+            vbs_host = self.config.vbs
+        except Exception, e:
+            self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
+            sys.exit(1)
 
+        self.logger.log("Diskmapper : %s VBS Server %s" %(dm_host, vbs_host))
+
+        self.initbackupd = InitBackupDaemon(dm_host, vbs_host)
         self.vb_disk_map = self.initbackupd.generate_disk_map()
+        atexit.register(self.cleanup_processes)
+        signal.signal(signal.SIGHUP, self.cleanup_processes)
 
         if self.vb_disk_map == None:
             self.logger.log("Critical: Failed to init backup daemon. Exiting... ")
             sys.exit(1)
 
         #spawn a process for the restore daemon
-        fs = Process(target=self.start_restore_daemon, args=(dm_host,))
-        fs.start()
+        self.fs = Process(target=self.start_restore_daemon, args=(dm_host,))
+        self.fs.start()
 
         #backup daemon initialized. We are all set to go
         self.main_loop()
-        fs.join()
+        self.fs.join()
 
 
     def start_restore_daemon(self, dm_host):
@@ -72,6 +88,14 @@ class Backupd:
         file_server = FileServer(dm_host,"0.0.0.0", 22122)
         file_server.start()
 
+    def cleanup_processes(self, signum, frame):
+
+         self.logger.log("Info: Terminating backupd ... ")
+         self.fs.terminate()
+         for process in self.thread_queue.keys():
+            self.thread_queue[process].terminate()
+
+         os._exit(0)
 
     def main_loop (self):
 
@@ -192,7 +216,7 @@ class backup_thread(multiprocessing.Process) :
 
             status = self.attach_checkpoint_cursor(vb_backup_task)
             if status == False:
-                self.logger.log("Failure: could not create temporary backup cursor. skipping backup for vb %d" %vb_backup_task[vb_id])
+                self.logger.log("Failure: could not create temporary backup cursor. skipping backup for vb %d" %vb_backup_task['vb_id'])
                 continue
 
             status = self.take_backup(vb_backup_task, datetimestamp)
@@ -215,13 +239,13 @@ class backup_thread(multiprocessing.Process) :
 
         if os.path.exists(self.last_checkpoint_file) and self.backup_type != 'full':
             f = open(self.last_checkpoint_file)
-            self.last_backup_checkpoint = int(f.read())
+            self.last_backup_checkpoint = str(f.read())
             f.close()
         else:
             self.last_backup_checkpoint = str(1)
 
         self.temporary_checkpoint_cursor = "temporary_backup_cursor_vb_" + str(vb_backup_task['vb_id'])
-        checkpoint_add_cmd = "python26 mbadm-tap-registration -h " + self.host + ":" + str(self.port) + " -r " + \
+        checkpoint_add_cmd = "python26 " + consts.TAP_REGISTERATION + " -h " + self.host + ":" + str(self.port) + " -r " + \
         self.temporary_checkpoint_cursor + " -l " + self.last_backup_checkpoint + " -v " + str(vb_backup_task['vb_id'])
 
         status, output = commands.getstatusoutput(checkpoint_add_cmd)
@@ -236,7 +260,7 @@ class backup_thread(multiprocessing.Process) :
     # and then delete the temporary cursor
     def cleanup_checkpoint_cursor(self, vb_backup_task, backup_status):
 
-        delete_tmp_cursor_cmd = "python26 mbadm-tap-registration -h " + self.host +":" + str(self.port) + " -d " + self.temporary_checkpoint_cursor
+        delete_tmp_cursor_cmd = "python26 " + consts.TAP_REGISTERATION + " -h " + self.host +":" + str(self.port) + " -d " + self.temporary_checkpoint_cursor
 
         if backup_status == True:
             status, output = commands.getstatusoutput(delete_tmp_cursor_cmd)
@@ -246,14 +270,14 @@ class backup_thread(multiprocessing.Process) :
             return True
         else:
             #failed backup
-            delete_tap_cursor_cmd = "python26 mbadm-tap-registration -h " + self.host + ":" + str(self.port) + " -d " + self.tapname
+            delete_tap_cursor_cmd = "python26 " + consts.TAP_REGISTERATION + " -h " + self.host + ":" + str(self.port) + " -d " + self.tapname
             status, output = commands.getstatusoutput(delete_tap_cursor_cmd)
             if status > 0:
                 self.logger.log("Failure: Unable to delete backup cursor. \n Command: %s Output %s" %(delete_tap_cursor_cmd, output))
                 return False
 
             #reattach the tap cursor to the original checkpoint id
-            checkpoint_add_cmd = "python26 mbadm-tap-registration -h " + self.host + ":" \
+            checkpoint_add_cmd = "python26 " + consts.TAP_REGISTERATION + " -h " + self.host + ":" \
             + str(self.port) + " -r " + self.tapname + " -l " + str(self.last_backup_checkpoint) \
             + " -v " + str(vb_backup_task['vb_id'])
 
@@ -482,26 +506,141 @@ class backup_thread(multiprocessing.Process) :
         return
 
 
+class Daemon:
+    """
+    A generic daemon class.
+
+    Usage: subclass the Daemon class and override the run() method
+    """
+    def __init__(self, pidfile, stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
+        self.stdin = stdin
+        self.stdout = stdout
+        self.stderr = stderr
+        self.pidfile = pidfile
+
+    def daemonize(self):
+        """
+        do the UNIX double-fork magic, see Stevens' "Advanced
+        Programming in the UNIX Environment" for details (ISBN 0201563177)
+        """
+        try:
+            pid = os.fork()
+            if pid > 0:
+                # exit first parent
+                sys.exit(0)
+        except OSError, e:
+            sys.stderr.write("fork #1 failed: %d (%s)\n" % (e.errno, e.strerror))
+            sys.exit(1)
+
+        # decouple from parent environment
+        os.chdir("/")
+        os.setsid()
+        os.umask(0)
+
+        # do second fork
+        try:
+            pid = os.fork()
+            if pid > 0:
+                # exit from second parent
+                sys.exit(0)
+        except OSError, e:
+            sys.stderr.write("fork #2 failed: %d (%s)\n" % (e.errno, e.strerror))
+            sys.exit(1)
+
+        # redirect standard file descriptors
+        sys.stdout.flush()
+        sys.stderr.flush()
+        si = file(self.stdin, 'r')
+        so = file(self.stdout, 'a+')
+        se = file(self.stderr, 'a+', 0)
+        os.dup2(si.fileno(), sys.stdin.fileno())
+        os.dup2(so.fileno(), sys.stdout.fileno())
+        os.dup2(se.fileno(), sys.stderr.fileno())
+
+        # write pidfile
+        atexit.register(self.delpid)
+        pid = str(os.getpid())
+        file(self.pidfile,'w+').write("%s\n" % pid)
+
+    def delpid(self):
+        os.remove(self.pidfile)
+
+    def start(self):
+        """
+        Start the daemon
+        """
+        # Check for a pidfile to see if the daemon already runs
+        try:
+            pf = file(self.pidfile,'r')
+            pid = int(pf.read().strip())
+            pf.close()
+        except IOError:
+            pid = None
+
+        if pid:
+            message = "pidfile %s already exist. Daemon already running?\n"
+            sys.stderr.write(message % self.pidfile)
+            sys.exit(1)
+
+        # Start the daemon
+        self.daemonize()
+        self.run()
+
+    def stop(self):
+        """
+        Stop the daemon
+        """
+        # Get the pid from the pidfile
+        try:
+            pf = file(self.pidfile,'r')
+            pid = int(pf.read().strip())
+            pf.close()
+        except IOError:
+            pid = None
+
+        if not pid:
+            message = "pidfile %s does not exist. Daemon not running?\n"
+            sys.stderr.write(message % self.pidfile)
+            return # not an error in a restart
+
+        # Try killing the daemon process
+        hup_cmd = "kill -s HUP " + str(pid)
+        status = 0
+        while status == 0:
+            #os.kill(pid, signal.SIGTERM)
+            status, output = commands.getstatusoutput(hup_cmd)
+            print "status %d" %status
+            time.sleep(0.1)
+
+        if os.path.exists(self.pidfile):
+            os.remove(self.pidfile)
+        else:
+            print str(err)
+            sys.exit(1)
+
+    def restart(self):
+        """
+        Restart the daemon
+        """
+        self.stop()
+        self.start()
+
+    def run(self):
+
+        backupd_process = Backupd()
+
 
 if __name__ == '__main__':
 
+    backup_daemon = Daemon("/var/run/zbackupd.pid")
 
-    options, remainder = getopt.getopt(sys.argv[1:], 'v:d:', ['vbs_host=',
-                                                              'disk_mapper=',
-                                                             ])
-    vbs_host = ""
-    disk_mapper = ""
-    for opt, arg in options:
-        if opt in ('-v', '--vbs'):
-            vbs_host = arg
-        elif opt in ('-d', '--disk_mapper'):
-            disk_mapper = arg
-
-
-    if vbs_host == "" or disk_mapper == "":
-        print "Need to specify vbs server and disk_mapper server"
-        print "Usage: backupd.py -v <vbs server:port> -d <disk mapper>"
-        sys.exit(1)
-
-    backupd_process = Backupd(vbs_host, disk_mapper)
+    if len(sys.argv) == 2:
+        if sys.argv[1] == 'start':
+            backup_daemon.start()
+        elif sys.argv[1] == 'stop':
+            backup_daemon.stop()
+        elif sys.argv[1] == 'restart':
+            backup_daemon.restart()
+    else:
+        print "Usage: backupd.py start|stop|restart"
 

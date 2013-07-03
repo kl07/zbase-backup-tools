@@ -72,6 +72,9 @@ class Config:
         self.download_retries = int(self.config.get('restore', 'download_retries'))
         self.upload_retries = int(self.config.get('backup', 'upload_retries'))
 
+        self.disk_mapper = self.config.get('backup', 'disk_mapper')
+        self.vbs = self.config.get('backup', 'vbs')
+
         if 'blobrestore' in self.config.sections():
             self.parallel_jobs = int(self.config.get('blobrestore',
                     'parallel_jobs'))

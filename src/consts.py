@@ -85,3 +85,4 @@ BACKUP_INTERVAL = 3600
 LAST_CHECKPOINT_FILE = 'last_cpoint'
 SS_PORT = 22122
 RESTORE_CMD = "membase-restore"
+TAP_REGISTERATION = '/opt/membase/membase-backup/mbadm-tap-registration'
