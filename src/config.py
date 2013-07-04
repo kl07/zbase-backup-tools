@@ -54,10 +54,14 @@ class Config:
 
         self.syslog_tag = self.config.get('log', 'syslog_tag')
         if self.config.has_option('general', 'disk_mapper_server'):
-
             self.disk_mapper_server = self.config.get('general', 'disk_mapper_server')
         else:
             self.disk_mapper_server = 'UNKNOWN'
+
+        if self.config.has_option('general', 'vbs_server'):
+            self.vbs_server = self.config.get('general', 'vbs_server')
+        else:
+            self.vbs_server = "UNKNOWN"
 
         self.buffer_list = self.config.get('general', 'buffer_list')
         if self.config.has_option("general", "membase_db_paths"):
@@ -72,8 +76,7 @@ class Config:
         self.download_retries = int(self.config.get('restore', 'download_retries'))
         self.upload_retries = int(self.config.get('backup', 'upload_retries'))
 
-        self.disk_mapper = self.config.get('backup', 'disk_mapper')
-        self.vbs = self.config.get('backup', 'vbs')
+
 
         if 'blobrestore' in self.config.sections():
             self.parallel_jobs = int(self.config.get('blobrestore',

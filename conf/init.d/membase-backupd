@@ -1,0 +1,99 @@
+#!/bin/bash 
+
+#   Copyright 2013 Zynga Inc.
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+. /etc/init.d/functions
+PIDFILE=/var/run/mbbackup.pid
+
+export LD_LIBRARY_PATH=/opt/sqlite3/lib/:$LD_LIBRARY_PATH
+
+command=$1
+
+if [ $UID -ne 0 ];
+then
+    echo "Please run as root"
+    exit 1
+fi
+
+status(){
+    if [ -e $PIDFILE ]; 
+    then
+        PID=$(cat $PIDFILE) 
+        kill -s 0 $PID 2> /dev/null && echo "Backup daemon is running with pid $PID" && exit 0
+        echo "Backup daemon is not running" 
+    else
+        echo "Backup daemon is not running" 
+    fi
+}
+
+start(){
+    if [ -e $PIDFILE ];
+    then
+        PID=$(cat $PIDFILE) 
+        kill -s 0 $PID 2> /dev/null && echo "Backup daemon is running with pid $PID" && exit 0
+    fi
+
+    if [ $1 -eq 1 ];
+    then
+        /usr/bin/python26 /opt/membase/membase-backup/membase-backupd start-with-fullbackup >/dev/null 2>&1 
+    else
+        /usr/bin/python26 /opt/membase/membase-backup/membase-backupd start >/dev/null 2>&1 
+    fi
+
+    sleep 1
+    status | grep 'is running' 2> /dev/null
+    if [ $? -eq 0 ];
+    then
+        echo Started backup daemon && exit 0
+    else
+        echo Failed to start backup daemon && exit 1
+    fi
+}
+
+
+stop(){
+
+    echo "Stopping membase backup daemon"
+	/usr/bin/python26 /opt/membase/membase-backup/membase-backupd stop >/dev/null 2>&1
+    if [ $? -eq 0 ];
+    then
+        echo "Stopped backup daemon successfully"
+    else
+        echo "Backup daemon is not running"
+    fi
+}
+
+case "$1" in
+    start)
+        start 0
+        ;;
+    start-with-fullbackup)
+        start 1
+        ;;
+    stop)
+    stop
+    ;;
+    status)
+    status; 
+    ;;
+    restart)
+    stop; start 0;
+    ;;
+    *)
+    echo $"Usage: $0 {start|stop|status|restart}"
+    exit 1
+esac
+
+

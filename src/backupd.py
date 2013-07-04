@@ -57,8 +57,8 @@ class Backupd:
             self.config = Config(consts.CONFIG_FILE)
             self.config.read()
             #get disk_mapper and vbs server settings from config
-            dm_host = self.config.disk_mapper
-            vbs_host = self.config.vbs
+            dm_host = self.config.disk_mapper_server
+            vbs_host = self.config.vbs_server
         except Exception, e:
             self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
             sys.exit(1)
