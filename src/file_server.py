@@ -90,8 +90,6 @@ class FileServer:
     def query_dm(self, vb_id):
 
         #query the disk_mapper and get the disk path
-        if vb_id == "":
-            vb_id = "0"
         vb_query_cmd = "curl -s \"http://" + self.disk_mapper + "/api?action=get_vb_mapping&&vbucket=vb_" + vb_id + "\""
         status, output = commands.getstatusoutput(vb_query_cmd)
 
