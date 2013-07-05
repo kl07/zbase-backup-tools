@@ -109,6 +109,8 @@ class FileServer:
     def get_disk_path(self, vb_id):
 
         vb_id = vb_id.lstrip('0')
+	if vb_id == "":
+	    vb_id = '0'
         response = self.query_dm(vb_id)
         if response == None:
             return None
@@ -119,6 +121,8 @@ class FileServer:
     def get_disk_basepath(self, vb_id):
 
         vb_id = vb_id.lstrip('0')
+	if vb_id == "":
+	    vb_id = '0'
         response = self.query_dm(vb_id)
         if response == None:
             return None
