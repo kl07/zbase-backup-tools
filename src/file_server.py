@@ -89,7 +89,6 @@ class FileServer:
 
     def query_dm(self, vb_id):
 
-        vb_id = vb_id.lstrip('0')
         #query the disk_mapper and get the disk path
         if vb_id == "":
             vb_id = "0"
@@ -109,6 +108,7 @@ class FileServer:
 
     def get_disk_path(self, vb_id):
 
+        vb_id = vb_id.lstrip('0')
         response = self.query_dm(vb_id)
         if response == None:
             return None
@@ -118,6 +118,7 @@ class FileServer:
 
     def get_disk_basepath(self, vb_id):
 
+        vb_id = vb_id.lstrip('0')
         response = self.query_dm(vb_id)
         if response == None:
             return None
@@ -160,7 +161,7 @@ class FileServer:
             vb_id = vb_id.lstrip('0')
             if vb_id == "":
                 vb_id = '0'
-            file_path = base_path + "/vbid_" + vb_id + consts.LAST_CHECKPOINT_FILE
+            file_path = base_path + "/vbid_" + vb_id + "_" + consts.LAST_CHECKPOINT_FILE
         else:
             file_path = base_path + filename
 

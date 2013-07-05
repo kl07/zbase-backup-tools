@@ -351,7 +351,7 @@ class Restore:
             except:
                 pass
         self.clean_s3_lock()
-        self.resume_coalescer(self.vb_id)
+        self._resume_coalescer(self.vb_id)
         if os.path.exists(consts.MBRESTORE_PID_FILE):
             os.unlink(consts.MBRESTORE_PID_FILE)
         self.logger.log("Restore process terminated")
@@ -431,7 +431,7 @@ class Restore:
             else:
                 self.logger.log("Locked incremental backup directory in s3")
             #attempt to pause coalescer on the storage server
-            self.pause_coalescer(self.vb_id)
+            self._pause_coalescer(self.vb_id)
 
         master_backup_epoch = epoch
         self.logger.log("Searching for master backup")
@@ -612,7 +612,7 @@ class Restore:
 
         end_time = int(time.time())
         self.clean_s3_lock()
-        self.resume_coalescer(self.vb_id)
+        self._resume_coalescer(self.vb_id)
         status, outout = self.getstatusoutput("python26 %s %s set complete_restore_vb %s" %(consts.PATH_MBFLUSHCTL, self.host, self.vb_id))
 
         if status > 0:
