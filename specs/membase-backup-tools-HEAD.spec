@@ -47,6 +47,7 @@ src/healthcheck_runner.sh \
 src/scheduler.py \
 src/mbadm-tap-registration \
 src/backup_merged \
+src/vbucket_restore.py \
 src/zstore_cmd \
 src/zstore_cmd_helper $RPM_BUILD_ROOT/opt/membase/membase-backup/
 cp src/blobrestore_utils/* $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/
