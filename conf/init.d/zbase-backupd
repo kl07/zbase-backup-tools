@@ -47,9 +47,9 @@ start(){
 
     if [ $1 -eq 1 ];
     then
-        /usr/bin/python26 /opt/membase/membase-backup/membase-backupd start-with-fullbackup >/dev/null 2>&1 
+        /usr/bin/python26 /opt/zbase/zbase-backup/zbase-backupd start-with-fullbackup >/dev/null 2>&1 
     else
-        /usr/bin/python26 /opt/membase/membase-backup/membase-backupd start >/dev/null 2>&1 
+        /usr/bin/python26 /opt/zbase/zbase-backup/zbase-backupd start >/dev/null 2>&1 
     fi
 
     sleep 1
@@ -65,8 +65,8 @@ start(){
 
 stop(){
 
-    echo "Stopping membase backup daemon"
-	/usr/bin/python26 /opt/membase/membase-backup/membase-backupd stop >/dev/null 2>&1
+    echo "Stopping zbase backup daemon"
+	/usr/bin/python26 /opt/zbase/zbase-backup/zbase-backupd stop >/dev/null 2>&1
     if [ $? -eq 0 ];
     then
         echo "Stopped backup daemon successfully"

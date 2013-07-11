@@ -107,7 +107,7 @@ class BackupProcess:
             pass
 
         self.update_mappingserver()
-        self.logger.log("=== Starting Membase Backup Daemon ===")
+        self.logger.log("=== Starting ZBase Backup Daemon ===")
         signal.signal(signal.SIGINT, self.graceful_exit)
         signal.signal(signal.SIGQUIT, self.graceful_exit)
         signal.signal(signal.SIGTERM, self.graceful_exit)
@@ -388,14 +388,14 @@ class BackupProcess:
             mb = MemcachedClient(host='127.0.0.1', port=11211)
             return mb.stats(item)
         except Exception, e:
-            self.logger.log("FAILED: Unable to query stats from Membase:11211 (%s)" %str(e))
+            self.logger.log("FAILED: Unable to query stats from zbase:11211 (%s)" %str(e))
             self.exit(1)
 
     def is_cursor_valid(self, cursor_name):
         try:
             checkpoint_stats = self.mbstats('checkpoint')
         except Exception:
-            self.logger.log("FAILED: Could not fetch tap stats from membase server")
+            self.logger.log("FAILED: Could not fetch tap stats from zbase server")
             self.exit(1)
 
         if len(filter(lambda x: 'eq_tapq:%s' %(cursor_name) in x, checkpoint_stats)):

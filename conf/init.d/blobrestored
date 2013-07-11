@@ -19,12 +19,12 @@
 
 command=$1
 status(){
-    /usr/bin/python26 /opt/membase/membase-backup/blobrestore_utils/blobrestored status
+    /usr/bin/python26 /opt/zbase/zbase-backup/blobrestore_utils/blobrestored status
 }
 
 start(){
 
-    /usr/bin/python26 /opt/membase/membase-backup/blobrestore_utils/blobrestored start > /dev/null 2>&1 &
+    /usr/bin/python26 /opt/zbase/zbase-backup/blobrestore_utils/blobrestored start > /dev/null 2>&1 &
     if [ $? -eq 0 ];
     then
         echo "Started blobrestore daemon successfully"
@@ -36,7 +36,7 @@ start(){
 
 stop(){
 
-    /usr/bin/python26 /opt/membase/membase-backup/blobrestore_utils/blobrestored stop
+    /usr/bin/python26 /opt/zbase/zbase-backup/blobrestore_utils/blobrestored stop
 }
 
 case "$1" in

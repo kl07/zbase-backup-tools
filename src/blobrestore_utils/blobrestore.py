@@ -1,5 +1,5 @@
 #!/usr/bin/env python26
-#Description: Blob restore driver for Membase 1.7.3
+#Description: Blob restore driver for zbase 1.7.3
 
 #   Copyright 2013 Zynga Inc.
 #
@@ -286,7 +286,7 @@ def parse_args(args):
 
     return options
 
-class MembasePool:
+class ZBasePool:
     def __init__(self):
         self.servers = []
 
@@ -615,7 +615,7 @@ class BlobrestoreDispatcher:
         for node_job_item in self.node_job.values():
             node_job_item.download_restored_keys(tmpdir)
 
-        membasepool = MembasePool()
+        zbasepool = ZBasePool()
         try:
             server_list = open(self.options['target_server_list'], 'r')
         except:
@@ -626,7 +626,7 @@ class BlobrestoreDispatcher:
             server = s.strip()
             if server == '':
                 continue
-            membasepool.addServer(server)
+            zbasepool.addServer(server)
 
         for f in os.listdir(tmpdir):
             log("Reading keys from host %s" %f)
@@ -639,15 +639,11 @@ class BlobrestoreDispatcher:
                     cksum = str(cksum)
                 if self.options['repair_mode']:
                     key += '_r'
-                membasepool.set_key(str(key), socket.ntohl(flg), exp, str(val), date, cksum)
+                zbasepool.set_key(str(key), socket.ntohl(flg), exp, str(val), date, cksum)
                 restored_key = ks.read()
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, exit)
-    if os.getuid() != 0:
-        print "Please run as root"
-        sys.exit(1)
-
     init_logger()
     options = parse_args(sys.argv)
     bd = BlobrestoreDispatcher(options)

@@ -52,7 +52,7 @@ class Restore:
             self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
             self.exit(1)
 
-        self.logger.log("=== Starting Membase Restore ===")
+        self.logger.log("=== Starting ZBase Restore ===")
 
         self.cloud = self.config.cloud
         self.game_id = self.config.game_id
@@ -122,27 +122,27 @@ class Restore:
             return True
 
     def setup_restore_env(self):
-        self.logger.log("Setting up restore environment for membase server")
+        self.logger.log("Setting up restore environment for zbase server")
         if os.path.exists(consts.MEMCACHED_PID_FILE):
             memcached_pid = int(open(consts.MEMCACHED_PID_FILE).read())
             try:
                 os.kill(memcached_pid, 0)
-                self.logger.log("Found running membase instance. Terminating" \
-                        " membase process")
+                self.logger.log("Found running zbase instance. Terminating" \
+                        " zbase process")
                 os.kill(memcached_pid, 9)
             except:
                 pass
 
-        self.logger.log("Cleaning up membase db directory")
-        for dbpath in self.config.membase_db_paths:
+        self.logger.log("Cleaning up zbase db directory")
+        for dbpath in self.config.zbase_db_paths:
             rm_db_cmd = "find %s -type f -delete" %dbpath
             status, output = self.getstatusoutput(rm_db_cmd)
             if status > 0:
-                self.logger.log("FAILED: Failed to clean membase db directory" \
+                self.logger.log("FAILED: Failed to clean zbase db directory" \
                         " (%s)" %output)
                 self.exit(1)
 
-        self.logger.log("Updating membase config file to start as restore mode")
+        self.logger.log("Updating zbase config file to start as restore mode")
         f = open(consts.MEMCACHED_SYSCONFIG_FILE)
         prefix, sysconfig, suffix = f.read().split("'")
         sysconfig = sysconfig.split(';')
@@ -157,11 +157,11 @@ class Restore:
         f = open(consts.MEMCACHED_SYSCONFIG_FILE, 'w')
         f.write(sysconfig_str)
         f.close()
-        self.logger.log("Starting membase")
-        start_membase_cmd = "/sbin/service memcached start"
-        status = os.system(start_membase_cmd)
+        self.logger.log("Starting zbase")
+        start_zbase_cmd = "/sbin/service memcached start"
+        status = os.system(start_zbase_cmd)
         if status > 0:
-            self.logger.log("Unable to start membase")
+            self.logger.log("Unable to start zbase")
             self.exit(1)
 
         for i in range(120):
@@ -171,10 +171,10 @@ class Restore:
                 break
             except:
                 if i == 119:
-                    start_membase_cmd = "/sbin/service memcached restart"
-                    status = os.system(start_membase_cmd)
+                    start_zbase_cmd = "/sbin/service memcached restart"
+                    status = os.system(start_zbase_cmd)
                     if status > 0:
-                        self.logger.log("Unable to start membase")
+                        self.logger.log("Unable to start zbase")
                         self.exit(1)
                 time.sleep(1)
 

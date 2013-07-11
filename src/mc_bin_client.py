@@ -172,7 +172,7 @@ class MemcachedClient(object):
             return self.__parseGet(parts)
 
     def options_supported(self):
-        """send option command to check if it is new membase with checksum."""
+        """send option command to check if it is new zbase with checksum."""
         try:
             parts=self._doCmd(0xa0, '', '')
             return True

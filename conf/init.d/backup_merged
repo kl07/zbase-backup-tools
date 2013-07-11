@@ -16,7 +16,7 @@
 
 . /etc/init.d/functions
 PIDFILE=/var/run/backup_merge.pid
-exec &> >(tee /dev/stderr | logger -t 'Membasebackup' --)
+exec &> >(tee /dev/stderr | logger -t 'zbasebackup' --)
 
 command=$1
 
@@ -44,7 +44,7 @@ start(){
         kill -s 0 $PID 2> /dev/null && echo "Backup merge daemon is running with pid $PID" && exit 0
     fi
 
-        /usr/bin/python26 /opt/membase/membase-backup/backup_merged start >/dev/null 2>&1 &
+        /usr/bin/python26 /opt/zbase/zbase-backup/backup_merged start >/dev/null 2>&1 &
 
     sleep 1
     status | grep 'is running' 2> /dev/null
@@ -60,7 +60,7 @@ start(){
 stop(){
 
     echo "Stopping backup merge daemon"
-    /usr/bin/python26 /opt/membase/membase-backup/backup_merged stop >/dev/null 2>&1
+    /usr/bin/python26 /opt/zbase/zbase-backup/backup_merged stop >/dev/null 2>&1
 
     if [ $? -eq 0 ];
     then
