@@ -9,7 +9,7 @@ and blobrestore tools.
     sudo python26 backupd.py start
     sudo python26 backupd.py stop
 
-1. backup daemon will connect to membase servers and create backups
+1. backup daemon will connect to zbase servers and create backups
 2. Every 60 minutes the backup daemon will schedule incremental backups
 3. restore process will listen on port 22122
 

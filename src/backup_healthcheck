@@ -101,7 +101,7 @@ class Verifier:
     def verify_split_index(self, split_index_file, files, vb):
         """
         Verify backups with split index file
-        NOTE: Code borrowed from membase-restore
+        NOTE: Code borrowed from zbase-restore
         """
 
         status = True
@@ -126,7 +126,7 @@ class Verifier:
     def checkpoint_walk(self, backups, vbucket):
         """
         Walk through the checkpoints from backups and check continuity
-        NOTE: Code borrowed from membase-restore
+        NOTE: Code borrowed from zbase-restore
         """
         last_file_checkpoints = None
         last_file = None

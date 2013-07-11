@@ -64,7 +64,7 @@ class Restore:
             self.logger.log("FAILED: Parsing config file (%s)" %(str(e)))
             self.exit(1)
 
-        self.logger.log("=== Starting Membase Restore ===")
+        self.logger.log("=== Starting ZBase Restore ===")
 
         #self.cloud = self.config.cloud
         #self.game_id = self.config.game_id
@@ -107,7 +107,7 @@ class Restore:
         signal.signal(signal.SIGTERM, self.graceful_exit)
 
     def setup_restore_env(self):
-        self.logger.log("Setting up restore environment for membase server")
+        self.logger.log("Setting up restore environment for zbase server")
 
         hostname, port = self.host.split(':')
 
@@ -120,8 +120,8 @@ class Restore:
 
             try:
                 os.kill(memcached_pid, 0)
-                self.logger.log("Found running membase instance. Terminating" \
-                        " membase process")
+                self.logger.log("Found running zbase instance. Terminating" \
+                        " zbase process")
                 os.kill(memcached_pid, 9)
             except:
                 pass
@@ -676,7 +676,7 @@ if __name__ == '__main__':
 
     if vb_id == -1 or disk_mapper == '':
         print ("Please specify vb_id and disk_mapper host");
-        print "Usage membase-restore -v <vb_id> -d <disk_mapper> [-p port]"
+        print "Usage zbase-restore -v <vb_id> -d <disk_mapper> [-p port]"
         sys.exit(1)
 
     if port == 0:

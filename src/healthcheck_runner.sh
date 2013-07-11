@@ -15,8 +15,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-game_id=`grep 'game_id =' /etc/membase-backup/default.ini | awk '{ print $NF }'`
+game_id=`grep 'game_id =' /etc/zbase-backup/default.ini | awk '{ print $NF }'`
 rep_dir='/var/www/html/health_reports/'
+
 count=""
 
 if [ $# -ne 1 -a $# -ne 2 ];
@@ -47,7 +48,7 @@ then
 fi
 
 mkdir -p $rep_dir
-/opt/membase/membase-backup/backup_healthcheck -g $game_id -o $rep_dir $count &> /tmp/rep-$$
+/opt/zbase/zbase-backup/backup_healthcheck -g $game_id -o $rep_dir $count &> /tmp/rep-$$
 
 grep -q CRITICAL /tmp/rep-$$;
 if [ $? -eq 0 ];

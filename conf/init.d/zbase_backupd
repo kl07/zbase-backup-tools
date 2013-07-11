@@ -16,7 +16,7 @@
 
 . /etc/init.d/functions
 PIDFILE=/var/run/zbbackup.pid
-DAEMON=/opt/membase/membase-backup/zbase-backupd
+DAEMON=/opt/zbase/zbase-backup/zbase-backupd
 command=$1
 
 if [ $UID -ne 0 ];

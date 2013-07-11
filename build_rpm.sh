@@ -15,19 +15,24 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-specfile=specs/membase-backup-tools-HEAD.spec
+specfile=specs/zbase-backup-tools-HEAD.spec
 VERSION=`grep Version $specfile | awk '{ print $NF }'`
 RELEASE=`grep Release $specfile | awk '{ print $NF }'`
 COMMIT="$VERSION-$RELEASE"
 
-RPM_SOURCE_DIR=`rpm --eval '%{_sourcedir}'`
-SOURCE="membase-backup-tools-$VERSION.tar.gz"
+BUILD_TMP="$(pwd)/build"
+rm -rf $BUILD_TMP
+mkdir -p $BUILD_TMP/{SRPMS,RPMS,BUILD,SOURCE,BUILDROOT}
+RPM_SOURCE_DIR=`rpm --define "_topdir $BUILD_TMP" --eval '%{_sourcedir}'`
+SOURCE="zbase-backup-tools-$VERSION.tar.gz"
 mkdir -p $RPM_SOURCE_DIR
 cp $specfile tmp-$$.spec
 sed -i "s/_VERSION/$VERSION/" tmp-$$.spec
 sed -i "s/_SOURCE/$SOURCE/" tmp-$$.spec
 sed -i "s/_RELEASE/$RELEASE/" tmp-$$.spec
 sed -i "s/_COMMIT/$VERSION-$RELEASE/" tmp-$$.spec
-git archive --format=tar --prefix="membase-backup-tools-$VERSION/" HEAD | gzip > $RPM_SOURCE_DIR/$SOURCE
-rpmbuild -ba tmp-$$.spec
+git archive --format=tar --prefix="zbase-backup-tools-$VERSION/" HEAD | gzip > $RPM_SOURCE_DIR/$SOURCE
+buildtmp=/tmp/build
+mkdir $buildtmp
+rpmbuild --define="_topdir $BUILD_TMP" --buildroot $BUILD_TMP/BUILDROOT -ba tmp-$$.spec
 rm tmp-$$.spec
