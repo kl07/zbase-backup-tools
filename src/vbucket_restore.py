@@ -24,15 +24,18 @@ from sendfile import sendfile
 import commands
 import string
 from download_client import download_client
+from config import Config
 import consts
 import json
 
 
 class vbucketRestore:
 
-    def __init__(self, diskmapper):
+    def __init__(self):
 
-        self.diskmapper = diskmapper
+        self.config = Config(consts.CONFIG_FILE)
+        self.config.read()
+        self.diskmapper = self.config.disk_mapper_server 
 
     def get_storage_server(self, vb_id):
 
@@ -44,7 +47,7 @@ class vbucketRestore:
             print vb_query_cmd
 
             if status > 0:
-                print "Failure: Unable to fetch disk mapping. Command %s output %s" %(fetch_map_cmd, output)
+                print "Failure: Unable to fetch disk mapping. Command %s output %s" %(vb_query_cmd, output)
                 if i >= consts.CONNECT_RETRIES:
                     break
                 continue
@@ -98,7 +101,7 @@ class vbucketRestore:
 
         output_status = []
         for vb_id in vb_list:
-            restore_cmd = "python26 " + consts.RESTORE_CMD + " -v " + str(vb_id) + " -d " + self.diskmapper
+            restore_cmd = "python26 " + consts.RESTORE_CMD_ABS + " -v " + str(vb_id) + " -d " + self.diskmapper
             print "Executing command %s" %restore_cmd
             status, output = commands.getstatusoutput(restore_cmd)
             restore_status = {}
@@ -123,7 +126,7 @@ if __name__ == '__main__':
     disk_mapper = "172.21.13.72"
     vb_list = [25, 26, 27]
 
-    vb_restore = vbucketRestore(disk_mapper)
+    vb_restore = vbucketRestore()
     status, checkpoint_list = vb_restore.get_checkpoints(vb_list)
 
     if status == True:
