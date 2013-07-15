@@ -690,7 +690,7 @@ if __name__ == '__main__':
         status, output = commands.getstatusoutput(vb_query_cmd)
 
         if status > 0:
-            print "Failure: Unable to fetch disk mapping. Command %s output %s" %(fetch_map_cmd, output)
+            print "Failure: Unable to fetch disk mapping. Command %s output %s" %(vb_query_cmd, output)
             if i >= consts.CONNECT_RETRIES:
                 break
             continue
