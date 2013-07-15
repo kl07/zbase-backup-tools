@@ -87,3 +87,4 @@ SS_PORT = 22122
 RESTORE_CMD = "membase-restore"
 RESTORE_CMD_ABS = "/opt/membase/membase-backup/membase-restore"
 TAP_REGISTERATION = '/opt/membase/membase-backup/mbadm-tap-registration'
+BACKUP_LOGFILE = '/dev/null'

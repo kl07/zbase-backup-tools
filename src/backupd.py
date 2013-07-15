@@ -640,7 +640,7 @@ class Daemon:
 
 if __name__ == '__main__':
 
-    backup_daemon = Daemon("/var/run/zbackupd.pid")
+    backup_daemon = Daemon("/var/run/zbackupd.pid", "/dev/null", consts.BACKUP_LOGFILE, consts.BACKUP_LOGFILE)
 
     if len(sys.argv) == 2:
         if sys.argv[1] == 'start':
