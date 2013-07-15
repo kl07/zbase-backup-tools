@@ -333,9 +333,17 @@ class backup_thread(multiprocessing.Process) :
                 self.logger.log("Failed: Done file exists, please clear master backup directory %s" %backup_path)
                 return False
 
-
         else:
             backup_path =  vb_backup_task['path'] + "/incremental/"
+
+        # check if the vbucket that we are trying to backup is either active or replica
+        vbucket_chk_cmd = "echo stats checkpoint | nc " + self.host + " " + str(self.port) + " | grep vb_" + str(vb_backup_task['vb_id']) + " | egrep \"active|replica\""
+        self.logger.log ("Executing command %s" %vbucket_chk_cmd)
+
+        status, output = commands.getstatusoutput(vbucket_chk_cmd)
+        if output == "":
+            self.logger.log("Warning vbucket %s not in active or replica state." %(str(vb_backup_task['vb_id'])))
+            return False
 
         for r in range(consts.BACKUP_RETRIES):
             retry = False
