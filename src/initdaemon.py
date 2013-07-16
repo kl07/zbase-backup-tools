@@ -206,7 +206,12 @@ class vbs_thread(threading.Thread):
                 index = 0
                 if len(server_id) > 1:
                     index = 1
-                vbs_map[vb_id] = server_list[server_id[index]]
+
+                serv_index = server_id[index]
+                # Skip vbuckets or servers in maintenance stages
+                if serv_index >= 0 and server_list[serv_index] != "0.0.0.0":
+                    vbs_map[vb_id] = server_list[serv_index]
+
                 vb_id = vb_id + 1
 
             self.update_map(vbs_map)
