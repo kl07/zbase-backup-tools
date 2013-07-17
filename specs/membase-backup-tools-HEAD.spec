@@ -32,7 +32,7 @@ src/logger.py \
 src/master-merge \
 src/mc_bin_client.py \
 src/membase-restore \
-src/backupd.py \
+src/zbase-backupd \
 src/download_client.py \
 src/file_server.py \
 src/initdaemon.py \
@@ -54,6 +54,7 @@ cp src/blobrestore_utils/* $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestor
 cp conf/clean_blobrestore_jobs.cron $RPM_BUILD_ROOT/opt/membase/membase-backup/
 cp conf/init.d/blobrestored $RPM_BUILD_ROOT/etc/init.d/
 cp conf/init.d/backup_merged $RPM_BUILD_ROOT/etc/init.d/
+cp conf/init.d/zbase_backupd $RPM_BUILD_ROOT/etc/init.d/
 cp conf/default.ini $RPM_BUILD_ROOT/etc/membase-backup/
 chown root $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobrestore_sshkey
 chmod 700 $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobrestore_sshkey
@@ -62,6 +63,7 @@ chmod 700 $RPM_BUILD_ROOT/opt/membase/membase-backup/blobrestore_utils/blobresto
 /etc/membase-backup/*
 /etc/init.d/blobrestored
 /etc/init.d/backup_merged
+/etc/init.d/zbase_backupd
 /opt/membase/membase-backup/*
 
 %post

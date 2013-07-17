@@ -17,7 +17,7 @@
 
 SYSLOG_TAG = 'Membasebackup'
 MBRESTORE_PID_FILE = '/var/run/mbrestore.pid'
-MBBACKUP_PID_FILE = '/var/run/mbbackup.pid'
+MBBACKUP_PID_FILE = '/var/run/zbbackup.pid'
 SCHEDULER_PID_FILE = '/var/run/backup_merge.pid'
 BLOBRESTORED_PID_FILE = '/var/run/blobrestored.pid'
 MEMCACHED_PID_FILE = '/var/run/memcached/memcached.pid'
@@ -87,4 +87,3 @@ SS_PORT = 22122
 RESTORE_CMD = "membase-restore"
 RESTORE_CMD_ABS = "/opt/membase/membase-backup/membase-restore"
 TAP_REGISTERATION = '/opt/membase/membase-backup/mbadm-tap-registration'
-BACKUP_LOGFILE = '/dev/null'

@@ -15,10 +15,8 @@
 #   limitations under the License.
 
 . /etc/init.d/functions
-PIDFILE=/var/run/mbbackup.pid
-
-export LD_LIBRARY_PATH=/opt/sqlite3/lib/:$LD_LIBRARY_PATH
-
+PIDFILE=/var/run/zbbackup.pid
+DAEMON=/opt/membase/membase-backup/zbase-backupd
 command=$1
 
 if [ $UID -ne 0 ];
@@ -45,12 +43,7 @@ start(){
         kill -s 0 $PID 2> /dev/null && echo "Backup daemon is running with pid $PID" && exit 0
     fi
 
-    if [ $1 -eq 1 ];
-    then
-        /usr/bin/python26 /opt/membase/membase-backup/membase-backupd start-with-fullbackup >/dev/null 2>&1 
-    else
-        /usr/bin/python26 /opt/membase/membase-backup/membase-backupd start >/dev/null 2>&1 
-    fi
+    $DAEMON start >/dev/null 2>&1
 
     sleep 1
     status | grep 'is running' 2> /dev/null
@@ -65,8 +58,8 @@ start(){
 
 stop(){
 
-    echo "Stopping membase backup daemon"
-	/usr/bin/python26 /opt/membase/membase-backup/membase-backupd stop >/dev/null 2>&1
+    echo "Stopping zbase backup daemon"
+    $DAEMON stop >/dev/null 2>&1
     if [ $? -eq 0 ];
     then
         echo "Stopped backup daemon successfully"
@@ -77,20 +70,18 @@ stop(){
 
 case "$1" in
     start)
-        start 0
-        ;;
-    start-with-fullbackup)
-        start 1
+        start
         ;;
     stop)
-    stop
-    ;;
+        stop
+        ;;
     status)
-    status; 
-    ;;
+        status; 
+        ;;
     restart)
-    stop; start 0;
-    ;;
+        stop;
+        start;
+        ;;
     *)
     echo $"Usage: $0 {start|stop|status|restart}"
     exit 1
